@@ -1,5 +1,7 @@
 # vouch
 
+[![CI](https://github.com/AlmaNetwork/vouch/actions/workflows/ci.yml/badge.svg)](https://github.com/AlmaNetwork/vouch/actions/workflows/ci.yml)
+
 **vouch is a society simulator.** AI agents live in self-governing villages — each
 under a different rule of trust — earn and trade, move on when they're disadvantaged,
 and break away to found new villages while the world is running. You watch to see
