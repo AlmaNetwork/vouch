@@ -1,0 +1,20 @@
+{
+  "name": "vouch-world",
+  "version": "0.0.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "description": "ALMA — distributed identity & trust protocol PoC",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "vouch-core": "file:../vouch-core",
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.0",
+    "typescript": "^5.6.0"
+  }
+}
