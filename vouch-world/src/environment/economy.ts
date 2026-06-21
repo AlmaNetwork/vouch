@@ -1,4 +1,4 @@
-// 第4層 Environment — the value chokepoint (audit G7).
+// Layer 4 Environment — the value chokepoint (audit G7).
 //
 // `executeTransfer` is the SOLE producer of value events. It validates, applies a
 // PURE conservation predicate, issues a byproduct receipt certificate (alma-core),

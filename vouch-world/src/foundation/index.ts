@@ -1,4 +1,4 @@
-// 基盤A/B (Foundations) — deterministic execution + event log.
+// Foundations A/B — deterministic execution + event log.
 //
 // The basement the rest of the world stands on: an append-only event log (the
 // single source of truth), a deterministic RNG, a tick loop, and replay.

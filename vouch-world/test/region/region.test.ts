@@ -67,8 +67,8 @@ describe("M2 — regions with institutions", () => {
   });
 });
 
-describe("M2 — founding (発議と実行の分離)", () => {
-  test("(イ) the experimenter founds a village mid-run; it is logged with the proposer", () => {
+describe("M2 — founding (propose/execute split)", () => {
+  test("(a) the experimenter founds a village mid-run; it is logged with the proposer", () => {
     const world = createAlmaWorld("found");
     seedGenesis(world, [STRICT, LENIENT]);
 
@@ -100,9 +100,9 @@ describe("M2 — founding (発議と実行の分離)", () => {
     const world = createAlmaWorld("both");
     seedGenesis(world, [STRICT]);
 
-    // (イ) experimenter
+    // (a) experimenter
     const a = proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova")));
-    // (ロ) emergence — same engine, same entry point; only the proposer differs.
+    // (b) emergence — same engine, same entry point; only the proposer differs.
     const b = proposeFounding(
       world,
       emergenceProposal(defineRegion("rift", "Rift"), "yama", "too strict", ["alice@yama", "bob@yama"]),
@@ -157,7 +157,7 @@ describe("M2 — determinism still holds (replay reconstructs the regions)", () 
   });
 });
 
-describe("M2 — 立法者 plumbing (§8): institution changes are swappable + logged", () => {
+describe("M2 — legislator plumbing (§8): institution changes are swappable + logged", () => {
   test("an amendment replaces the policy as data and is recorded in the log", () => {
     const world = createAlmaWorld("amend");
     seedGenesis(world, [LENIENT]);

@@ -1,4 +1,4 @@
-// 第1層 信頼コア — the certificate envelope: generate + formally verify.
+// Layer 1 Trust Core — the certificate envelope: generate + formally verify.
 //
 // This is the heart of the trust core. It does exactly two things (§2-2):
 //   1. issueCertificate  — stamp an envelope and sign it with the issuer's key.

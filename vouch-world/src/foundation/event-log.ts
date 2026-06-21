@@ -1,4 +1,4 @@
-// 基盤B イベントログ — append-only log. The single source of truth (§3).
+// Foundations B event log — append-only log. The single source of truth (§3).
 //
 // Only `append` mutates the log. Stored events are deep-frozen, and readers get
 // a copy, so a once-written event can never be changed or removed (§M1).

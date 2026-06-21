@@ -1,4 +1,4 @@
-// 第3層 Agent (住人) — types.
+// Layer 3 Agent (residents) — types.
 //
 // An agent's identity/balance/reputation is DERIVED by folding the event log into
 // this slice (audit 3-A) — never a parallel mutable store. Agents USE the core as

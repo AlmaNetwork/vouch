@@ -1,4 +1,4 @@
-// 第3層 Agent — the brain: (read-only view) -> intent (audit G6).
+// Layer 3 Agent — the brain: (read-only view) -> intent (audit G6).
 //
 // A brain receives ONLY a frozen read-only view — no emit, no rng, no clock. It
 // returns an Intent; the environment journals it (agent.decided) and executes it.

@@ -1,8 +1,8 @@
-// 基盤B イベントログ — the event record.
+// Foundation B event log — the event record.
 //
 // An event is an immutable FACT: "at tick T, actor A did/caused something of
 // kind `type` with this `payload`". The log of all events is the single source
-// of truth for the world (§3 基盤B); every state is derivable by folding events.
+// of truth for the world (§3 Foundation B); every state is derivable by folding events.
 
 export const SYSTEM_ACTOR = "world";
 
@@ -18,10 +18,10 @@ export interface AlmaEvent {
    * future economy) must NOT read `tick` as canonical/wall-clock time.
    */
   readonly tick: number;
-  /** Event kind (種別). */
+  /** Event kind. */
   readonly type: string;
-  /** Who caused it (発生主体): an identifier string, or SYSTEM_ACTOR for the engine. */
+  /** Who caused it (the originating subject): an identifier string, or SYSTEM_ACTOR for the engine. */
   readonly actor: string;
-  /** Event content (内容). Opaque to the log; meaning belongs to higher layers. */
+  /** Event content. Opaque to the log; meaning belongs to higher layers. */
   readonly payload: Readonly<Record<string, unknown>>;
 }

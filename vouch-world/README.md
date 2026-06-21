@@ -1,13 +1,13 @@
 # vouch-world
 
 A proof-of-concept for ALMA — a distributed identity / trust-protocol simulator.
-Built bottom-up, one milestone at a time. See `指示書` for the full spec; this README
+Built bottom-up, one milestone at a time. See `spec` for the full spec; this README
 tracks what is actually implemented.
 
 ## Stack
 
 - **Runtime / tests:** [Bun](https://bun.sh) (`bun test`, runs TypeScript directly)
-- **Trust Core (第1層):** extracted into a standalone package, [`vouch-core`](../vouch-core)
+- **Trust Core (Layer 1):** extracted into a standalone package, [`vouch-core`](../vouch-core)
   (consumed here as `vouch-core`, a `file:../vouch-core` dependency). It carries the
   Ed25519 / JCS / zod machinery — see that package's README.
 - **HTTP (reserved for §5 observation/broadcast):** `hono` — not yet wired up
@@ -22,16 +22,16 @@ Dependency direction is strictly downward: an upper layer may know a lower one, 
 the reverse (§3).
 
 ```
-vouch-core/       ✅ 第1層 Trust Core (M0) — its OWN package; generate + formal-verify factory
+vouch-core/       ✅ Layer 1 Trust Core (M0) — its OWN package; generate + formal-verify factory
 vouch-world/  (this repo, the simulator)
   src/
-    foundation/  ✅ 基盤A/B Event log + deterministic RNG + tick loop + replay (M1)
+    foundation/  ✅ Foundations A/B Event log + deterministic RNG + tick loop + replay (M1)
                     + read-only WorldLog facade + CommitSink (M2.5 hardening)
-    region/      ✅ 第2層 Villages: institutions vocab + slice reducer + selectors (M2)
-    agent/       ✅ 第3層 Residents: brains (view→intent) + agent-slice fold (M3)
-    environment/ ✅ 第4層 Composition root + founding + economy + driver (M2.5/M3)
+    region/      ✅ Layer 2 Villages: institutions vocab + slice reducer + selectors (M2)
+    agent/       ✅ Layer 3 Residents: brains (view→intent) + agent-slice fold (M3)
+    environment/ ✅ Layer 4 Composition root + founding + economy + driver (M2.5/M3)
     credential/  ✅ Typed, validated certificate types on the universal envelope
-    observation/ ⬜ 第5層 Observation & broadcast (M5)
+    observation/ ⬜ Layer 5 Observation & broadcast (M5)
   examples/      m0-m1-demo.ts — uses vouch-core + foundation together
 ```
 
@@ -59,7 +59,7 @@ bun run typecheck # tsc --noEmit (optional)
 | **Credentials** | Typed, validated certificate types on the universal envelope (skill/membership/asset/endorsement + custom) | ✅ implemented, tests green |
 | M4 | Diplomacy / cross-region recognition | ⬜ next |
 
-## M0 — Trust Core (第1層) — extracted to the `vouch-core` package
+## M0 — Trust Core (Layer 1) — extracted to the `vouch-core` package
 
 The lowest layer, now its **own standalone package** ([`vouch-core`](../vouch-core)) and
 consumed as a dependency. A **stateless factory** that generates ids/keys/certificates
@@ -126,17 +126,17 @@ const result = verifyCertificate(cert, guild.publicKey);
 Storage · verification policy · certificate chains · revocation · regions · economy ·
 currency · CBOR · any suite other than ed25519. Those arrive in later milestones.
 
-## M1 — Foundations: event log + deterministic execution (基盤A/B)
+## M1 — Foundations: event log + deterministic execution (Foundations A/B)
 
-The basement everything else stands on. Built on one promise (§M1 設計の約束):
+The basement everything else stands on. Built on one promise (§M1 design promise):
 **there is no API to set world state directly.** State changes only by emitting an
 event, which is appended to the log and folded through a reducer — so state is always
 reconstructable from the log alone.
 
-- **基盤B `EventLog`** ([event-log.ts](src/foundation/event-log.ts)) — append-only, the
+- **Foundation B `EventLog`** ([event-log.ts](src/foundation/event-log.ts)) — append-only, the
   single source of truth. Events carry `{ seq, tick, type, actor, payload }`, are
   deep-frozen on write, and readers get a copy. No update/delete.
-- **基盤A `Rng`** ([rng.ts](src/foundation/rng.ts)) — deterministic PRNG (cyrb128 +
+- **Foundation A `Rng`** ([rng.ts](src/foundation/rng.ts)) — deterministic PRNG (cyrb128 +
   sfc32). All world randomness flows through it; same seed ⇒ same sequence. `bytes(32)`
   feeds M0's `keyPairFromSeed`, and `fork(label)` derives reproducible sub-streams.
 - **`World`** ([world.ts](src/foundation/world.ts)) — ties the RNG + log + reducer.
@@ -159,7 +159,7 @@ world.run(50, (ctx) => {
 Two determinism properties are tested separately: **forward** (same seed ⇒ identical
 history) and **reconstruction** (fold the log ⇒ the live state).
 
-## M2 — Regions & founding (第2層)
+## M2 — Regions & founding (Layer 2)
 
 A village is a **governance subject**, not hardcoded behaviour: it is a data
 `RegionDefinition` carrying its **institutions** — a certificate-schema ledger, a
@@ -177,13 +177,13 @@ definition; the engine never grows.
 - **Founding = propose / execute split** ([founding.ts](src/region/founding.ts)) — the
   one execution engine `proposeFounding(world, proposal)` serves *every* proposer.
   Proposals reach it through a single `FoundingProposal` interface:
-  - **(イ) experimenter** — god-view injection, implemented: `experimenterProposal(...)`.
-  - **(ロ) emergence** — reserved for M3: `emergenceProposal(...)` hits the *same* engine;
+  - **(a) experimenter** — god-view injection, implemented: `experimenterProposal(...)`.
+  - **(b) emergence** — reserved for M3: `emergenceProposal(...)` hits the *same* engine;
     only its trigger logic is missing.
   - genesis villages are seeded through the same engine (`seedGenesis`).
 
 A founded village is born **unrecognized** with **zero residents**; the founding event
-records **who proposed it** (§2 設計の約束). Recognition (the approval flow) is M4;
+records **who proposed it** (§2 design promise). Recognition (the approval flow) is M4;
 immigration is M3.
 
 ```ts

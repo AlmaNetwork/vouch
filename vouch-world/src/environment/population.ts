@@ -1,4 +1,4 @@
-// 第4層 Environment — admission + immigration (write path for the agent slice).
+// Layer 4 Environment — admission + immigration (write path for the agent slice).
 //
 // All of these go through the engine (§2-5): they validate, then emit one
 // env-authored event the reducer folds. Agents never appear or move except here.

@@ -1,4 +1,4 @@
-// 第2層 Region — the region read-model slice + its reducer + selectors.
+// Layer 2 Region — the region read-model slice + its reducer + selectors.
 //
 // Region owns ONLY its slice of world state and the rules that fold region
 // events into it. World-state OWNERSHIP and the write path live one layer up, in

@@ -1,4 +1,4 @@
-// 第3層 Agent — read-only selectors over the agent slice (§2-6).
+// Layer 3 Agent — read-only selectors over the agent slice (§2-6).
 
 import type { AgentSlice, AgentState } from "./types";
 

@@ -1,4 +1,4 @@
-// 基盤 utilities — immutability + stable serialization.
+// Foundation utilities — immutability + stable serialization.
 
 /** Recursively freeze an object so it cannot be mutated after the fact. */
 export function deepFreeze<T>(value: T): T {

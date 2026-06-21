@@ -1,4 +1,4 @@
-// 第1層 信頼コア — byte <-> base64 encoding for the envelope's signature field.
+// Layer 1 Trust Core — byte <-> base64 encoding for the envelope's signature field.
 
 const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
 

@@ -1,4 +1,4 @@
-// 第4層 Environment (engine) — public surface.
+// Layer 4 Environment (engine) — public surface.
 //
 // Owns world-state composition (root reducer / world factory) and the sanctioned
 // WRITE path: founding, admission/immigration, and the value chokepoint

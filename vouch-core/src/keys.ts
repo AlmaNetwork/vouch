@@ -1,4 +1,4 @@
-// 第1層 信頼コア — Ed25519 key generation.
+// Layer 1 Trust Core — Ed25519 key generation.
 //
 // The core is a factory: it generates keys (§2-2). It stores nothing.
 // An Ed25519 private key IS its 32-byte seed, so `keyPairFromSeed` lets a later

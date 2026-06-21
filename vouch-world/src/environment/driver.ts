@@ -1,4 +1,4 @@
-// 第4層 Environment — the simulation driver: brains -> journal -> execute (audit G6).
+// Layer 4 Environment — the simulation driver: brains -> journal -> execute (audit G6).
 //
 // LIVE-only orchestration. Per tick, for each agent it builds a frozen ReadOnlyView,
 // calls the brain, JOURNALS the returned intent (agent.decided), then EXECUTES it

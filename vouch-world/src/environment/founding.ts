@@ -1,4 +1,4 @@
-// 第4層 Environment — the founding EXECUTION engine (the sanctioned write path).
+// Layer 4 Environment — the founding EXECUTION engine (the sanctioned write path).
 //
 // Hoisted out of region/ (audit G2/G3): founding is a WRITE operation, so it
 // belongs to the environment layer that owns the write path. Region keeps only
@@ -63,13 +63,13 @@ export function proposeFounding(env: Commit, proposal: FoundingProposal): Region
 
 // --- proposal constructors: both flow into the one engine above ----------
 
-/** (イ) external injection — the experimenter founds a village mid-run (god view; sim-only). */
+/** (a) external injection — the experimenter founds a village mid-run (god view; sim-only). */
 export function experimenterProposal(definition: RegionDefinition, note?: string): FoundingProposal {
   return { definition, proposer: { kind: "experimenter", note } };
 }
 
 /**
- * (ロ) internal emergence — reserved for M3+. No auto-trigger yet; this constructor
+ * (b) internal emergence — reserved for M3+. No auto-trigger yet; this constructor
  * exists so the SAME engine can be driven by an emergence proposer the moment agents
  * exist. Calling it today simply proves the entry point is shared.
  */
@@ -82,7 +82,7 @@ export function seedGenesis(env: Commit, definitions: readonly RegionDefinition[
   return definitions.map((definition) => proposeFounding(env, { definition, proposer: { kind: "genesis" } }));
 }
 
-// --- 立法者 plumbing (§8): institutions are swappable + every change is logged ---
+// --- legislator plumbing (§8): institutions are swappable + every change is logged ---
 //
 // The future viewer-voting hook. The MECHANISM exists (function + event + reducer
 // case) so institutions can be replaced and the change is part of the immutable

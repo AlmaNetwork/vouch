@@ -1,4 +1,4 @@
-// 基盤A 確定的乱数源 — deterministic RNG.
+// Foundation A: deterministic random source — deterministic RNG.
 //
 // All of the world's randomness flows through this (§M1, §2-7). Given a seed,
 // the sequence is fixed, so the same seed replays the same history. Algorithm:

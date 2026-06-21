@@ -1,4 +1,4 @@
-// 第4層 Environment (engine) — the composition root + single write path.
+// Layer 4 Environment (engine) — the composition root + single write path.
 //
 // Hoisted out of region/ (audit G2): world-state OWNERSHIP belongs to the
 // environment (layer 4), not to a single domain (region, layer 2). The root

@@ -1,6 +1,6 @@
-// 基盤A+B かみ合わせ — the event-sourced world skeleton (§M1).
+// Foundations A + B interplay — the event-sourced world skeleton (§M1).
 //
-// The design promise (§M1 設計の約束): there is NO API to set world state
+// The design promise (§M1 design promise): there is NO API to set world state
 // directly. State changes ONLY through `emit(event)`, which appends to the log
 // and folds the event through the reducer. Therefore state is always
 // reconstructable from the log alone — see `replayState`.

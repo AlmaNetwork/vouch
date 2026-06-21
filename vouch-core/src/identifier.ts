@@ -1,4 +1,4 @@
-// 第1層 信頼コア — identifier syntax: `name@region`.
+// Layer 1 Trust Core — identifier syntax: `name@region`.
 //
 // The core only checks SYNTAX. It does not know what a region is, who owns it,
 // or whether it is trustworthy (§2-1, §2-2). It just generates and validates the

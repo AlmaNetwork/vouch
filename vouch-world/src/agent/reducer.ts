@@ -1,4 +1,4 @@
-// 第3層 Agent — the agent-slice reducer (pure fold; runs live AND on replay).
+// Layer 3 Agent — the agent-slice reducer (pure fold; runs live AND on replay).
 //
 // Audit G8: value/balance changes are honored ONLY when the event is env-authored
 // (actor === SYSTEM_ACTOR). Because World.emit is public, this fold point is the

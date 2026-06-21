@@ -1,4 +1,4 @@
-// 第3層 Agent (住人) — public surface.
+// Layer 3 Agent (residents) — public surface.
 //
 // Identity/balance/reputation derived by folding the log (audit 3-A). Brains read
 // a frozen view and return intents; the environment journals + executes them.

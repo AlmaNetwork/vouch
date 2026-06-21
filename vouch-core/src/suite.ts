@@ -1,4 +1,4 @@
-// 第1層 信頼コア — signature-suite registry.
+// Layer 1 Trust Core — signature-suite registry.
 //
 // The envelope carries a `suite` field (§4) so the byte format can grow later
 // (CBOR, other curves, BBS+ ...) WITHOUT rebuilding the envelope. Signing and

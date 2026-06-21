@@ -1,4 +1,4 @@
-// 第1層 信頼コア — JCS (RFC 8785) canonicalization.
+// Layer 1 Trust Core — JCS (RFC 8785) canonicalization.
 //
 // The trust core fixes only the "shape of the envelope" and "how the signature
 // is attached" (§2-3). JCS gives us a single canonical byte sequence for any

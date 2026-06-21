@@ -1,4 +1,4 @@
-// 第2層 Region (村) — public surface.
+// Layer 2 Region — public surface.
 //
 // Villages as data-defined governance subjects (§2-1): the institution
 // vocabulary (types), the slice reducer that folds region events, and read-only

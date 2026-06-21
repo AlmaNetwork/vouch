@@ -1,4 +1,4 @@
-// 第2層 Region (村) — types.
+// Layer 2 Region (village) — types.
 //
 // A village is NOT hardcoded: it is a DATA definition that carries its
 // institutions (§2-A). Institutions are kept as swappable "settings" (§8): the
@@ -6,7 +6,7 @@
 // not yet activated.
 //
 // The trust core (M0) is unchanged here; the only thing that grows is the set of
-// `region` strings (§2 設計の約束).
+// `region` strings (§2 design promise).
 
 // --- institutions (the minimal governance set, §2-A) ---------------------
 
@@ -24,10 +24,10 @@ export interface VerificationPolicy {
 
 /**
  * How a foreign certificate is translated into the local vocabulary (§4-A).
- *   absorb    — 丸呑み: accept as-is
- *   map       — マッピング: convert the foreign type into a local one
- *   reexamine — 再審査: treat as a hint, re-check under local rules
- *   reject    — 拒否: do not accept
+ *   absorb    — swallow whole: accept as-is
+ *   map       — mapping: convert the foreign type into a local one
+ *   reexamine — re-examination: treat as a hint, re-check under local rules
+ *   reject    — rejection: do not accept
  * In M2 this is only carried as data; the behavior arrives in M4.
  */
 export type ForeignCertStance = "absorb" | "map" | "reexamine" | "reject";
@@ -55,11 +55,11 @@ export interface RegionDefinition {
 // --- founding (proposal + status) ----------------------------------------
 
 /**
- * Who proposed a founding (発議者, §2 設計の約束). The SAME execution engine
+ * Who proposed a founding (the proposer, §2 design promise). The SAME execution engine
  * serves every proposer:
  *   genesis      — the initial world (born recognized)
- *   experimenter — (イ) external injection, the god view  [implemented in M2]
- *   emergence    — (ロ) internal emergence from the world [interface only; trigger in M3+]
+ *   experimenter — (a) external injection, the god view  [implemented in M2]
+ *   emergence    — (b) internal emergence from the world [interface only; trigger in M3+]
  */
 export type Proposer =
   | { readonly kind: "genesis" }
@@ -69,13 +69,13 @@ export type Proposer =
 /** Recognition status. Founded villages are born "unrecognized"; M4 grants "recognized". */
 export type RecognitionStatus = "unrecognized" | "recognized";
 
-/** A founding proposal: the single interface both (イ) and (ロ) flow through. */
+/** A founding proposal: the single interface both (a) and (b) flow through. */
 export interface FoundingProposal {
   readonly definition: RegionDefinition;
   readonly proposer: Proposer;
 }
 
-/** An institution amendment (the 立法者 plumbing; §8). Logged, never silent. */
+/** An institution amendment (the legislator plumbing; §8). Logged, never silent. */
 export type InstitutionChange =
   | { readonly policy: "verification"; readonly value: VerificationPolicy }
   | { readonly policy: "diplomacy"; readonly value: DiplomacyPolicy }
