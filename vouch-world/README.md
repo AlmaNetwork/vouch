@@ -28,9 +28,10 @@ vouch-world/  (this repo, the simulator)
     foundation/  ✅ 基盤A/B Event log + deterministic RNG + tick loop + replay (M1)
                     + read-only WorldLog facade + CommitSink (M2.5 hardening)
     region/      ✅ 第2層 Villages: institutions vocab + slice reducer + selectors (M2)
-    environment/ ✅ 第4層 Composition root + founding write path (M2.5); value + diplomacy (M3/M4)
-    agent/       ⬜ 第3層 Residents & economy (M3)
-    observation/ ⬜ 第5層 Observation & broadcast (M1+ / M5)
+    agent/       ✅ 第3層 Residents: brains (view→intent) + agent-slice fold (M3)
+    environment/ ✅ 第4層 Composition root + founding + economy + driver (M2.5/M3)
+    credential/  ✅ Typed, validated certificate types on the universal envelope
+    observation/ ⬜ 第5層 Observation & broadcast (M5)
   examples/      m0-m1-demo.ts — uses vouch-core + foundation together
 ```
 
@@ -54,8 +55,9 @@ bun run typecheck # tsc --noEmit (optional)
 | **M1** | Event log + deterministic RNG + tick loop + replay | ✅ implemented, tests green |
 | **M2** | Regions as data-defined governance + dynamic founding | ✅ implemented, tests green |
 | **M2.5** | Separation hardening (audit G1–G5): read-only log, CommitSink, composition root hoisted to environment/, sim-tick detached from protocol state (`foundedAtSeq`) | ✅ implemented, tests green |
-| M3 | Agents & economy | ⬜ next |
-| M4 | Diplomacy / cross-region recognition | ⬜ |
+| **M3** | Agents, economy (credit/currency), transactions, migration, emergent founding | ✅ implemented, tests green |
+| **Credentials** | Typed, validated certificate types on the universal envelope (skill/membership/asset/endorsement + custom) | ✅ implemented, tests green |
+| M4 | Diplomacy / cross-region recognition | ⬜ next |
 
 ## M0 — Trust Core (第1層) — extracted to the `vouch-core` package
 
