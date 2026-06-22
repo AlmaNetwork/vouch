@@ -98,6 +98,7 @@ export interface RegionState {
 
 export const EVENT_REGION_FOUNDED = "region.founded";
 export const EVENT_REGION_INSTITUTION_CHANGED = "region.institution.changed";
+export const EVENT_REGION_RECOGNIZED = "region.recognized"; // M4: a region joins the international society
 
 export type RegionFoundedPayload = {
   region: RegionDefinition;
@@ -109,6 +110,11 @@ export type InstitutionChangedPayload = {
   regionId: string;
   change: InstitutionChange;
   proposer: Proposer;
+};
+
+export type RegionRecognizedPayload = {
+  regionId: string;
+  by: string; // the recognizing region
 };
 
 // --- builders (convenience; villages are still just data) ----------------

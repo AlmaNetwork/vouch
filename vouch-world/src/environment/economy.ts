@@ -16,6 +16,7 @@ import {
   treasuryId,
 } from "../agent";
 import { type CommitSink, SYSTEM_ACTOR } from "../foundation";
+import { canTransactAcross } from "./diplomacy";
 import type { WorldState } from "./state";
 
 const BASE_COST_RATE = 0.2;
@@ -60,8 +61,9 @@ export function executeTransfer(env: CommitSink<WorldState>, move: TransferMove,
   if (!isTransferable("currency")) return { ok: false, reason: "not-transferable" };
   if (!Number.isInteger(move.amount) || move.amount <= 0) return { ok: false, reason: "bad-amount" };
   if (from.region !== to.region) {
-    // §audit G9: cross-region value flow is the M4 diplomacy boundary — a LOUD refusal.
-    throw new Error(`executeTransfer: cross-region transfer (${from.region} -> ${to.region}) is M4 (diplomacy), refused`);
+    // M4: cross-region value flows are gated by diplomacy (mutual recognition + stance).
+    const gate = canTransactAcross(state, from.region, to.region);
+    if (!gate.ok) return { ok: false, reason: gate.reason };
   }
   if (from.balances.currency < move.amount) return { ok: false, reason: "insufficient-funds" };
   // the fee sink MUST exist, else the reducer would drop it and currency would leak.

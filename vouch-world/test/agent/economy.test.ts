@@ -106,13 +106,15 @@ describe("M3 — only the environment can change value (§2-4, audit G8)", () =>
     expect(getAgent(world.getState(), "alice@umi")?.balances.currency).toBe(before);
   });
 
-  test("a cross-region transfer is loudly refused (M4 boundary, audit G9)", () => {
+  test("a cross-region transfer to an unrecognized region is refused (M4 diplomacy gate)", () => {
     const world = umiWorld();
     proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova", lenient())));
     admitTreasury(world, "nova");
     admitAgent(world, { id: "carol@nova", region: "nova", role: "merchant", valueProfile: "lenient", publicKey: pub(3), currency: 50 });
 
-    expect(() => executeTransfer(world, { from: "alice@umi", to: "carol@nova", amount: 10 }, { tick: 0, notary: NOTARY })).toThrow(/cross-region/);
+    const res = executeTransfer(world, { from: "alice@umi", to: "carol@nova", amount: 10 }, { tick: 0, notary: NOTARY });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.reason).toBe("receiver-region-unrecognized");
   });
 
   test("a transfer with no treasury is rejected, so the fee can't leak (no-treasury)", () => {

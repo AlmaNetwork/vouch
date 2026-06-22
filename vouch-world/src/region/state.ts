@@ -9,9 +9,11 @@ import type { Reducer } from "../foundation";
 import {
   EVENT_REGION_FOUNDED,
   EVENT_REGION_INSTITUTION_CHANGED,
+  EVENT_REGION_RECOGNIZED,
   type InstitutionChangedPayload,
   type Institutions,
   type RegionFoundedPayload,
+  type RegionRecognizedPayload,
   type RegionState,
 } from "./types";
 
@@ -51,6 +53,12 @@ export const regionReducer: Reducer<RegionSlice> = (state, event) => {
       if (!existing) return state;
       const updated: RegionState = { ...existing, institutions: applyInstitutionChange(existing.institutions, p) };
       return { ...state, regions: { ...state.regions, [p.regionId]: updated } };
+    }
+    case EVENT_REGION_RECOGNIZED: {
+      const p = event.payload as RegionRecognizedPayload;
+      const existing = state.regions[p.regionId];
+      if (!existing || existing.status === "recognized") return state;
+      return { ...state, regions: { ...state.regions, [p.regionId]: { ...existing, status: "recognized" } } };
     }
     default:
       return state;

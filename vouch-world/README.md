@@ -29,7 +29,7 @@ vouch-world/  (this repo, the simulator)
                     + read-only WorldLog facade + CommitSink (M2.5 hardening)
     region/      ✅ Layer 2 Villages: institutions vocab + slice reducer + selectors (M2)
     agent/       ✅ Layer 3 Residents: brains (view→intent) + agent-slice fold (M3)
-    environment/ ✅ Layer 4 Composition root + founding + economy + driver (M2.5/M3)
+    environment/ ✅ Layer 4 Composition root + founding + economy + diplomacy + driver (M2.5/M3/M4)
     credential/  ✅ Typed, validated certificate types on the universal envelope
     observation/ ⬜ Layer 5 Observation & broadcast (M5)
   examples/      m0-m1-demo.ts — uses vouch-core + foundation together
@@ -57,7 +57,7 @@ bun run typecheck # tsc --noEmit (optional)
 | **M2.5** | Separation hardening (audit G1–G5): read-only log, CommitSink, composition root hoisted to environment/, sim-tick detached from protocol state (`foundedAtSeq`) | ✅ implemented, tests green |
 | **M3** | Agents, economy (credit/currency), transactions, migration, emergent founding | ✅ implemented, tests green |
 | **Credentials** | Typed, validated certificate types on the universal envelope (skill/membership/asset/endorsement + custom) | ✅ implemented, tests green |
-| M4 | Diplomacy / cross-region recognition | ⬜ next |
+| **M4** | Diplomacy: cert translation (absorb/map/reexamine/reject) + recognition flow + cross-region trade gate | 🟡 in progress — emergent cross-border (scarcity) next |
 
 ## M0 — Trust Core (Layer 1) — extracted to the `vouch-core` package
 

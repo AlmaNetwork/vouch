@@ -27,7 +27,7 @@ time — **taken part in**.
 
 | Package | What it is | Tests |
 |---------|-----------|-------|
-| [`vouch-world`](./vouch-world) | The **simulator** — the deterministic world engine, the villages, the agents, the economy, and a typed-credential layer. This is the world. | 57 |
+| [`vouch-world`](./vouch-world) | The **simulator** — the deterministic world engine, the villages, the agents, the economy, a typed-credential layer, and diplomacy. This is the world. | 71 |
 | [`vouch-core`](./vouch-core) | The **trust engine** it runs on — a standalone, dependency-free\* factory that mints ids/keys/certificates and **formally verifies** signatures. It knows nothing of villages or economies; meaning lives outside it, and it's reusable on its own. | 35 |
 
 \* depends on no other layer; only `@noble/curves`, `canonicalize`, `zod`.
@@ -84,7 +84,7 @@ A/B Foundations     append-only event log + deterministic RNG + replay     vouch
 | M2 | Villages as data-defined governance + dynamic founding | ✅ |
 | M2.5 | Separation hardening: read-only log, CommitSink, composition root, seq-ordering | ✅ |
 | M3 | Agents, economy (credit/currency), transactions, migration, emergent founding | ✅ |
-| M4 | Diplomacy / cross-village certificate translation & recognition | ⬜ next |
+| **M4** | Diplomacy: certificate translation (absorb/map/reexamine/reject) + recognition flow + cross-region trade gate | 🟡 in progress — emergent cross-border (scarcity) next |
 | M5 | Observation lenses & broadcast (the "vouch" viewer vocabulary lives here) | ⬜ |
 
 ## Run
@@ -106,7 +106,7 @@ vouch/
 │       ├── foundation/         # A/B  event log · RNG · world/tick · replay
 │       ├── region/             # L2   institution vocabulary · slice reducer · selectors
 │       ├── agent/              # L3   brains (view -> intent) · agent-slice fold
-│       ├── environment/        # L4   composition root · founding · economy · driver
+│       ├── environment/        # L4   composition root · founding · economy · diplomacy · driver
 │       └── credential/         #      typed, validated certificate types on the envelope
 └── vouch-core/                 # L1 trust engine (standalone package)
     └── src/                    #   identifier · keys · suite · jcs · encoding · certificate
