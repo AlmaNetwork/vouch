@@ -23,6 +23,17 @@ export interface CommitSink<S> {
   emit(type: string, actor: string, payload?: Record<string, unknown>): AlmaEvent;
 }
 
+/**
+ * A READ-ONLY view of a world (audit G11): readers only, no mutators. The §5
+ * observation layer takes ONLY this, so "watching can never change the world"
+ * (§2-6) is a compile-time fact, not a discipline. `World` structurally satisfies it.
+ */
+export interface WorldView<S> {
+  getState(): S;
+  readonly tick: number;
+  readonly log: WorldLog;
+}
+
 export interface TickContext<S> {
   readonly tick: number;
   readonly rng: Rng;
@@ -36,7 +47,7 @@ export interface WorldOptions<S> {
   readonly reducer: Reducer<S>;
 }
 
-export class World<S> implements CommitSink<S> {
+export class World<S> implements CommitSink<S>, WorldView<S> {
   readonly rng: Rng;
   /** Read-only view of the log (audit G1) — no `append`; emit is the only writer. */
   readonly log: WorldLog;

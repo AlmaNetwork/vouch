@@ -6,5 +6,5 @@
 export { SYSTEM_ACTOR, EVENT_TICK, type AlmaEvent } from "./event";
 export { EventLog, type WorldLog } from "./event-log";
 export { Rng } from "./rng";
-export { World, replayState, type Reducer, type TickContext, type WorldOptions, type CommitSink } from "./world";
+export { World, replayState, type Reducer, type TickContext, type WorldOptions, type CommitSink, type WorldView } from "./world";
 export { deepFreeze, stableStringify, fnv1a } from "./util";

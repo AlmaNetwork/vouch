@@ -27,7 +27,7 @@ time — **taken part in**.
 
 | Package | What it is | Tests |
 |---------|-----------|-------|
-| [`vouch-world`](./vouch-world) | The **simulator** — the deterministic world engine, the villages, the agents, the economy, a typed-credential layer, and diplomacy. This is the world. | 71 |
+| [`vouch-world`](./vouch-world) | The **simulator** — the deterministic world engine, the villages, the agents, the economy, typed credentials, diplomacy, and a read-only observation server. This is the world. | 76 |
 | [`vouch-core`](./vouch-core) | The **trust engine** it runs on — a standalone, dependency-free\* factory that mints ids/keys/certificates and **formally verifies** signatures. It knows nothing of villages or economies; meaning lives outside it, and it's reusable on its own. | 35 |
 
 \* depends on no other layer; only `@noble/curves`, `canonicalize`, `zod`.
@@ -51,7 +51,7 @@ envelope never changes; only what you put in it.
 Dependency direction is strictly downward; a lower layer never knows an upper one.
 
 ```
-L5  Observation     read-only; metrics / log / the village newspaper       (planned, M5)
+L5  Observation     read-only HTTP (hono): metrics / log / state            vouch-world/src/observation
 L4  Environment     composition root + the only write path;
                     value-conservation monopoly                            vouch-world/src/environment
 L3  Agent           residents; brains (rule-based -> LLM-swappable);
@@ -85,7 +85,7 @@ A/B Foundations     append-only event log + deterministic RNG + replay     vouch
 | M2.5 | Separation hardening: read-only log, CommitSink, composition root, seq-ordering | ✅ |
 | M3 | Agents, economy (credit/currency), transactions, migration, emergent founding | ✅ |
 | **M4** | Diplomacy: certificate translation (absorb/map/reexamine/reject) + recognition flow + cross-region trade gate | 🟡 in progress — emergent cross-border (scarcity) next |
-| M5 | Observation lenses & broadcast (the "vouch" viewer vocabulary lives here) | ⬜ |
+| **M5** | Observation: read-only HTTP server (hono) + metrics — external clients connect to *watch* (§2-6) | 🟡 in progress — broadcast / newspaper next |
 
 ## Run
 
@@ -107,7 +107,8 @@ vouch/
 │       ├── region/             # L2   institution vocabulary · slice reducer · selectors
 │       ├── agent/              # L3   brains (view -> intent) · agent-slice fold
 │       ├── environment/        # L4   composition root · founding · economy · diplomacy · driver
-│       └── credential/         #      typed, validated certificate types on the envelope
+│       ├── credential/         #      typed, validated certificate types on the envelope
+│       └── observation/        # L5   read-only HTTP (hono) · metrics
 └── vouch-core/                 # L1 trust engine (standalone package)
     └── src/                    #   identifier · keys · suite · jcs · encoding · certificate
 ```

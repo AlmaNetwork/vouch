@@ -10,7 +10,7 @@ tracks what is actually implemented.
 - **Trust Core (Layer 1):** extracted into a standalone package, [`vouch-core`](../vouch-core)
   (consumed here as `vouch-core`, a `file:../vouch-core` dependency). It carries the
   Ed25519 / JCS / zod machinery — see that package's README.
-- **HTTP (reserved for §5 observation/broadcast):** `hono` — not yet wired up
+- **HTTP (§5 observation):** `hono` — the read-only observation server (`src/observation`)
 
 This repo is the **simulator** (`vouch-world`); the meaning-free Trust Core lives in its
 own repo/package next to it (`vouch-core`). Dependency direction is one-way:
@@ -31,7 +31,7 @@ vouch-world/  (this repo, the simulator)
     agent/       ✅ Layer 3 Residents: brains (view→intent) + agent-slice fold (M3)
     environment/ ✅ Layer 4 Composition root + founding + economy + diplomacy + driver (M2.5/M3/M4)
     credential/  ✅ Typed, validated certificate types on the universal envelope
-    observation/ ⬜ Layer 5 Observation & broadcast (M5)
+    observation/ 🟡 Layer 5 Read-only HTTP (hono) + metrics (M5); broadcast next
   examples/      m0-m1-demo.ts — uses vouch-core + foundation together
 ```
 
@@ -58,6 +58,7 @@ bun run typecheck # tsc --noEmit (optional)
 | **M3** | Agents, economy (credit/currency), transactions, migration, emergent founding | ✅ implemented, tests green |
 | **Credentials** | Typed, validated certificate types on the universal envelope (skill/membership/asset/endorsement + custom) | ✅ implemented, tests green |
 | **M4** | Diplomacy: cert translation (absorb/map/reexamine/reject) + recognition flow + cross-region trade gate | 🟡 in progress — emergent cross-border (scarcity) next |
+| **M5** | Observation: read-only HTTP server (hono) + metrics — external clients connect to watch (§2-6) | 🟡 in progress — broadcast / newspaper next |
 
 ## M0 — Trust Core (Layer 1) — extracted to the `vouch-core` package
 
