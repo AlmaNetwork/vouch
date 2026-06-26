@@ -10,7 +10,7 @@
 // unchanged: one engine, one FoundingProposal interface, every proposer equal.
 
 import { isValidRegion } from "vouch-core"; // the extracted Trust Core, consumed as a dependency
-import { SYSTEM_ACTOR, type CommitSink } from "../foundation";
+import type { CommitSink } from "../foundation";
 import {
   EVENT_REGION_FOUNDED,
   EVENT_REGION_INSTITUTION_CHANGED,
@@ -49,7 +49,7 @@ export function proposeFounding(env: Commit, proposal: FoundingProposal): Region
     throw new Error(`founding: region "${definition.id}" already exists`);
   }
 
-  env.emit(EVENT_REGION_FOUNDED, SYSTEM_ACTOR, {
+  env.commitSystem(EVENT_REGION_FOUNDED, {
     region: definition,
     proposer,
     status: birthStatus(proposer),
@@ -101,7 +101,7 @@ export function amendInstitution(env: Commit, regionId: string, change: Institut
   const region = getRegion(env.getState(), regionId);
   if (!region) throw new Error(`amendInstitution: region "${regionId}" does not exist`);
 
-  env.emit(EVENT_REGION_INSTITUTION_CHANGED, SYSTEM_ACTOR, { regionId, change, proposer });
+  env.commitSystem(EVENT_REGION_INSTITUTION_CHANGED, { regionId, change, proposer });
 
   const updated = getRegion(env.getState(), regionId);
   if (!updated) throw new Error("amendInstitution: invariant violated");

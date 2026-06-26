@@ -8,7 +8,7 @@
 
 import { type Certificate, decodeBase64, parseIdentifier, verifyCertificate } from "vouch-core";
 import { getAgent } from "../agent";
-import { type CommitSink, SYSTEM_ACTOR } from "../foundation";
+import type { CommitSink } from "../foundation";
 import { EVENT_REGION_RECOGNIZED, type ForeignCertStance, type RegionState, getRegion } from "../region";
 import type { WorldState } from "./state";
 
@@ -97,7 +97,7 @@ export function recognizeRegion(env: CommitSink<WorldState>, by: string, target:
   if (!t) throw new Error(`recognizeRegion: target "${target}" does not exist`);
   if (t.status === "recognized") return t; // idempotent
 
-  env.emit(EVENT_REGION_RECOGNIZED, SYSTEM_ACTOR, { regionId: target, by });
+  env.commitSystem(EVENT_REGION_RECOGNIZED, { regionId: target, by });
   const updated = getRegion(env.getState(), target);
   if (!updated) throw new Error("recognizeRegion: invariant violated");
   return updated;

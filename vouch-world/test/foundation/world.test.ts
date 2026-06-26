@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { EVENT_TICK, type AlmaEvent } from "../../src/foundation/event";
+import { EVENT_TICK, SYSTEM_ACTOR, type AlmaEvent } from "../../src/foundation/event";
 import { type Reducer, World, replayState } from "../../src/foundation/world";
 
 // A tiny domain to exercise the event-sourcing machinery without pulling in any
@@ -88,6 +88,19 @@ describe("world / tick loop", () => {
     // Replaying just the emitted events reproduces the same state.
     const events: AlmaEvent[] = w.log.all();
     expect(replayState(events, INITIAL, reducer).state).toEqual(w.getState());
+  });
+
+  test("emit rejects SYSTEM_ACTOR; commitSystem is the only system-authoring path (§2-4)", () => {
+    const w = makeWorld("cap");
+    // a principal-authored event is fine
+    w.emit("ping", "alice@umi", { value: 1 });
+    expect(w.getState().lastActor).toBe("alice@umi");
+    // forging a system-authored event via emit throws at WRITE time (can't enter the log)
+    expect(() => w.emit("ping", SYSTEM_ACTOR, {})).toThrow();
+    expect(w.getState().pings).toBe(1); // the forged emit did not append
+    // the privileged commit authors with SYSTEM_ACTOR
+    w.commitSystem("ping", { value: 2 });
+    expect(w.getState().lastActor).toBe(SYSTEM_ACTOR);
   });
 
   test("world.log is read-only: no append, so emit is the only path into the log (G1)", () => {

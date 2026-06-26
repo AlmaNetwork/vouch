@@ -15,7 +15,7 @@ import {
   getAgent,
   treasuryId,
 } from "../agent";
-import { type CommitSink, SYSTEM_ACTOR } from "../foundation";
+import { type CommitSink } from "../foundation";
 import { canTransactAcross } from "./diplomacy";
 import type { WorldState } from "./state";
 
@@ -93,6 +93,6 @@ export function executeTransfer(env: CommitSink<WorldState>, move: TransferMove,
   );
 
   const payload: SettlementPayload = { entries, receipt, memo: { from: from.id, to: to.id, amount: move.amount, fee } };
-  env.emit(EVENT_ECONOMY_SETTLED, SYSTEM_ACTOR, payload);
+  env.commitSystem(EVENT_ECONOMY_SETTLED, payload);
   return { ok: true, fee, receipt };
 }

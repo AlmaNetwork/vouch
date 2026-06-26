@@ -13,7 +13,7 @@ import {
   getAgent,
   treasuryId,
 } from "../agent";
-import { type CommitSink, SYSTEM_ACTOR } from "../foundation";
+import { type CommitSink } from "../foundation";
 import { getRegion } from "../region";
 import type { WorldState } from "./state";
 
@@ -44,7 +44,7 @@ export function admitAgent(env: CommitSink<WorldState>, spec: AdmitSpec): AgentS
     reputation: 0,
     valueProfile: spec.valueProfile,
   };
-  env.emit(EVENT_AGENT_ADMITTED, SYSTEM_ACTOR, { agent });
+  env.commitSystem(EVENT_AGENT_ADMITTED, { agent });
 
   const admitted = getAgent(env.getState(), spec.id);
   if (!admitted) throw new Error("admitAgent: invariant violated");
@@ -67,7 +67,7 @@ export function admitTreasury(env: CommitSink<WorldState>, region: string, initi
 export function immigrate(env: CommitSink<WorldState>, agentId: string, toRegion: string): AgentState {
   if (!getAgent(env.getState(), agentId)) throw new Error(`immigrate: agent "${agentId}" does not exist`);
   if (!getRegion(env.getState(), toRegion)) throw new Error(`immigrate: region "${toRegion}" does not exist`);
-  env.emit(EVENT_AGENT_MIGRATED, SYSTEM_ACTOR, { agentId, toRegion });
+  env.commitSystem(EVENT_AGENT_MIGRATED, { agentId, toRegion });
   const moved = getAgent(env.getState(), agentId);
   if (!moved) throw new Error("immigrate: invariant violated");
   return moved;

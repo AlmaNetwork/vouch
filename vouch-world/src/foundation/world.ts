@@ -20,7 +20,14 @@ export type Reducer<S> = (state: S, event: AlmaEvent) => S;
  */
 export interface CommitSink<S> {
   getState(): S;
+  /** Author a PRINCIPAL event (a non-system actor). SYSTEM_ACTOR is rejected here — use commitSystem. */
   emit(type: string, actor: string, payload?: Record<string, unknown>): AlmaEvent;
+  /**
+   * Author an ENVIRONMENT event (actor = SYSTEM_ACTOR). The privileged §2-4 commit:
+   * only code that holds a CommitSink (the env-only write capability) can produce a
+   * system-authored / conserved event. Keep CommitSink out of untrusted hands.
+   */
+  commitSystem(type: string, payload?: Record<string, unknown>): AlmaEvent;
 }
 
 /**
@@ -73,23 +80,41 @@ export class World<S> implements CommitSink<S>, WorldView<S> {
     return this.currentState;
   }
 
-  /**
-   * The ONLY way the world changes: append an event, fold it into state.
-   * §2-4 conservation (audit G4): when the M3 economy lands, value/balance events
-   * must be produced ONLY by the environment's executeTransfer, and the economy
-   * reducer must honor them only when env-authored — never a self-asserted balance
-   * event. Because this method is public, the REDUCER is the real chokepoint.
-   */
-  emit(type: string, actor: string, payload: Record<string, unknown> = {}): AlmaEvent {
+  /** Append an event + fold it into state — the single internal mutation. */
+  private author(type: string, actor: string, payload: Record<string, unknown>): AlmaEvent {
     const event = this.events.append({ tick: this.currentTick, type, actor, payload });
     this.currentState = deepFreeze(this.reducer(this.currentState, event));
     return event;
   }
 
-  /** Advance discrete time by one tick, recording the advance as an event. */
+  /**
+   * Author an event as a PRINCIPAL (an agent / owner — a non-system actor).
+   * §2-4 conservation (audit G4/G7): SYSTEM_ACTOR is REJECTED here, so a caller that
+   * only reaches `emit` (e.g. a future network command handler) can never forge a
+   * `world`-authored settlement. System events go through `commitSystem`, which is
+   * only on the env-only CommitSink. The reducer ALSO gates on actor === SYSTEM_ACTOR,
+   * so a forged non-system event is ignored on replay too (defence in depth).
+   */
+  emit(type: string, actor: string, payload: Record<string, unknown> = {}): AlmaEvent {
+    if (actor === SYSTEM_ACTOR) {
+      throw new Error(`emit: actor "${SYSTEM_ACTOR}" is reserved for environment-authored events — use commitSystem`);
+    }
+    return this.author(type, actor, payload);
+  }
+
+  /**
+   * Author an ENVIRONMENT event (actor = SYSTEM_ACTOR) — the privileged §2-4 commit.
+   * Reachable only via a CommitSink (the env-only write capability), so the
+   * conservation monopoly is enforced at WRITE time, not just at the reducer.
+   */
+  commitSystem(type: string, payload: Record<string, unknown> = {}): AlmaEvent {
+    return this.author(type, SYSTEM_ACTOR, payload);
+  }
+
+  /** Advance discrete time by one tick, recording the advance as a system event. */
   advanceTick(): AlmaEvent {
     this.currentTick += 1;
-    return this.emit(EVENT_TICK, SYSTEM_ACTOR, { tick: this.currentTick });
+    return this.commitSystem(EVENT_TICK, { tick: this.currentTick });
   }
 
   /** tick-loop skeleton: advance `ticks` times; each tick records ≥1 event. */

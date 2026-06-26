@@ -23,7 +23,7 @@ import {
   runEconomy,
   seedGenesis,
 } from "../../src/environment";
-import { replayState } from "../../src/foundation";
+import { SYSTEM_ACTOR, replayState } from "../../src/foundation";
 import { defineRegion, getRegion, makeInstitutions } from "../../src/region";
 
 const NOTARY = keyPairFromSeed(new Uint8Array(32).fill(9));
@@ -104,6 +104,22 @@ describe("M3 — only the environment can change value (§2-4, audit G8)", () =>
     });
 
     expect(getAgent(world.getState(), "alice@umi")?.balances.currency).toBe(before);
+  });
+
+  test("a SYSTEM_ACTOR settlement cannot be forged via emit — blocked at write time (audit G7)", () => {
+    const world = umiWorld();
+    const before = getAgent(world.getState(), "alice@umi")?.balances.currency;
+
+    // Forging the env actor ("world") on a value event now THROWS — it never enters the log.
+    expect(() =>
+      world.emit(EVENT_ECONOMY_SETTLED, SYSTEM_ACTOR, {
+        entries: [{ agentId: "alice@umi", currencyDelta: 1000, creditDelta: 0, reputationDelta: 0 }],
+        memo: { from: "alice@umi", to: "alice@umi", amount: 0, fee: 0 },
+      }),
+    ).toThrow();
+
+    expect(getAgent(world.getState(), "alice@umi")?.balances.currency).toBe(before);
+    expect(world.log.all().some((e) => e.type === EVENT_ECONOMY_SETTLED)).toBe(false);
   });
 
   test("a cross-region transfer to an unrecognized region is refused (M4 diplomacy gate)", () => {
