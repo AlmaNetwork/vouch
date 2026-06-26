@@ -120,6 +120,13 @@ export type InstitutionChange =
   | { readonly policy: "governance"; readonly value: Governance } // constitutional change (P2)
   | { readonly policy: "economy"; readonly value: EconomyPolicy }; // fee/tax policy (P2)
 
+/**
+ * An OPEN council amendment proposal (P3 voting): the proposed change plus who has voted
+ * for it so far. A region has at most one open proposal; it resolves (applies + clears)
+ * when `votes.length` reaches the council's `threshold`.
+ */
+export type GovProposal = { change: InstitutionChange; votes: readonly string[]; proposedBy: string };
+
 // --- runtime state (derived from events) ---------------------------------
 
 export interface RegionState {
@@ -135,6 +142,7 @@ export interface RegionState {
   readonly owner: string | null;
   readonly lifecycle: RegionLifecycle; // active | dormant (P3); born active
   readonly salePrice: number | null; // asking price when listed on the market; null = not for sale
+  readonly openProposal: GovProposal | null; // the council's one in-flight amendment vote (P3); null when none
   // residency is NOT stored here — it is derived from the agent slice (AgentState.region,
   // via agentsInRegion), keeping a single source of truth (audit 3-A / EMG-2).
 }
@@ -147,6 +155,8 @@ export const EVENT_REGION_RECOGNIZED = "region.recognized"; // M4: a region join
 export const EVENT_REGION_LIFECYCLE_CHANGED = "region.lifecycle.changed"; // P3: active <-> dormant
 export const EVENT_REGION_LISTED = "region.listed"; // P3: owner sets an asking price (null = delist)
 export const EVENT_REGION_OWNERSHIP_TRANSFERRED = "region.ownership.transferred"; // P3: sold/handed over (never deleted)
+export const EVENT_GOV_PROPOSAL_OPENED = "gov.proposal.opened"; // P3: a council member proposes an amendment
+export const EVENT_GOV_VOTE_CAST = "gov.vote.cast"; // P3: a council member votes; resolves at threshold
 
 export type RegionFoundedPayload = {
   region: RegionDefinition;
@@ -169,6 +179,8 @@ export type RegionRecognizedPayload = {
 export type RegionLifecycleChangedPayload = { regionId: string; lifecycle: RegionLifecycle };
 export type RegionListedPayload = { regionId: string; salePrice: number | null };
 export type RegionOwnershipTransferredPayload = { regionId: string; from: string; to: string; price: number | null };
+export type GovProposalOpenedPayload = { regionId: string; change: InstitutionChange; by: string };
+export type GovVoteCastPayload = { regionId: string; voter: string };
 
 // --- builders (convenience; villages are still just data) ----------------
 

@@ -12,6 +12,8 @@
 import { isValidRegion } from "vouch-core"; // the extracted Trust Core, consumed as a dependency
 import type { CommitSink } from "../foundation";
 import {
+  EVENT_GOV_PROPOSAL_OPENED,
+  EVENT_GOV_VOTE_CAST,
   EVENT_REGION_FOUNDED,
   EVENT_REGION_INSTITUTION_CHANGED,
   type FoundingProposal,
@@ -104,17 +106,66 @@ export function seedGenesis(env: Commit, definitions: readonly RegionDefinition[
 export function amendInstitution(env: Commit, regionId: string, change: InstitutionChange, by: string): RegionState {
   const region = getRegion(env.getState(), regionId);
   if (!region) throw new Error(`amendInstitution: region "${regionId}" does not exist`);
+  // Council-governed regions decide collectively — a single member may NOT amend directly.
+  if (region.institutions.governance.kind === "council") {
+    throw new Error(`amendInstitution: region "${regionId}" is council-governed — use openProposal/castVote`);
+  }
   if (!canGovern(region, by)) {
     throw new Error(`amendInstitution: "${by}" may not amend region "${regionId}" under its ${region.institutions.governance.kind} governance`);
   }
-  // A constitutional change must leave the region governable (no empty-council brick);
-  // an economy change must stay within sane bounds (no fee > amount / negative fee).
-  if (change.policy === "governance") validateGovernance(change.value);
+  // A constitutional change must leave the region governable (no empty-council brick, and no
+  // owner-null dictatorship); an economy change must stay within bounds (no fee > amount / negative).
+  if (change.policy === "governance") {
+    validateGovernance(change.value);
+    if (change.value.kind === "dictatorship" && region.owner === null) {
+      throw new Error(`amendInstitution: a system-owned (owner-null) region cannot become a dictatorship — it would be ungovernable`);
+    }
+  }
   if (change.policy === "economy") validateEconomyPolicy(change.value);
 
   env.commitSystem(EVENT_REGION_INSTITUTION_CHANGED, { regionId, change, by });
 
   const updated = getRegion(env.getState(), regionId);
   if (!updated) throw new Error("amendInstitution: invariant violated");
+  return updated;
+}
+
+// --- council voting (§8, P3): collective amendments via proposal + votes -------------
+//
+// A council-governed region amends through a PROPOSAL that APPLIES once `threshold` members
+// have voted (the proposer's open counts as the first vote, so a threshold-1 council resolves
+// at once). Resolution happens in the region reducer when the vote count crosses threshold,
+// so it replays deterministically. The change is validated here, at propose time.
+
+export function openProposal(env: Commit, regionId: string, change: InstitutionChange, by: string): RegionState {
+  const region = getRegion(env.getState(), regionId);
+  if (!region) throw new Error(`openProposal: region "${regionId}" does not exist`);
+  if (region.institutions.governance.kind !== "council") throw new Error(`openProposal: region "${regionId}" is not council-governed`);
+  if (!canGovern(region, by)) throw new Error(`openProposal: "${by}" is not a council member of region "${regionId}"`);
+  if (region.openProposal) throw new Error(`openProposal: region "${regionId}" already has an open proposal`);
+  if (change.policy === "governance") {
+    validateGovernance(change.value);
+    // an owner-null region made a dictatorship would be ungovernable forever (same brick as an
+    // empty council) — a council may not vote itself into that state.
+    if (change.value.kind === "dictatorship" && region.owner === null) {
+      throw new Error(`openProposal: a system-owned (owner-null) region cannot become a dictatorship — it would be ungovernable`);
+    }
+  }
+  if (change.policy === "economy") validateEconomyPolicy(change.value);
+  env.commitSystem(EVENT_GOV_PROPOSAL_OPENED, { regionId, change, by });
+  const updated = getRegion(env.getState(), regionId);
+  if (!updated) throw new Error("openProposal: invariant violated");
+  return updated;
+}
+
+export function castVote(env: Commit, regionId: string, voter: string): RegionState {
+  const region = getRegion(env.getState(), regionId);
+  if (!region) throw new Error(`castVote: region "${regionId}" does not exist`);
+  if (!region.openProposal) throw new Error(`castVote: region "${regionId}" has no open proposal`);
+  if (!canGovern(region, voter)) throw new Error(`castVote: "${voter}" is not a council member of region "${regionId}"`);
+  if (region.openProposal.votes.includes(voter)) throw new Error(`castVote: "${voter}" already voted`);
+  env.commitSystem(EVENT_GOV_VOTE_CAST, { regionId, voter });
+  const updated = getRegion(env.getState(), regionId);
+  if (!updated) throw new Error("castVote: invariant violated");
   return updated;
 }

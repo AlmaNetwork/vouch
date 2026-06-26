@@ -7,12 +7,17 @@
 
 import { SYSTEM_ACTOR, type Reducer } from "../foundation";
 import {
+  EVENT_GOV_PROPOSAL_OPENED,
+  EVENT_GOV_VOTE_CAST,
   EVENT_REGION_FOUNDED,
   EVENT_REGION_INSTITUTION_CHANGED,
   EVENT_REGION_LIFECYCLE_CHANGED,
   EVENT_REGION_LISTED,
   EVENT_REGION_OWNERSHIP_TRANSFERRED,
   EVENT_REGION_RECOGNIZED,
+  type GovProposalOpenedPayload,
+  type GovVoteCastPayload,
+  type InstitutionChange,
   type InstitutionChangedPayload,
   type Institutions,
   type RegionFoundedPayload,
@@ -26,19 +31,33 @@ import {
 /** The region read-model slice of world state. The environment composes this in. */
 export type RegionSlice = { readonly regions: Readonly<Record<string, RegionState>> };
 
-function applyInstitutionChange(institutions: Institutions, payload: InstitutionChangedPayload): Institutions {
-  switch (payload.change.policy) {
+function applyInstitutionChange(institutions: Institutions, change: InstitutionChange): Institutions {
+  switch (change.policy) {
     case "verification":
-      return { ...institutions, verificationPolicy: payload.change.value };
+      return { ...institutions, verificationPolicy: change.value };
     case "diplomacy":
-      return { ...institutions, diplomacyPolicy: payload.change.value };
+      return { ...institutions, diplomacyPolicy: change.value };
     case "schemaLedger":
-      return { ...institutions, schemaLedger: payload.change.value };
+      return { ...institutions, schemaLedger: change.value };
     case "governance":
-      return { ...institutions, governance: payload.change.value };
+      return { ...institutions, governance: change.value };
     case "economy":
-      return { ...institutions, economyPolicy: payload.change.value };
+      return { ...institutions, economyPolicy: change.value };
   }
+}
+
+/**
+ * Resolve a region's open council proposal: if its votes have reached the council's
+ * `threshold`, APPLY the (already-validated-at-propose-time) change and clear the proposal.
+ * Otherwise leave it open. A no-op when there is no proposal.
+ */
+function resolveIfPassed(region: RegionState): RegionState {
+  const p = region.openProposal;
+  if (!p) return region;
+  const g = region.institutions.governance;
+  const threshold = g.kind === "council" ? g.threshold : 1;
+  if (p.votes.length < threshold) return region;
+  return { ...region, institutions: applyInstitutionChange(region.institutions, p.change), openProposal: null };
 }
 
 /** Folds region-level events into the region slice. Ignores everything else. */
@@ -62,6 +81,7 @@ export const regionReducer: Reducer<RegionSlice> = (state, event) => {
         owner: p.owner,
         lifecycle: "active", // born active; the owner may hibernate it later (P3)
         salePrice: null,
+        openProposal: null,
       };
       return { ...state, regions: { ...state.regions, [region.id]: region } };
     }
@@ -69,7 +89,7 @@ export const regionReducer: Reducer<RegionSlice> = (state, event) => {
       const p = event.payload as InstitutionChangedPayload;
       const existing = state.regions[p.regionId];
       if (!existing) return state;
-      const updated: RegionState = { ...existing, institutions: applyInstitutionChange(existing.institutions, p) };
+      const updated: RegionState = { ...existing, institutions: applyInstitutionChange(existing.institutions, p.change) };
       return { ...state, regions: { ...state.regions, [p.regionId]: updated } };
     }
     case EVENT_REGION_RECOGNIZED: {
@@ -103,9 +123,28 @@ export const regionReducer: Reducer<RegionSlice> = (state, event) => {
         owner: p.to,
         lifecycle: "active",
         salePrice: null,
+        openProposal: null, // any in-flight council vote is void once the asset changes hands
         institutions: { ...existing.institutions, governance: { kind: "dictatorship" } },
       };
       return { ...state, regions: { ...state.regions, [p.regionId]: transferred } };
+    }
+    case EVENT_GOV_PROPOSAL_OPENED: {
+      const p = event.payload as GovProposalOpenedPayload;
+      const existing = state.regions[p.regionId];
+      if (!existing) return state;
+      if (existing.institutions.governance.kind !== "council") return state; // only councils vote
+      if (existing.openProposal) return state; // one open proposal at a time
+      // the proposer's open counts as their vote; resolve immediately if threshold is 1
+      const opened: RegionState = { ...existing, openProposal: { change: p.change, votes: [p.by], proposedBy: p.by } };
+      return { ...state, regions: { ...state.regions, [p.regionId]: resolveIfPassed(opened) } };
+    }
+    case EVENT_GOV_VOTE_CAST: {
+      const p = event.payload as GovVoteCastPayload;
+      const existing = state.regions[p.regionId];
+      if (!existing || !existing.openProposal) return state;
+      if (existing.openProposal.votes.includes(p.voter)) return state; // no double vote
+      const voted: RegionState = { ...existing, openProposal: { ...existing.openProposal, votes: [...existing.openProposal.votes, p.voter] } };
+      return { ...state, regions: { ...state.regions, [p.regionId]: resolveIfPassed(voted) } };
     }
     default:
       return state;

@@ -73,13 +73,17 @@ through `environment`**. `region` exports only types/reducer/slice/selectors and
   economy is frozen** (`executeTransfer` refuses `region-dormant`). Price settlement in currency
   is deferred (the account↔agent value bridge is Track B).
 - **Governance (§8 valve, now OPEN+gated):** `Institutions.governance` = `dictatorship` (the
-  owner is sole authority) | `council` (any listed member; `threshold` reserved for P3 voting).
-  `amendInstitution(env, regionId, change, by)` throws unless `canGovern(region, by)` — so a
-  participant rewrites only the rules of a region they govern, **including governance itself**
-  (a dictator can open a council). `validateGovernance` rejects an empty council (permanent
-  brick). The reducer's top actor-gate makes this unforgeable (a non-system institution change
-  is ignored). Authorization of WHICH principal lives at write-time (`canGovern`); the reducer
-  gate only enforces env-authorship.
+  owner is sole authority) | `council` (a set of `members` + a `threshold`).
+  - **dictatorship:** `amendInstitution(env, regionId, change, by)` throws unless `by` is the
+    owner; the owner can rewrite any rule **including governance itself** (open a council).
+  - **council (P3 voting):** `amendInstitution` is REJECTED — a member `openProposal(...)`s and
+    members `castVote(...)`; the change APPLIES in the reducer once `votes.length >= threshold`
+    (the proposer's open counts as vote 1, so a threshold-1 council resolves at once). One open
+    proposal at a time; no double-vote; resolution is a pure deterministic fold.
+  - `validateGovernance` rejects an empty council, and a change to a `dictatorship` is rejected
+    when `owner === null` (both would brick the region — no one could ever govern it).
+  - The reducer's top actor-gate makes all of this unforgeable (a non-system institution/vote
+    event is ignored, live + replay).
 - **`economyPolicy`** on `Institutions` = the region's own fee/tax schedule
   (`baseCostRate`/`minCostRate`/`repDiscount`/`creditPerTx`); `executeTransfer` reads the
   SENDER region's policy. Owner-amendable (`InstitutionChange` "economy"), **validated** by

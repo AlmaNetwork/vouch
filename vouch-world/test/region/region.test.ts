@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test";
 import {
   INITIAL_WORLD_STATE,
   amendInstitution,
+  castVote,
   createAlmaWorld,
   emergenceProposal,
   experimenterProposal,
+  openProposal,
   proposeFounding,
   rootReducer,
   seedGenesis,
@@ -235,33 +237,58 @@ describe("Track A — owner-scoped governance gate (§8 legislator, valve now OP
     expect(replayState(world.log.all(), INITIAL_WORLD_STATE, rootReducer).state).toEqual(world.getState());
   });
 
-  test("council: any member may amend; a non-member is rejected", () => {
+  test("council voting (P3): a member proposes, votes reach threshold, the amendment applies", () => {
     const world = createAlmaWorld("council");
     seedGenesis(world, [LENIENT]);
-    const council = makeInstitutions({ governance: { kind: "council", members: ["acct:a", "acct:b"], threshold: 1 } });
+    const council = makeInstitutions({
+      governance: { kind: "council", members: ["acct:a", "acct:b"], threshold: 2 },
+      diplomacyPolicy: { defaultStance: "absorb", overrides: {} },
+    });
     proposeFounding(world, experimenterProposal(defineRegion("rep", "Rep", council), undefined, "acct:a"));
 
-    // a council member (not the owner) may amend
-    amendInstitution(world, "rep", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, "acct:b");
+    // a single member may NOT amend directly — councils decide collectively
+    expect(() => amendInstitution(world, "rep", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, "acct:a")).toThrow();
+    // a member proposes (counts as 1 vote); below threshold 2, nothing applies yet
+    openProposal(world, "rep", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, "acct:a");
+    expect(getRegion(world.getState(), "rep")?.institutions.diplomacyPolicy.defaultStance).toBe("absorb");
+    // a non-member cannot vote
+    expect(() => castVote(world, "rep", "acct:x")).toThrow();
+    // the second member votes -> threshold reached -> the change APPLIES and the proposal clears
+    castVote(world, "rep", "acct:b");
     expect(getRegion(world.getState(), "rep")?.institutions.diplomacyPolicy.defaultStance).toBe("reject");
-    // a non-member is rejected
-    expect(() => amendInstitution(world, "rep", { policy: "diplomacy", value: { defaultStance: "absorb", overrides: {} } }, "acct:x")).toThrow();
+    expect(getRegion(world.getState(), "rep")?.openProposal).toBeNull();
+
+    // and the whole vote replays deterministically
+    expect(replayState(world.log.all(), INITIAL_WORLD_STATE, rootReducer).state).toEqual(world.getState());
   });
 
-  test("governance itself is amendable: a dictator can open a council, shifting who may govern", () => {
+  test("an owner-null council cannot vote itself into an ungovernable dictatorship (brick)", () => {
+    const world = createAlmaWorld("nullbrick");
+    // a system-owned (owner null) council region — e.g. genesis seeded with council governance
+    const council = makeInstitutions({ governance: { kind: "council", members: ["acct:a", "acct:b"], threshold: 1 }, diplomacyPolicy: { defaultStance: "absorb", overrides: {} } });
+    seedGenesis(world, [defineRegion("umi", "Umi", council)]);
+    // it IS governable by its members while a council...
+    openProposal(world, "umi", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, "acct:a");
+    expect(getRegion(world.getState(), "umi")?.institutions.diplomacyPolicy.defaultStance).toBe("reject");
+    // ...but it may NOT vote itself to a dictatorship (owner null -> no one could ever govern it)
+    expect(() => openProposal(world, "umi", { policy: "governance", value: { kind: "dictatorship" } }, "acct:a")).toThrow();
+  });
+
+  test("governance is amendable: a dictator opens a council, after which amendments require a vote", () => {
     const world = createAlmaWorld("constitution");
     seedGenesis(world, [LENIENT]);
     proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova", makeInstitutions()), undefined, "acct:alice"));
 
-    // the dictator (owner) opens a council
+    // the dictator (owner) opens a council (threshold 1) — a direct amend while still a dictatorship
     amendInstitution(world, "nova", { policy: "governance", value: { kind: "council", members: ["acct:alice", "acct:bob"], threshold: 1 } }, "acct:alice");
     expect(getRegion(world.getState(), "nova")?.institutions.governance.kind).toBe("council");
 
-    // now bob (a council member, NOT the owner) can amend
-    amendInstitution(world, "nova", { policy: "diplomacy", value: { defaultStance: "absorb", overrides: {} } }, "acct:bob");
+    // now a DIRECT amend is rejected; bob (a member) proposes — at threshold 1 it applies at once
+    expect(() => amendInstitution(world, "nova", { policy: "diplomacy", value: { defaultStance: "absorb", overrides: {} } }, "acct:bob")).toThrow();
+    openProposal(world, "nova", { policy: "diplomacy", value: { defaultStance: "absorb", overrides: {} } }, "acct:bob");
     expect(getRegion(world.getState(), "nova")?.institutions.diplomacyPolicy.defaultStance).toBe("absorb");
-    // a stranger still cannot
-    expect(() => amendInstitution(world, "nova", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, "acct:stranger")).toThrow();
+    // a stranger can neither propose nor vote
+    expect(() => openProposal(world, "nova", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, "acct:stranger")).toThrow();
   });
 
   test("a FORGED region.institution.changed (non-system actor) is ignored at the fold — can't seize governance (audit G8)", () => {

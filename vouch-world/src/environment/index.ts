@@ -13,6 +13,8 @@ export {
   emergenceProposal,
   seedGenesis,
   amendInstitution,
+  openProposal,
+  castVote,
 } from "./founding";
 export {
   type TransferMove,

@@ -218,7 +218,8 @@ Reproduce these verbatim; tests assert on them and reducers match on them.
 
 **Event types**
 - Region: `region.founded`, `region.institution.changed`, `region.recognized`,
-  `region.lifecycle.changed`, `region.listed`, `region.ownership.transferred`.
+  `region.lifecycle.changed`, `region.listed`, `region.ownership.transferred`,
+  `gov.proposal.opened`, `gov.vote.cast`.
 - Agent/economy: `agent.admitted`, `agent.migrated`, `agent.decided`,
   `agent.vouched`, `economy.settled`, `economy.minted`.
 
