@@ -150,13 +150,18 @@ breaking change requiring deliberate sign-off.
 
 ### Conservation monopoly
 
-- **`executeTransfer` is the sole producer of value events** (`economy.settled`).
+- **`executeTransfer` is the sole producer of value-move events** (`economy.settled`).
   No other code may move value. Agents emit `Intent`s; the environment executes.
 - **Currency is conserved:** settlement `currencyDelta`s must sum to zero. A
-  violation throws as an internal bug (it is never a user-facing error).
-- **The reducer is the real chokepoint.** `World.emit` is public, so the
-  `agentReducer` only honors `economy.settled` when `event.actor === SYSTEM_ACTOR`
-  (`"world"`). A self-asserted balance event is ignored.
+  violation throws as an internal bug (it is never a user-facing error). New currency
+  enters ONLY via admission endowments or an explicit, logged `economy.minted`
+  (`mintCurrency`) — so the supply (`currencySupply`) is auditable from t0.
+- **System authoring is unforgeable at write time + reducer-gated.** `World.emit`
+  **rejects** `actor === SYSTEM_ACTOR` (throws) — system/conserved events are authored
+  only via `World.commitSystem`, exposed on the env-only `CommitSink`. As defence in
+  depth, the `agentReducer` also honors value events (`economy.settled`/`economy.minted`)
+  only when `event.actor === SYSTEM_ACTOR` (`"world"`), so a forged event is ignored on
+  replay too.
 - **Settlements apply atomically.** If any entry references an unknown agent, the
   whole settlement is rejected — never apply a partial set of legs (would strand
   currency).
@@ -213,7 +218,7 @@ Reproduce these verbatim; tests assert on them and reducers match on them.
 **Event types**
 - Region: `region.founded`, `region.institution.changed`, `region.recognized`.
 - Agent/economy: `agent.admitted`, `agent.migrated`, `agent.decided`,
-  `economy.settled`.
+  `economy.settled`, `economy.minted`.
 
 **Certificate / protocol**
 - `CERT_VERSION = "alma-cert/v1"`, `DEFAULT_SUITE = "ed25519"`.

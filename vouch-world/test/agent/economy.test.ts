@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { type Certificate, encodeBase64, keyPairFromSeed, verifyCertificate } from "vouch-core";
 import {
   EVENT_AGENT_DECIDED,
+  EVENT_ECONOMY_MINTED,
   EVENT_ECONOMY_SETTLED,
+  currencySupply,
   getAgent,
   listAgents,
   treasuryId,
@@ -18,6 +20,7 @@ import {
   immigrate,
   isCurrencyConserving,
   isTransferable,
+  mintCurrency,
   proposeFounding,
   rootReducer,
   runEconomy,
@@ -83,6 +86,8 @@ describe("M3 — transactions go through the environment (§2-4/§2-5)", () => {
       const receipt = (e.payload as { receipt: Certificate }).receipt;
       expect(verifyCertificate(receipt, NOTARY.publicKey)).toEqual({ ok: true });
       expect(receipt.schemaId).toBe("alma.tx/receipt/v1");
+      // the receipt records WHICH notary key signed it (multi-node verification, no key directory)
+      expect(receipt.claims.notaryKeyId).toBe(encodeBase64(NOTARY.publicKey));
     }
   });
 
@@ -161,6 +166,46 @@ describe("M3 — only the environment can change value (§2-4, audit G8)", () =>
   test("currency is transferable, credit is not (§3-B)", () => {
     expect(isTransferable("currency")).toBe(true);
     expect(isTransferable("credit")).toBe(false);
+  });
+});
+
+describe("Track A — explicit mint + auditable supply (conservation baseline)", () => {
+  test("mintCurrency is the explicit, logged origin of currency; supply grows by exactly the amount", () => {
+    const world = umiWorld(); // alice 100, bob 0, treasury 0 => supply 100
+    const before = currencySupply(world.getState());
+    expect(before).toBe(100);
+
+    const res = mintCurrency(world, "bob@umi", 50, "genesis-grant");
+    expect(res.ok).toBe(true);
+    expect(getAgent(world.getState(), "bob@umi")?.balances.currency).toBe(50);
+    expect(currencySupply(world.getState())).toBe(before + 50);
+
+    // a logged, env-authored event (actor "world")
+    const minted = world.log.all().filter((e) => e.type === EVENT_ECONOMY_MINTED);
+    expect(minted.length).toBe(1);
+    expect(minted[0]?.actor).toBe("world");
+
+    // replay reproduces the minted supply exactly
+    expect(replayState(world.log.all(), INITIAL_WORLD_STATE, rootReducer).state).toEqual(world.getState());
+  });
+
+  test("a forged mint can't enter the log (write-time) nor be honored unauthored (reducer-gate)", () => {
+    const world = umiWorld();
+    const before = currencySupply(world.getState());
+    // forging the env actor on a mint throws at write time
+    expect(() => world.emit(EVENT_ECONOMY_MINTED, SYSTEM_ACTOR, { agentId: "alice@umi", amount: 999, reason: "x" })).toThrow();
+    // a self-asserted (non-system) mint is ignored by the reducer's actor-gate
+    world.emit(EVENT_ECONOMY_MINTED, "alice@umi", { agentId: "alice@umi", amount: 999, reason: "x" });
+    expect(currencySupply(world.getState())).toBe(before);
+  });
+
+  test("transfers conserve supply; only admission + mint change it", () => {
+    const world = umiWorld();
+    const supply = currencySupply(world.getState());
+    executeTransfer(world, { from: "alice@umi", to: "bob@umi", amount: 40 }, { tick: 0, notary: NOTARY });
+    expect(currencySupply(world.getState())).toBe(supply); // a transfer is zero-sum
+    mintCurrency(world, "bob@umi", 10, "grant");
+    expect(currencySupply(world.getState())).toBe(supply + 10);
   });
 });
 

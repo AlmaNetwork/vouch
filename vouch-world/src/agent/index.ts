@@ -7,4 +7,4 @@
 export * from "./types";
 export { agentReducer } from "./reducer";
 export { type Brain, type ReadOnlyView, idleBrain, tradingBrain, defaultBrains } from "./brain";
-export { listAgents, getAgent, agentsInRegion, treasuryId } from "./selectors";
+export { listAgents, getAgent, agentsInRegion, treasuryId, currencySupply } from "./selectors";

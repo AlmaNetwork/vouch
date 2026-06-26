@@ -7,9 +7,11 @@
 // of the entries — no World/tick/rng — so it could later be lifted onto a
 // distributed executor (real ALMA) without touching this signature.
 
-import { type Certificate, type KeyPair, issueCertificate } from "vouch-core";
+import { type Certificate, type KeyPair, encodeBase64, issueCertificate } from "vouch-core";
 import {
+  EVENT_ECONOMY_MINTED,
   EVENT_ECONOMY_SETTLED,
+  type MintPayload,
   type SettlementEntry,
   type SettlementPayload,
   getAgent,
@@ -81,12 +83,15 @@ export function executeTransfer(env: CommitSink<WorldState>, move: TransferMove,
 
   // byproduct certificate (§2-8 seed) — "this transaction completed", signed by the
   // region notary. It accumulates in the log; replay folds it as data (never re-signs).
+  // `notaryKeyId` records WHICH key signed it, so a verifier on another node can pick
+  // the right key without a global key directory (multi-operator / replay safety). Ed25519
+  // signing is deterministic and issuedAt comes from the tick, so the receipt is bit-stable.
   const receipt = issueCertificate(
     {
       issuer: `notary@${from.region}`,
       subject: to.id,
       schemaId: "alma.tx/receipt/v1",
-      claims: { from: from.id, to: to.id, amount: move.amount, fee, kind: "currency" },
+      claims: { from: from.id, to: to.id, amount: move.amount, fee, kind: "currency", notaryKeyId: encodeBase64(opts.notary.publicKey) },
       issuedAt: tickToIso(opts.tick),
     },
     opts.notary.privateKey,
@@ -95,4 +100,20 @@ export function executeTransfer(env: CommitSink<WorldState>, move: TransferMove,
   const payload: SettlementPayload = { entries, receipt, memo: { from: from.id, to: to.id, amount: move.amount, fee } };
   env.commitSystem(EVENT_ECONOMY_SETTLED, payload);
   return { ok: true, fee, receipt };
+}
+
+export type MintResult = { ok: true } | { ok: false; reason: string };
+
+/**
+ * Mint NEW currency to an agent — the EXPLICIT, logged, env-authored origin of money,
+ * distinct from transfers (which conserve, summing to zero). This is the conservation
+ * BASELINE: the supply (`currencySupply`) only ever grows via admission endowments and
+ * this event, so total supply is auditable from t0. Env-only (commitSystem); a forged
+ * mint is rejected at write time and again by the reducer's actor-gate.
+ */
+export function mintCurrency(env: CommitSink<WorldState>, agentId: string, amount: number, reason: string): MintResult {
+  if (!Number.isInteger(amount) || amount <= 0) return { ok: false, reason: "bad-amount" };
+  if (!getAgent(env.getState(), agentId)) return { ok: false, reason: "unknown-agent" };
+  env.commitSystem(EVENT_ECONOMY_MINTED, { agentId, amount, reason } satisfies MintPayload);
+  return { ok: true };
 }

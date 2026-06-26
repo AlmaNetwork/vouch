@@ -37,8 +37,11 @@ through `environment`**. `region` exports only types/reducer/slice/selectors and
   `create(42)` and `create("42")` are the same stream. `fork(label)` consumes two
   draws from the parent and advances it. Never `Date.now()` / `Math.random()`.
 - **Two narrow capability views** (pass the narrowest a function needs):
-  - `CommitSink<S>` = `{ getState, emit }` — give this to write operations so they
-    can't reach `rng`/`advanceTick`/`run`/`log`.
+  - `CommitSink<S>` = `{ getState, emit, commitSystem }` — the env-only write capability.
+    `emit(type, actor, …)` authors a PRINCIPAL event and **rejects `actor === SYSTEM_ACTOR`**
+    (throws). System/conserved events go through `commitSystem(type, payload)` (actor =
+    `"world"`). Keep `CommitSink` out of untrusted hands — that, plus the emit guard, makes
+    a forged `world`-authored settlement impossible at write time.
   - `WorldView<S>` = `{ getState, tick, log }` — readers only; give this to
     observation so watching can't write.
 - Events, payloads, and state are **deep-frozen**; clone to change.
@@ -56,6 +59,10 @@ through `environment`**. `region` exports only types/reducer/slice/selectors and
   absent**; `region.recognized` is idempotent and monotonic toward `recognized`.
 - **No residency field on `RegionState`** — membership is derived from the agent
   slice (`agentsInRegion`). Single source of truth.
+- **`owner: string | null`** on `RegionState` = the account that governs it (one person
+  = one region); `null` = system/unowned (genesis, emergence). `experimenterProposal(def,
+  note?, owner)` sets it; selectors `ownerOf` / `ownedRegionsOf`. Regions are **never
+  deleted** (append-only; the market transfers ownership instead).
 - `makeInstitutions` defaults are asymmetric: `rejectUnknownSchemas: true`,
   `diplomacyPolicy.defaultStance: "reexamine"`. Build a "lenient" village by
   overriding.
@@ -70,9 +77,11 @@ through `environment`**. `region` exports only types/reducer/slice/selectors and
   Stochasticity arrives only as `view.roll` (a single deterministic draw the driver
   supplies). `Intent` is `idle | transfer | emigrate`; `transfer` moves currency
   only.
-- **Actor-gate (the conservation chokepoint):** the reducer honors `economy.settled`
-  only when `event.actor === SYSTEM_ACTOR` (`"world"`). A self-asserted settlement is
-  ignored. `World.emit` is public, so this reducer check — not `emit` — is the gate.
+- **Actor-gate (defence in depth):** the reducer honors value events (`economy.settled`,
+  `economy.minted`) only when `event.actor === SYSTEM_ACTOR` (`"world"`), so a forged
+  event is ignored on replay. Write-time, `World.emit` already rejects `SYSTEM_ACTOR`
+  and system events go through `commitSystem` (env-only `CommitSink`) — so a forge is
+  blocked before it can enter the log, AND ignored if one ever did.
 - **Atomic settlement:** if any entry's agent is unknown, reject the whole event
   (`CC-1`). Never apply a partial set of legs.
 - `agent.decided` changes no state — it journals the brain's decision for

@@ -17,7 +17,9 @@ export {
 export {
   type TransferMove,
   type TransferResult,
+  type MintResult,
   executeTransfer,
+  mintCurrency,
   isCurrencyConserving,
   isTransferable,
 } from "./economy";

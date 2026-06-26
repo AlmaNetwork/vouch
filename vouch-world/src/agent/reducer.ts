@@ -8,11 +8,13 @@ import { SYSTEM_ACTOR, type Reducer } from "../foundation";
 import {
   EVENT_AGENT_ADMITTED,
   EVENT_AGENT_MIGRATED,
+  EVENT_ECONOMY_MINTED,
   EVENT_ECONOMY_SETTLED,
   type AgentAdmittedPayload,
   type AgentMigratedPayload,
   type AgentSlice,
   type AgentState,
+  type MintPayload,
   type SettlementPayload,
 } from "./types";
 
@@ -49,6 +51,14 @@ export const agentReducer: Reducer<AgentSlice> = (state, event) => {
         };
       }
       return { agents };
+    }
+    case EVENT_ECONOMY_MINTED: {
+      // §2-4 / audit G8: minting is env-only — the explicit, logged origin of currency.
+      if (event.actor !== SYSTEM_ACTOR) return state;
+      const { agentId, amount } = event.payload as MintPayload;
+      const a = state.agents[agentId];
+      if (!a) return state;
+      return { agents: { ...state.agents, [agentId]: { ...a, balances: { ...a.balances, currency: a.balances.currency + amount } } } };
     }
     // agent.decided is a journaled record only — it changes no protected state.
     default:

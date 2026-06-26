@@ -21,3 +21,12 @@ export function agentsInRegion(state: AgentSlice, region: string): AgentState[] 
 export function treasuryId(region: string): string {
   return `treasury@${region}`;
 }
+
+/**
+ * The total currency in circulation — the auditable supply. Transfers conserve it
+ * (sum to zero); only admission endowments and explicit `economy.minted` events
+ * change it. The conservation invariant: supply == (sum of all mints/endowments).
+ */
+export function currencySupply(state: AgentSlice): number {
+  return listAgents(state).reduce((sum, a) => sum + a.balances.currency, 0);
+}
