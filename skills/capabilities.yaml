@@ -47,7 +47,9 @@ enums:
   RecognitionStatus: [unrecognized, recognized]
   ForeignCertStance: [absorb, map, reexamine, reject]   # §4-A foreign-cert translation
   ProposerKind: [genesis, experimenter, emergence]
-  InstitutionChangePolicy: [verification, diplomacy, schemaLedger]
+  InstitutionChangePolicy: [verification, diplomacy, schemaLedger, governance, economy, resource]
+  GovernanceKind: [dictatorship, council]          # who may amend a region (§8)
+  RegionLifecycle: [active, dormant]               # P3 market: dormant = hibernated, listable/sellable
 
 # --- reusable logical shapes (mirror the real TS types) -----------------------
 shapes:
@@ -59,17 +61,29 @@ shapes:
     schemaLedger: "SchemaLedgerEntry[]"        # [{ schemaId, label? }]
     verificationPolicy: { acceptedSchemaIds: "string[]", rejectUnknownSchemas: boolean }
     diplomacyPolicy: { defaultStance: ForeignCertStance, overrides: "Record<region, ForeignCertStance>" }
+    governance: Governance                     # who may amend (§8)
+    economyPolicy: EconomyPolicy               # the region's own fee/credit schedule
+    resourcePolicy: ResourcePolicy             # P3 scarcity pool config
+  Governance:
+    # one of:
+    - { kind: dictatorship }                                          # the region owner is sole authority
+    - { kind: council, members: "string[]", threshold: integer }      # M-of-N members vote
+  EconomyPolicy: { baseCostRate: "number 0..1", minCostRate: "number 0..1", repDiscount: "number>=0", creditPerTx: "integer>=0" }
+  ResourcePolicy: { capacity: "integer>=0", regenPerTick: "integer>=0" }
   Proposer:
     # one of:
     - { kind: genesis }
     - { kind: experimenter, note: "string?" }
     - { kind: emergence, sourceRegion: string, reason: string, cohort: "string[]" }
-  FoundingProposal: { definition: RegionDefinition, proposer: Proposer }
+  FoundingProposal: { definition: RegionDefinition, proposer: Proposer, owner: "string | null" }  # owner = the governing account/ID
   InstitutionChange:
     # one of (tagged by `policy`):
     - { policy: verification, value: VerificationPolicy }
     - { policy: diplomacy, value: DiplomacyPolicy }
     - { policy: schemaLedger, value: "SchemaLedgerEntry[]" }
+    - { policy: governance, value: Governance }
+    - { policy: economy, value: EconomyPolicy }
+    - { policy: resource, value: ResourcePolicy }
   AdmitSpec:
     id: string            # name@region; must end with "@<region>"
     region: string
@@ -115,21 +129,44 @@ capabilities:
         errors: ["invalid region id (must be lowercase alphanumeric)", "region already exists"]
         httpStatus: not-yet-http
         constructors:                     # both flow into the SAME engine (propose/execute split)
-          - experimenterProposal(definition, note?)   # (a) external injection — god view, sim-only
-          - emergenceProposal(definition, sourceRegion, reason, cohort)  # (b) internal emergence — interface only
+          - experimenterProposal(definition, note?, owner?)   # (a) external injection; owner = governing account/ID
+          - emergenceProposal(definition, sourceRegion, reason, cohort)  # (b) internal emergence (born owner=null)
 
       - name: amendInstitution
-        summary: Replace one of a region's institution policies (legislator plumbing, §8).
-        logicalInput: { regionId: string, change: InstitutionChange, proposer: Proposer }
+        summary: Replace one of a region's institution policies — the owner-scoped governance gate (§8).
+        logicalInput: { regionId: string, change: InstitutionChange, by: string }   # `by` = the acting account/ID
         serverArgs: [env]
         returns: RegionState
         emits: region.institution.changed
-        errors: ["region does not exist"]
+        errors:
+          - "region does not exist"
+          - "region is council-governed — use openProposal/castVote"
+          - "`by` may not amend (not the owner / not a council member)"
+          - "owner-null region cannot become a dictatorship (would be ungovernable)"
         httpStatus: not-yet-http
         notes: >
-          The mechanism exists and every change is logged; nothing auto-calls it. Provenance
-          gating (only collective-origin proposers may amend) is deferred to the reducer fold
-          point (audit G8) and is NOT enforced on this branch.
+          Provenance gating is ENFORCED now (audit G8 resolved): an amendment is honored only if `by`
+          satisfies the region's governance (dictatorship → the owner). A dictator may rewrite
+          governance itself (open a council). Council-governed regions go through the vote path below.
+
+      - name: openProposal
+        summary: A council member proposes an institution amendment (P3 voting). One open proposal at a time.
+        logicalInput: { regionId: string, change: InstitutionChange, by: string }
+        serverArgs: [env]
+        returns: RegionState
+        emits: gov.proposal.opened
+        errors: ["region does not exist", "not council-governed", "`by` not a council member", "a proposal is already open"]
+        httpStatus: not-yet-http
+        notes: "The proposer's open counts as vote 1; the change APPLIES in the reducer once votes >= threshold."
+
+      - name: castVote
+        summary: A council member votes for the open proposal; it resolves (applies + clears) at threshold.
+        logicalInput: { regionId: string, voter: string }
+        serverArgs: [env]
+        returns: RegionState
+        emits: gov.vote.cast
+        errors: ["region does not exist", "no open proposal", "`voter` not a council member", "already voted"]
+        httpStatus: not-yet-http
 
   economy:
     module: src/environment/economy.ts
@@ -152,13 +189,26 @@ capabilities:
           - bad-amount                     # amount must be a positive integer
           - insufficient-funds
           - no-treasury                    # the region fee sink must exist (conservation)
+          - region-dormant                 # a hibernated/listed/mid-sale region is shut down — residents can't transact
+          - unknown-region                 # the sender's region is missing
           # cross-region (from.region != to.region) diplomacy gate (§4-C):
-          - unknown-region
           - sender-region-unrecognized
           - receiver-region-unrecognized
           - receiver-rejects-sender
         receiptClaims:                     # claims carried by the alma.tx/receipt/v1 certificate
-          { from: string, to: string, amount: integer, fee: integer, kind: "currency" }
+          { from: string, to: string, amount: integer, fee: integer, kind: "currency", notaryKeyId: "base64 (which notary key signed)" }
+        notes: "Fee/credit come from the SENDER region's economyPolicy (sovereign over its own economy)."
+
+      - name: mintCurrency
+        summary: Mint NEW currency to an agent — the explicit, logged origin of money after genesis (the conservation baseline).
+        logicalInput: { agentId: string, amount: integer, reason: string }
+        serverArgs: [env]
+        returns:
+          ok_true:  { ok: true }
+          ok_false: { ok: false, reason: "bad-amount | unknown-agent" }
+        emits: economy.minted
+        httpStatus: not-yet-http
+        notes: "Supply only ever grows via admission endowments + this; auditable from t0 via assertCurrencyConserved."
 
   diplomacy:
     module: src/environment/diplomacy.ts
@@ -209,6 +259,91 @@ capabilities:
         emits: agent.migrated
         errors: ["agent does not exist", "region does not exist"]
         httpStatus: not-yet-http
+
+  social:
+    module: src/environment/social.ts
+    items:
+      - name: vouchFor
+        summary: One agent VOUCHES for another, raising the subject's `trust` (the brand verb) — distinct from reputation.
+        logicalInput: { from: string, to: string, weight: "integer 1..5" }
+        serverArgs: [env]
+        returns:
+          ok_true:  { ok: true }
+          ok_false: { ok: false, reason: "self-vouch | bad-weight | unknown-agent" }
+        emits: agent.vouched
+        httpStatus: not-yet-http
+
+  item:
+    module: src/environment/items.ts
+    items:
+      - name: mintItem
+        summary: Mint a new unique, tradeable digital item owned by an agent (the P3 ownership ledger).
+        logicalInput: { itemId: string, kind: string, owner: string }
+        serverArgs: [env]
+        returns:
+          ok_true:  { ok: true }
+          ok_false: { ok: false, reason: "bad-item | item-exists | unknown-agent" }
+        emits: item.minted
+        httpStatus: not-yet-http
+        notes: "WHO may mint is the API layer's (Track B) call; the domain just validates the item + recipient."
+      - name: transferItem
+        summary: Transfer an item to another agent. Authorized by the current HOLDER (`by` === the item's owner).
+        logicalInput: { itemId: string, to: string, by: string }
+        serverArgs: [env]
+        returns:
+          ok_true:  { ok: true }
+          ok_false: { ok: false, reason: "unknown-item | not-owner | already-owner | unknown-agent" }
+        emits: item.transferred
+        httpStatus: not-yet-http
+
+  resource:
+    module: src/environment/resource.ts
+    items:
+      - name: regenerateResources
+        summary: Produce into a region's resource pool up to capacity (driven each tick by the sim driver).
+        logicalInput: { regionId: string }
+        serverArgs: [env]
+        returns: "ResourceResult { ok } — no-op for a region with no/full pool"
+        emits: resource.regenerated
+        httpStatus: not-yet-http
+      - name: drawResource
+        summary: An agent DRAWS from its region's active pool (pool -> agent). Fails on scarcity (P3, the "compete" substrate).
+        logicalInput: { agentId: string, amount: integer }
+        serverArgs: [env]
+        returns:
+          ok_true:  { ok: true }
+          ok_false: { ok: false, reason: "bad-amount | unknown-agent | unknown-region | region-dormant | insufficient-resource" }
+        emits: resource.drawn
+        httpStatus: not-yet-http
+
+  market:
+    module: src/environment/market.ts          # regions are OWNABLE instances — hibernated/listed/sold, NEVER deleted. All owner-gated (isOwner).
+    items:
+      - name: setRegionLifecycle
+        summary: The owner hibernates / reactivates their region (active <-> dormant).
+        logicalInput: { regionId: string, lifecycle: RegionLifecycle, by: string }
+        serverArgs: [env]
+        returns: "MarketResult { ok, region } | { ok:false, reason }"
+        emits: region.lifecycle.changed
+        errors: ["unknown-region", "not-owner"]
+        httpStatus: not-yet-http
+      - name: listRegion
+        summary: List a DORMANT region for sale at an asking price (or null to delist). Owner-only.
+        logicalInput: { regionId: string, salePrice: "integer>=0 | null", by: string }
+        serverArgs: [env]
+        returns: MarketResult
+        emits: region.listed
+        errors: ["unknown-region", "not-owner", "bad-price", "not-dormant"]
+        httpStatus: not-yet-http
+      - name: transferRegionOwnership
+        summary: Sell/hand over a LISTED region's ownership. The region is PRESERVED (institutions/residents/treasury stay); governance resets to dictatorship under the new owner.
+        logicalInput: { regionId: string, to: string, by: string }
+        serverArgs: [env]
+        returns: MarketResult
+        emits: region.ownership.transferred
+        errors: ["unknown-region", "not-owner", "bad-recipient", "not-listed", "already-owner"]
+        httpStatus: not-yet-http
+        notes: "Currency SETTLEMENT of the price is deferred (the account<->agent value bridge is Track B); `price` is the recorded agreed amount."
 
   credential:
     module: src/credential/index.ts

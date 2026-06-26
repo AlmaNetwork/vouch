@@ -52,7 +52,16 @@ comments use. Enums list their exact members.
   - **credit** — **non-transferable**, slow-accruing trust.
 - **`executeTransfer`** — the *sole* producer of value events. The environment alone moves
   value; agents only *request* (§2-4). Currency is conserved by construction (moved
-  amounts + treasury fee sum to zero).
+  amounts + treasury fee sum to zero). A **dormant** region can't transact (`region-dormant`).
+- **`economyPolicy`** — each region's own fee/credit schedule
+  (`baseCostRate` / `minCostRate` / `repDiscount` / `creditPerTx`); `executeTransfer` reads
+  the **sender** region's policy. Owner-amendable, validated so a fee can never exceed the amount.
+- **Mint (`mintCurrency`)** — the explicit, logged origin of new currency after genesis
+  (`economy.minted`). Supply only grows via admission endowments + mints, so it's auditable
+  from t0 (`assertCurrencyConserved`).
+- **Standings** — three distinct per-agent measures: **reputation** (economy-derived, accrues
+  on settled trades), **trust** (social capital from being *vouched for* — a vouch doesn't buy a
+  cheaper fee), and **resources** (amount drawn from region pools).
 - **Receipt** — a signed certificate (`alma.tx/receipt/v1`) minted as a byproduct of a
   settled transfer; it accumulates in the log and is folded as data on replay (never
   re-signed).
@@ -87,10 +96,39 @@ comments use. Enums list their exact members.
 - **Proposer** — who proposed a region's founding: `genesis` | `experimenter` (god-view
   injection) | `emergence` (internal secession). One execution engine serves all (§2-B).
 - **`InstitutionChange`** — a logged amendment to one policy, tagged by `policy`:
-  `verification` | `diplomacy` | `schemaLedger`. The mechanism exists; provenance gating
-  is not yet enforced on this build.
-- **`CommitSink`** — the narrow write capability `{ getState, emit }` that domain
-  operations take, instead of the whole world (audit G3). The environment owns the write
-  path.
-- **Reducer** — folds an emitted event into new state. Because `emit` is public, the
-  reducer fold point is the real chokepoint for conservation invariants (audit G4).
+  `verification` | `diplomacy` | `schemaLedger` | `governance` | `economy` | `resource`.
+- **`owner`** — the account/ID that **governs** a region (`null` = system/unowned: genesis,
+  emergence). The Sybil rule is **1 person = 1 ID**; an ID may govern *multiple* regions.
+- **Governance** — a region's constitution: **dictatorship** (the `owner` is sole authority)
+  or **council** (`members` + a vote `threshold`). Provenance gating is **enforced** now
+  (audit G8 resolved): `amendInstitution` is honored only if the actor `by` satisfies it.
+- **Council voting** — a council member `openProposal`s an `InstitutionChange`; members
+  `castVote`; the change applies in the reducer once `votes ≥ threshold` (the proposer's open
+  is vote 1). One open proposal at a time; replays deterministically.
+- **`CommitSink`** — the narrow write capability `{ getState, emit, commitSystem }` that domain
+  operations take, instead of the whole world (audit G3). The environment owns the write path.
+- **Reducer** — folds an emitted event into new state. An actor-gate (`actor === SYSTEM_ACTOR`)
+  at the top of each slice reducer makes a forged non-system event a no-op, live and on replay.
+
+## Region market & scarcity (P3)
+
+- **Lifecycle** — `active` (running) or `dormant` (hibernated by the owner). A region is
+  **never deleted**; a defunct one is hibernated and sold.
+- **Region market** — regions are **ownable instances**: `setRegionLifecycle` (hibernate),
+  `listRegion` (set a `salePrice` on a dormant region), `transferRegionOwnership` (sell/hand
+  over). A sale **preserves** the region (institutions/residents/treasury stay) and resets
+  governance to dictatorship under the new owner. Owner-gated (the *asset* right, distinct
+  from the *rules* right). Price settlement in currency is deferred to Track B.
+- **Scarcity / resources** — a region's `resourcePolicy` `{capacity, regenPerTick}` feeds a
+  finite pool (`resourceLevel`); `regenerateResources` produces into it each tick,
+  `drawResource` moves pool → agent. When the pool is depleted, late drawers get
+  `insufficient-resource` — that scarcity is the "compete" substrate.
+
+## Items & social (P3)
+
+- **Digital item** — a unique, tradeable asset distinct from currency, tracked by an
+  ownership ledger (`itemId → owner`). `mintItem` / `transferItem` (holder-gated). Deed-like
+  (unique), not a fungible quota.
+- **Vouch (`vouchFor`)** — the brand verb: one agent vouches for another (weight 1..5),
+  raising the subject's **trust** (`agent.vouched`). Distinct from a paid endorsement
+  credential; kept separate from reputation.

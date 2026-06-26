@@ -71,9 +71,29 @@ credential as a **byproduct**: a receipt signed by the region's notary.
 
 | `schemaId` | Meaning | Claims |
 |---|---|---|
-| `alma.tx/receipt/v1` | "this transfer settled" | `{ from, to, amount, fee, kind: "currency" }` |
+| `alma.tx/receipt/v1` | "this transfer settled" | `{ from, to, amount, fee, kind: "currency", notaryKeyId }` |
 
 You don't issue this directly — the node produces it server-side when a transfer settles,
 and it accumulates in the log inside the `economy.settled` event's `receipt` field. Replay
 folds it as data; it is never re-signed. This is how value moves leave an auditable,
 verifiable trail without any client ever touching a signing key.
+
+## The item ledger (vs. credentials)
+
+Beyond credentials, the world has a separate **digital-item ledger** — unique, tradeable
+assets distinct from currency (deed-like, not a fungible quota), tracked as `itemId → owner`
+(visible under `/state`'s `items`):
+
+- **`mintItem`** — `{ itemId, kind, owner }` — create a new unique item owned by an agent.
+  (Who *may* mint is the node's policy — Track B.) Emits `item.minted`.
+- **`transferItem`** — `{ itemId, to, by }` — move an item; authorized by the current
+  **holder** (`by` === the item's owner). Emits `item.transferred`.
+
+An item-for-currency atomic swap is a later refinement; today items move on their own ledger.
+
+## Vouching (the brand verb)
+
+- **`vouchFor`** — `{ from, to, weight }` (weight 1..5) — one agent vouches for another,
+  raising the subject's **trust** (`agent.vouched`). Social capital, kept **distinct** from
+  economy-derived reputation (a vouch doesn't buy a cheaper fee) and from a paid
+  `alma.endorsement/v1` credential.

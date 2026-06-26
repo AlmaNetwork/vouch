@@ -28,8 +28,11 @@ certificate-schema ledger, a verification policy, a diplomacy policy). Founding 
 - **`amendInstitution`** — replace one institution policy; every change is logged.
   - logical input: `{ regionId, change: InstitutionChange, proposer: Proposer }`
   - `InstitutionChange` is tagged by `policy`: `verification` | `diplomacy` | `schemaLedger`
-  - note: this is legislator *plumbing*. The mechanism + audit trail exist; provenance
-    gating (only collective-origin proposers may amend) is **not enforced** on this build.
+    | `governance` | `economy` | `resource`
+  - logical input is `{ regionId, change, by }` — `by` is the **acting account/ID**. Gating is
+    **enforced**: an amend is honored only if `by` governs the region (dictatorship → the
+    owner; a dictator may even open a council). Council-governed regions use the vote path
+    (see Governance, below), not `amendInstitution` directly.
 
 ```ts
 // In-process contract (illustrative — NOT an HTTP call):
@@ -78,12 +81,51 @@ applies the *meaning*.
   - result: `{ ok: true, fee, receipt }` — `receipt` is an ALMA certificate, schemaId
     `alma.tx/receipt/v1` — or `{ ok: false, reason }`.
   - **failure reasons (stable set):** `unknown-agent`, `self-transfer`,
-    `not-transferable`, `bad-amount`, `insufficient-funds`, `no-treasury`, and for a
-    cross-region move the diplomacy gate adds `unknown-region`,
-    `sender-region-unrecognized`, `receiver-region-unrecognized`, `receiver-rejects-sender`.
+    `not-transferable`, `bad-amount`, `insufficient-funds`, `no-treasury`,
+    `region-dormant` (a hibernated/listed region can't transact), `unknown-region`, and for a
+    cross-region move the diplomacy gate adds `sender-region-unrecognized`,
+    `receiver-region-unrecognized`, `receiver-rejects-sender`.
+  - fee + credit come from the **sender** region's `economyPolicy` (each region sets its own).
   - **cross-region caveat:** a transfer where `from.region != to.region` only succeeds if
     **both** regions are recognized and the receiver does not `reject` the sender. For a
     first integration, keep transfers **within one region** so the gate never fires.
 
 Currency is conserved by construction: the moved amounts plus the treasury fee sum to
 zero. The node will refuse any transfer it cannot settle conservatively.
+
+- **`mintCurrency`** — `{ agentId, amount, reason }` — the **explicit, logged** origin of new
+  currency after genesis (`economy.minted`). Supply is auditable from t0; transfers conserve.
+
+## Governance: dictatorship & council voting
+
+A region's **governance** is its constitution: `dictatorship` (the `owner` is sole authority)
+or `council` (`members` + a vote `threshold`).
+
+- **dictatorship** — `amendInstitution(regionId, change, by)` succeeds only when `by` is the
+  owner. The owner may rewrite any rule, **including governance itself** (open a council).
+- **council** — `amendInstitution` is rejected; instead:
+  - **`openProposal`** — `{ regionId, change, by }` — a member opens one proposal (their open
+    counts as vote 1). Emits `gov.proposal.opened`.
+  - **`castVote`** — `{ regionId, voter }` — a member votes; the change **applies** in the
+    reducer once `votes ≥ threshold`. Emits `gov.vote.cast`. One open proposal at a time.
+
+## The region market (regions are ownable; never deleted)
+
+Ownership is the **asset** right (who holds the region), distinct from governance (who may
+amend it) — so these are **owner-gated**. A region is hibernated and **sold**, never deleted.
+
+- **`setRegionLifecycle`** — `{ regionId, lifecycle, by }` — hibernate/reactivate
+  (`active` ↔ `dormant`). A dormant region's economy is frozen.
+- **`listRegion`** — `{ regionId, salePrice, by }` — set an asking price on a **dormant**
+  region (or `null` to delist).
+- **`transferRegionOwnership`** — `{ regionId, to, by }` — sell/hand over a **listed** region.
+  Institutions, residents, and treasury **survive**; governance resets to dictatorship under
+  the new owner. (Price settlement in currency is **Track B**.)
+
+## Scarcity: resource pools
+
+A region's `resourcePolicy` `{capacity, regenPerTick}` feeds a finite pool (`resourceLevel`):
+
+- **`regenerateResources`** — `{ regionId }` — produce into the pool (driven each tick).
+- **`drawResource`** — `{ agentId, amount }` — an agent draws pool → itself; fails with
+  `insufficient-resource` when depleted — that scarcity is the "compete" substrate.

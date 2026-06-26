@@ -254,10 +254,72 @@ export interface components {
                 [key: string]: components["schemas"]["ForeignCertStance"];
             };
         };
+        /** @description Who may amend a region — its constitution (§8). dictatorship → the owner; council → listed members + a vote threshold. */
+        Governance: {
+            /** @constant */
+            kind: "dictatorship";
+        } | {
+            /** @constant */
+            kind: "council";
+            members: string[];
+            threshold: number;
+        };
+        /** @description The region's own fee/credit schedule (read by executeTransfer for the sender's region). */
+        EconomyPolicy: {
+            baseCostRate: number;
+            minCostRate: number;
+            repDiscount: number;
+            creditPerTx: number;
+        };
+        /** @description A region's finite resource pool config (P3 scarcity, the "compete" substrate). */
+        ResourcePolicy: {
+            capacity: number;
+            regenPerTick: number;
+        };
+        /**
+         * @description active = running; dormant = hibernated by the owner (can be listed + sold). A region is never deleted.
+         * @enum {string}
+         */
+        RegionLifecycle: "active" | "dormant";
+        /** @description A logged amendment to one institution policy, tagged by `policy`. */
+        InstitutionChange: {
+            /** @constant */
+            policy: "verification";
+            value: components["schemas"]["VerificationPolicy"];
+        } | {
+            /** @constant */
+            policy: "diplomacy";
+            value: components["schemas"]["DiplomacyPolicy"];
+        } | {
+            /** @constant */
+            policy: "schemaLedger";
+            value: components["schemas"]["SchemaLedgerEntry"][];
+        } | {
+            /** @constant */
+            policy: "governance";
+            value: components["schemas"]["Governance"];
+        } | {
+            /** @constant */
+            policy: "economy";
+            value: components["schemas"]["EconomyPolicy"];
+        } | {
+            /** @constant */
+            policy: "resource";
+            value: components["schemas"]["ResourcePolicy"];
+        };
+        /** @description A council's one in-flight amendment vote (P3); applies once `votes` reach the threshold. */
+        GovProposal: {
+            change: components["schemas"]["InstitutionChange"];
+            votes: string[];
+            proposedBy: string;
+        };
         Institutions: {
             schemaLedger: components["schemas"]["SchemaLedgerEntry"][];
             verificationPolicy: components["schemas"]["VerificationPolicy"];
             diplomacyPolicy: components["schemas"]["DiplomacyPolicy"];
+            governance: components["schemas"]["Governance"];
+            economyPolicy: components["schemas"]["EconomyPolicy"];
+            resourcePolicy: components["schemas"]["ResourcePolicy"];
         };
         /** @description Who proposed a region's founding. */
         Proposer: {
@@ -287,13 +349,31 @@ export interface components {
          *         "diplomacyPolicy": {
          *           "defaultStance": "reexamine",
          *           "overrides": {}
+         *         },
+         *         "governance": {
+         *           "kind": "dictatorship"
+         *         },
+         *         "economyPolicy": {
+         *           "baseCostRate": 0.2,
+         *           "minCostRate": 0.05,
+         *           "repDiscount": 0.02,
+         *           "creditPerTx": 1
+         *         },
+         *         "resourcePolicy": {
+         *           "capacity": 0,
+         *           "regenPerTick": 0
          *         }
          *       },
          *       "status": "recognized",
          *       "proposer": {
          *         "kind": "genesis"
          *       },
-         *       "foundedAtSeq": 0
+         *       "foundedAtSeq": 0,
+         *       "owner": null,
+         *       "lifecycle": "active",
+         *       "salePrice": null,
+         *       "openProposal": null,
+         *       "resourceLevel": 0
          *     }
          */
         RegionState: {
@@ -304,6 +384,15 @@ export interface components {
             proposer: components["schemas"]["Proposer"];
             /** @description The log seq at which the region was founded (NOT the sim tick). */
             foundedAtSeq: number;
+            /** @description The account/ID that governs this region; null = system/unowned (genesis, emergence). */
+            owner: string | null;
+            lifecycle: components["schemas"]["RegionLifecycle"];
+            /** @description Asking price when listed on the market; null = not for sale. */
+            salePrice: number | null;
+            /** @description The council's one in-flight amendment vote (P3); null when none. */
+            openProposal: components["schemas"]["GovProposal"] | null;
+            /** @description Current amount in the region's resource pool (P3 scarcity); born 0. */
+            resourceLevel: number;
         };
         Balances: {
             /** @description Non-transferable, slow trust accrual (§3-B). */
@@ -320,8 +409,20 @@ export interface components {
             /** @description base64 Ed25519 public key ("" for a treasury account). */
             publicKey: string;
             balances: components["schemas"]["Balances"];
+            /** @description Economy-derived standing (accrues on settled trades). */
             reputation: number;
+            /** @description Social capital from being vouched for — distinct from reputation (a vouch doesn't buy a cheaper fee). */
+            trust: number;
+            /** @description Amount drawn from region resource pools (P3 scarcity). */
+            resources: number;
             valueProfile: components["schemas"]["ValueProfile"];
+        };
+        /** @description A unique, tradeable digital item (the ownership ledger), distinct from currency. */
+        ItemState: {
+            id: string;
+            kind: string;
+            /** @description the agent (name@region) that holds it */
+            owner: string;
         };
         WorldState: {
             /** @description Regions keyed by id. */
@@ -331,6 +432,10 @@ export interface components {
             /** @description Agents keyed by id. */
             agents: {
                 [key: string]: components["schemas"]["AgentState"];
+            };
+            /** @description Digital items keyed by id (the P3 ownership ledger). */
+            items: {
+                [key: string]: components["schemas"]["ItemState"];
             };
         };
         /**
@@ -352,9 +457,12 @@ export interface components {
             seq: number;
             tick: components["schemas"]["Tick"];
             /**
-             * @description Event kind. Known kinds on this branch: region.founded,
-             *     region.institution.changed, region.recognized, agent.admitted,
-             *     agent.migrated, agent.decided, economy.settled, system.tick.
+             * @description Event kind. Known kinds: region.founded, region.institution.changed,
+             *     region.recognized, region.lifecycle.changed, region.listed,
+             *     region.ownership.transferred, gov.proposal.opened, gov.vote.cast,
+             *     resource.regenerated, resource.drawn, agent.admitted, agent.migrated,
+             *     agent.decided, agent.vouched, economy.settled, economy.minted,
+             *     item.minted, item.transferred, system.tick.
              */
             type: string;
             /** @description The originating subject (an identifier), or "world" for the engine. */

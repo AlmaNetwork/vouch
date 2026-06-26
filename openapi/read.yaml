@@ -347,15 +347,67 @@ components:
         overrides:
           type: object
           additionalProperties: { $ref: "#/components/schemas/ForeignCertStance" }
+    Governance:
+      description: Who may amend a region — its constitution (§8). dictatorship → the owner; council → listed members + a vote threshold.
+      oneOf:
+        - type: object
+          required: [kind]
+          properties: { kind: { type: string, const: dictatorship } }
+        - type: object
+          required: [kind, members, threshold]
+          properties:
+            kind: { type: string, const: council }
+            members: { type: array, items: { type: string } }
+            threshold: { type: integer, minimum: 1 }
+    EconomyPolicy:
+      type: object
+      description: The region's own fee/credit schedule (read by executeTransfer for the sender's region).
+      required: [baseCostRate, minCostRate, repDiscount, creditPerTx]
+      properties:
+        baseCostRate: { type: number, minimum: 0, maximum: 1 }
+        minCostRate: { type: number, minimum: 0, maximum: 1 }
+        repDiscount: { type: number, minimum: 0 }
+        creditPerTx: { type: integer, minimum: 0 }
+    ResourcePolicy:
+      type: object
+      description: A region's finite resource pool config (P3 scarcity, the "compete" substrate).
+      required: [capacity, regenPerTick]
+      properties:
+        capacity: { type: integer, minimum: 0 }
+        regenPerTick: { type: integer, minimum: 0 }
+    RegionLifecycle:
+      type: string
+      description: active = running; dormant = hibernated by the owner (can be listed + sold). A region is never deleted.
+      enum: [active, dormant]
+    InstitutionChange:
+      description: A logged amendment to one institution policy, tagged by `policy`.
+      oneOf:
+        - { type: object, required: [policy, value], properties: { policy: { type: string, const: verification }, value: { $ref: "#/components/schemas/VerificationPolicy" } } }
+        - { type: object, required: [policy, value], properties: { policy: { type: string, const: diplomacy }, value: { $ref: "#/components/schemas/DiplomacyPolicy" } } }
+        - { type: object, required: [policy, value], properties: { policy: { type: string, const: schemaLedger }, value: { type: array, items: { $ref: "#/components/schemas/SchemaLedgerEntry" } } } }
+        - { type: object, required: [policy, value], properties: { policy: { type: string, const: governance }, value: { $ref: "#/components/schemas/Governance" } } }
+        - { type: object, required: [policy, value], properties: { policy: { type: string, const: economy }, value: { $ref: "#/components/schemas/EconomyPolicy" } } }
+        - { type: object, required: [policy, value], properties: { policy: { type: string, const: resource }, value: { $ref: "#/components/schemas/ResourcePolicy" } } }
+    GovProposal:
+      type: object
+      description: A council's one in-flight amendment vote (P3); applies once `votes` reach the threshold.
+      required: [change, votes, proposedBy]
+      properties:
+        change: { $ref: "#/components/schemas/InstitutionChange" }
+        votes: { type: array, items: { type: string } }
+        proposedBy: { type: string }
     Institutions:
       type: object
-      required: [schemaLedger, verificationPolicy, diplomacyPolicy]
+      required: [schemaLedger, verificationPolicy, diplomacyPolicy, governance, economyPolicy, resourcePolicy]
       properties:
         schemaLedger:
           type: array
           items: { $ref: "#/components/schemas/SchemaLedgerEntry" }
         verificationPolicy: { $ref: "#/components/schemas/VerificationPolicy" }
         diplomacyPolicy: { $ref: "#/components/schemas/DiplomacyPolicy" }
+        governance: { $ref: "#/components/schemas/Governance" }
+        economyPolicy: { $ref: "#/components/schemas/EconomyPolicy" }
+        resourcePolicy: { $ref: "#/components/schemas/ResourcePolicy" }
     Proposer:
       description: Who proposed a region's founding.
       oneOf:
@@ -379,7 +431,7 @@ components:
               items: { type: string }
     RegionState:
       type: object
-      required: [id, displayName, institutions, status, proposer, foundedAtSeq]
+      required: [id, displayName, institutions, status, proposer, foundedAtSeq, owner, lifecycle, salePrice, openProposal, resourceLevel]
       properties:
         id: { type: string }
         displayName: { type: string }
@@ -390,6 +442,22 @@ components:
           type: integer
           minimum: 0
           description: The log seq at which the region was founded (NOT the sim tick).
+        owner:
+          type: [string, "null"]
+          description: The account/ID that governs this region; null = system/unowned (genesis, emergence).
+        lifecycle: { $ref: "#/components/schemas/RegionLifecycle" }
+        salePrice:
+          type: [integer, "null"]
+          description: Asking price when listed on the market; null = not for sale.
+        openProposal:
+          description: The council's one in-flight amendment vote (P3); null when none.
+          oneOf:
+            - { $ref: "#/components/schemas/GovProposal" }
+            - { type: "null" }
+        resourceLevel:
+          type: integer
+          minimum: 0
+          description: Current amount in the region's resource pool (P3 scarcity); born 0.
       example:
         id: umi
         displayName: Umi
@@ -397,9 +465,17 @@ components:
           schemaLedger: []
           verificationPolicy: { acceptedSchemaIds: [], rejectUnknownSchemas: false }
           diplomacyPolicy: { defaultStance: reexamine, overrides: {} }
+          governance: { kind: dictatorship }
+          economyPolicy: { baseCostRate: 0.2, minCostRate: 0.05, repDiscount: 0.02, creditPerTx: 1 }
+          resourcePolicy: { capacity: 0, regenPerTick: 0 }
         status: recognized
         proposer: { kind: genesis }
         foundedAtSeq: 0
+        owner: null
+        lifecycle: active
+        salePrice: null
+        openProposal: null
+        resourceLevel: 0
 
     # --- agent (Layer 3) ----------------------------------------------------
     Balances:
@@ -414,7 +490,7 @@ components:
           description: Transferable medium of exchange (§3-B).
     AgentState:
       type: object
-      required: [id, region, role, publicKey, balances, reputation, valueProfile]
+      required: [id, region, role, publicKey, balances, reputation, trust, resources, valueProfile]
       properties:
         id:
           type: string
@@ -427,13 +503,30 @@ components:
           type: string
           description: base64 Ed25519 public key ("" for a treasury account).
         balances: { $ref: "#/components/schemas/Balances" }
-        reputation: { type: number }
+        reputation:
+          type: number
+          description: Economy-derived standing (accrues on settled trades).
+        trust:
+          type: number
+          description: Social capital from being vouched for — distinct from reputation (a vouch doesn't buy a cheaper fee).
+        resources:
+          type: number
+          description: Amount drawn from region resource pools (P3 scarcity).
         valueProfile: { $ref: "#/components/schemas/ValueProfile" }
+
+    ItemState:
+      type: object
+      description: A unique, tradeable digital item (the ownership ledger), distinct from currency.
+      required: [id, kind, owner]
+      properties:
+        id: { type: string }
+        kind: { type: string }
+        owner: { type: string, description: the agent (name@region) that holds it }
 
     # --- composed world (Layer 4) -------------------------------------------
     WorldState:
       type: object
-      required: [regions, agents]
+      required: [regions, agents, items]
       properties:
         regions:
           type: object
@@ -443,6 +536,10 @@ components:
           type: object
           description: Agents keyed by id.
           additionalProperties: { $ref: "#/components/schemas/AgentState" }
+        items:
+          type: object
+          description: Digital items keyed by id (the P3 ownership ledger).
+          additionalProperties: { $ref: "#/components/schemas/ItemState" }
 
     # --- event log (Foundation B) -------------------------------------------
     AlmaEvent:
@@ -457,9 +554,12 @@ components:
         type:
           type: string
           description: |
-            Event kind. Known kinds on this branch: region.founded,
-            region.institution.changed, region.recognized, agent.admitted,
-            agent.migrated, agent.decided, economy.settled, system.tick.
+            Event kind. Known kinds: region.founded, region.institution.changed,
+            region.recognized, region.lifecycle.changed, region.listed,
+            region.ownership.transferred, gov.proposal.opened, gov.vote.cast,
+            resource.regenerated, resource.drawn, agent.admitted, agent.migrated,
+            agent.decided, agent.vouched, economy.settled, economy.minted,
+            item.minted, item.transferred, system.tick.
         actor:
           type: string
           description: The originating subject (an identifier), or "world" for the engine.
