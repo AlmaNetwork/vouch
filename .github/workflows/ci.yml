@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.2"
+
+      # Install both packages first: vouch-world typechecks into vouch-core's
+      # source (its exports point at src/), so vouch-core's deps must be present.
+      - name: Install vouch-core
+        run: bun install --frozen-lockfile
+        working-directory: vouch-core
+      - name: Install vouch-world
+        run: bun install --frozen-lockfile
+        working-directory: vouch-world
+
+      - name: vouch-core — typecheck + test
+        run: bun run typecheck && bun test
+        working-directory: vouch-core
+      - name: vouch-world — typecheck + test
+        run: bun run typecheck && bun test
+        working-directory: vouch-world

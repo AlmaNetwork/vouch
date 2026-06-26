@@ -1,167 +1,130 @@
-# Vouch Network
+# vouch
 
-A command-driven network node API with event sourcing and deterministic replay support.
+[![CI](https://github.com/AlmaNetwork/vouch/actions/workflows/ci.yml/badge.svg)](https://github.com/AlmaNetwork/vouch/actions/workflows/ci.yml)
 
-## Features
+**vouch is a society simulator.** AI agents live in self-governing villages — each
+under a different rule of trust — earn and trade, move on when they're disadvantaged,
+and break away to found new villages while the world is running. You watch to see
+**which institutions prosper**: the strict village or the lenient one, the open
+economy or the guarded one.
 
-- **Event Sourcing**: All state changes are captured as immutable events
-- **Deterministic Replay**: State can be reconstructed from the event journal
-- **Pluggable Commands**: Extensible command architecture for network operations
-- **ALMA ID System**: Structured identifiers for accounts, assets, and regions
-- **Idempotency**: Built-in support for idempotent request handling
-- **Simulation**: Dry-run commands before committing changes
+Every interaction is recorded in one append-only log, and the entire history replays
+deterministically — so you can rewind, compare two runs side by side, and ask *"what
+if this one thing were different?"* It's a world meant to be **watched**, and — in
+time — **taken part in**.
 
-## Quick Start
+### What happens in a run
 
-### Prerequisites
+- villages are founded with their own institutions, and agents are admitted as residents
+- agents transact — currency moves, trust (credit) accrues, every deal leaves a signed receipt
+- the disadvantaged **migrate** to other villages
+- when a cohort's values clash with their village and reach critical mass, they
+  **secede and found a new village** whose rules embody their dissatisfaction
+- *(coming)* villages meet across borders and negotiate whose certificates they honor;
+  a "village newspaper" narrates the turning points to viewers
 
-- Node.js 20+
-- npm or pnpm
+## Packages
 
-### Installation
+| Package | What it is | Tests |
+|---------|-----------|-------|
+| [`vouch-world`](./vouch-world) | The **simulator** — the deterministic world engine, the villages, the agents, the economy, typed credentials, diplomacy, a region market, digital items, a resource/scarcity model, and a read-only observation server. This is the world. | 100 |
+| [`vouch-core`](./vouch-core) | The **trust engine** it runs on — a standalone, dependency-free\* factory that mints ids/keys/certificates and **formally verifies** signatures. It knows nothing of villages or economies; meaning lives outside it, and it's reusable on its own. | 35 |
+
+\* depends on no other layer; only `@noble/curves`, `canonicalize`, `zod`.
+
+## Under the hood
+
+vouch speaks **ALMA**, a distributed identity & trust protocol — that's the substrate,
+not the show. The protocol fixes only the shape of a certificate and how it's signed;
+*what a certificate means, and whether a village honors it,* is the simulation's drama.
+
+### Credentials
+
+A certificate's envelope is universal; its *meaning* is open. The credential layer
+([`vouch-world/src/credential`](./vouch-world/src/credential)) declares typed credential
+kinds — skill, membership, asset, endorsement, or your own — each a `schemaId` with a
+validated claims shape, issued and verified on top of the meaning-free core. The
+envelope never changes; only what you put in it.
+
+### Architecture — 5 layers + 2 foundations
+
+Dependency direction is strictly downward; a lower layer never knows an upper one.
+
+```
+L5  Observation     read-only HTTP (hono): metrics / log / state            vouch-world/src/observation
+L4  Environment     composition root + the only write path;
+                    value-conservation monopoly                            vouch-world/src/environment
+L3  Agent           residents; brains (rule-based -> LLM-swappable);
+                    state derived by folding the log                       vouch-world/src/agent
+L2  Region          villages as data: institutions + slice reducer         vouch-world/src/region
+L1  Trust engine    stateless generate + formal-verify factory             vouch-core
+A/B Foundations     append-only event log + deterministic RNG + replay     vouch-world/src/foundation
+```
+
+### Principles that make the world honest
+
+- **Event sourcing.** The append-only log is the single source of truth; all state is
+  derived by folding it. There is no API to mutate the world directly — only
+  `emit(event)` — so the whole history replays deterministically.
+- **Conservation monopoly.** Only the environment changes value; agents *request*, the
+  environment *executes* after checking conservation. No one can mint themselves money.
+- **Form vs. meaning.** The trust engine makes no judgement and stores nothing; whether
+  a certificate is *valid* is each village's call.
+- **Determinism & replay.** A fixed seed reproduces the exact same history; even
+  non-deterministic (e.g. LLM) decisions are journaled and replayed from the log.
+- **Observation never interferes.** The observation layer only reads; watching the
+  world can never change it.
+
+## Status
+
+| Milestone | Scope | Status |
+|-----------|-------|--------|
+| M0 | Trust engine: keypairs, `name@region` ids, certificate issue + formal verify | ✅ |
+| M1 | Event log + deterministic RNG + tick loop + replay | ✅ |
+| M2 | Villages as data-defined governance + dynamic founding | ✅ |
+| M2.5 | Separation hardening: read-only log, CommitSink, composition root, seq-ordering | ✅ |
+| M3 | Agents, economy (credit/currency), transactions, migration, emergent founding | ✅ |
+| **M4** | Diplomacy: certificate translation (absorb/map/reexamine/reject) + recognition flow + cross-region trade gate | 🟡 in progress — emergent cross-border (scarcity) next |
+| **M5** | Observation: read-only HTTP server (hono) + metrics — external clients connect to *watch* (§2-6) | 🟡 in progress — broadcast / newspaper next |
+
+## Run
+
+Each package is self-contained ([Bun](https://bun.sh) runs the TypeScript directly):
 
 ```bash
-npm install
+cd vouch-world && bun install && bun test   # the simulator (depends on ../vouch-core)
+cd vouch-core  && bun install && bun test   # the trust engine, on its own
 ```
 
-### Development
-
-```bash
-# Start the development server
-npm run dev
-
-# Run tests
-npm test
-
-# Type check
-npm run typecheck
-
-# Lint
-npm run lint
-```
-
-### Production
-
-```bash
-# Build
-npm run build
-
-# Start
-npm start
-```
-
-## API Overview
-
-### Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/` | Root health check |
-| `GET` | `/v1/health` | Network health check |
-| `POST` | `/v1/execute` | Execute commands |
-| `POST` | `/v1/simulate` | Simulate commands (dry-run) |
-| `GET` | `/v1/state` | Get current network state |
-| `GET` | `/v1/residents` | List residents |
-| `GET` | `/v1/ledger` | Get transaction ledger |
-
-### Authentication
-
-All endpoints (except health checks) require authentication:
-
-```bash
-curl -H "Authorization: Bearer account:owner@tokyo" \
-  http://localhost:3000/v1/state
-```
-
-### Commands
-
-Commands are executed via `POST /v1/execute`:
-
-```bash
-curl -X POST http://localhost:3000/v1/execute \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer account:owner@tokyo" \
-  -d '{
-    "commands": [
-      {
-        "name": "establish",
-        "regionId": "tokyo",
-        "regionName": "Tokyo Region"
-      }
-    ]
-  }'
-```
-
-Available commands:
-- `establish` - Create a new region
-- `admit` - Add a new resident
-- `amend` - Modify region settings
-- `transact` - Execute a transaction
-- `createAssetType` - Create a new asset type
-- `createAsset` - Create an asset instance
-
-### Simulation
-
-Simulate commands without persisting changes:
-
-```bash
-curl -X POST http://localhost:3000/v1/simulate \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer account:owner@tokyo" \
-  -d '{
-    "commands": [
-      {
-        "name": "establish",
-        "regionId": "tokyo",
-        "regionName": "Tokyo Region"
-      }
-    ]
-  }'
-```
-
-Returns `200 OK` if commands would succeed, `412 Precondition Failed` if they would fail.
-
-## Architecture
+## Layout
 
 ```
-src/
-├── application/       # Application layer (commands, handlers)
-│   ├── commands/      # Pluggable command registry
-│   └── handlers/      # Legacy command handlers
-├── domain/            # Domain layer (models, policies)
-│   ├── models/        # Domain entities and value objects
-│   └── policies/      # Business rules
-├── http/              # HTTP layer (routes, middleware)
-│   ├── routes/        # API routes
-│   ├── middleware/    # HTTP middleware
-│   └── schemas/       # Request/response schemas
-└── infra/             # Infrastructure layer
-    └── persistence/   # Journal and database
+vouch/
+├── vouch-world/                # the simulator
+│   ├── examples/               #   m0-m1-demo.ts
+│   └── src/
+│       ├── foundation/         # A/B  event log · RNG · world/tick · replay
+│       ├── region/             # L2   institution vocabulary · slice reducer · selectors
+│       ├── agent/              # L3   brains (view -> intent) · agent-slice fold
+│       ├── environment/        # L4   composition root · founding · economy · diplomacy · driver
+│       ├── credential/         #      typed, validated certificate types on the envelope
+│       └── observation/        # L5   read-only HTTP (hono) · metrics
+└── vouch-core/                 # L1 trust engine (standalone package)
+    └── src/                    #   identifier · keys · suite · jcs · encoding · certificate
 ```
 
-### Key Concepts
+## Naming
 
-- **Region**: A network namespace with its own governance
-- **Account**: An identity that can own residents and assets
-- **Resident**: A participant in the network
-- **Asset**: A transferable unit of value
-- **Command**: An intent to change state
-- **Event**: An immutable record of state change
+`vouch` is the simulation (and the brand); `ALMA` is the protocol it implements. The
+protocol/domain identifiers keep the `ALMA` name (the certificate format `alma-cert/v1`,
+the schema namespace `alma.*`) — same split as a product versus the protocol it speaks.
 
-## ID Format (ALMA)
+## Protocol & background
 
-```
-account_id     = name '@' region        # e.g., alice@tokyo
-asset_type_id  = region '/' name        # e.g., tokyo/points
-asset_id       = account '/' type '#' name  # e.g., alice@tokyo/points#main
-```
-
-## API Documentation
-
-- **Swagger UI**: http://localhost:3000/docs
-- **ReDoc**: http://localhost:3000/docs/redoc
-- **OpenAPI JSON**: http://localhost:3000/docs/openapi.json
+- ALMA whitepaper — https://alma.gitbook.io/alma
+- Scrapbox — https://scrapbox.io/alma/
+- Org — https://github.com/AlmaNetwork
 
 ## License
 
-ISC
+[Apache-2.0](./LICENSE) © AlmaNetwork.
