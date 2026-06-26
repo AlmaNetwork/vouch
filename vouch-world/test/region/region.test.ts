@@ -134,8 +134,8 @@ describe("M2 — founding (propose/execute split)", () => {
   });
 });
 
-describe("Track A — region ownership (one person = one region)", () => {
-  test("genesis & emergence are system-owned (owner null); the experimenter path can own", () => {
+describe("Track A — region ownership (governed by an account/ID; 1 person = 1 ID)", () => {
+  test("genesis & emergence are system-owned (owner null); an ID can govern multiple regions", () => {
     const world = createAlmaWorld("owner");
     seedGenesis(world, [STRICT, LENIENT]);
 
@@ -143,10 +143,12 @@ describe("Track A — region ownership (one person = one region)", () => {
     expect(getRegion(world.getState(), "yama")?.owner).toBeNull();
     expect(ownerOf(world.getState(), "umi")).toBeNull();
 
-    // A human participant founds AND governs their one region.
+    // A human participant founds AND governs regions. Sybil rule is 1 person = 1 ID;
+    // an ID may govern MULTIPLE regions (no one-region cap).
     proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova"), undefined, "acct:alice"));
+    proposeFounding(world, experimenterProposal(defineRegion("harbor", "Harbor"), undefined, "acct:alice"));
     expect(ownerOf(world.getState(), "nova")).toBe("acct:alice");
-    expect(ownedRegionsOf(world.getState(), "acct:alice").map((r) => r.id)).toEqual(["nova"]);
+    expect(ownedRegionsOf(world.getState(), "acct:alice").map((r) => r.id).sort()).toEqual(["harbor", "nova"]);
     expect(ownedRegionsOf(world.getState(), "acct:nobody")).toEqual([]);
 
     // A seceded region is system/unowned at birth (the market/claim assigns an owner later).

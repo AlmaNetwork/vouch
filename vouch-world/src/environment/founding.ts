@@ -66,8 +66,9 @@ export function proposeFounding(env: Commit, proposal: FoundingProposal): Region
 
 /**
  * (a) external injection — the experimenter founds a village mid-run (god view; sim-only).
- * `owner` is the account that will GOVERN the region (one person = one region); pass null for
- * a system/unowned region. This is the path a human participant founds-and-governs through.
+ * `owner` is the account/ID that will GOVERN the region (null = system/unowned). This is the
+ * path a human participant founds-and-governs through; an ID may found MULTIPLE regions
+ * (the Sybil rule is 1 person = 1 ID, and an ID can be resident and/or founder).
  */
 export function experimenterProposal(definition: RegionDefinition, note?: string, owner: string | null = null): FoundingProposal {
   return { definition, proposer: { kind: "experimenter", note }, owner };

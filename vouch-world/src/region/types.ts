@@ -73,9 +73,10 @@ export type RecognitionStatus = "unrecognized" | "recognized";
 export interface FoundingProposal {
   readonly definition: RegionDefinition;
   readonly proposer: Proposer;
-  // Who will GOVERN the founded region (one person = one region). An account/principal
-  // id, or null for a system/unowned region (genesis, emergence). Owner is orthogonal
-  // to `proposer` (who proposed it): a human founds AND governs; the world seeds genesis.
+  // Who will GOVERN the founded region: an account/principal id, or null for a
+  // system/unowned region (genesis, emergence). The Sybil rule is 1 person = 1 ID;
+  // an ID may be resident and/or founder, and may govern MULTIPLE regions. Owner is
+  // orthogonal to `proposer` (who proposed it): a human founds AND governs; world seeds genesis.
   readonly owner: string | null;
 }
 
@@ -94,8 +95,9 @@ export interface RegionState {
   readonly status: RecognitionStatus;
   readonly proposer: Proposer;
   readonly foundedAtSeq: number; // log seq, NOT sim tick (audit G5: protocol state orders by seq)
-  // The account that GOVERNS this region (one person = one region). null = system/unowned
-  // (genesis, emergence). The region market later transfers this; the region is never deleted.
+  // The account/ID that GOVERNS this region. null = system/unowned (genesis, emergence).
+  // An ID may govern MULTIPLE regions (Sybil resistance is 1-person-1-ID, NOT one-region-
+  // per-person). The region market later transfers this; the region is never deleted.
   readonly owner: string | null;
   // residency is NOT stored here — it is derived from the agent slice (AgentState.region,
   // via agentsInRegion), keeping a single source of truth (audit 3-A / EMG-2).

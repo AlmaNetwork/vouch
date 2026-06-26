@@ -59,10 +59,11 @@ through `environment`**. `region` exports only types/reducer/slice/selectors and
   absent**; `region.recognized` is idempotent and monotonic toward `recognized`.
 - **No residency field on `RegionState`** — membership is derived from the agent
   slice (`agentsInRegion`). Single source of truth.
-- **`owner: string | null`** on `RegionState` = the account that governs it (one person
-  = one region); `null` = system/unowned (genesis, emergence). `experimenterProposal(def,
-  note?, owner)` sets it; selectors `ownerOf` / `ownedRegionsOf`. Regions are **never
-  deleted** (append-only; the market transfers ownership instead).
+- **`owner: string | null`** on `RegionState` = the account/ID that governs it; `null` =
+  system/unowned (genesis, emergence). `experimenterProposal(def, note?, owner)` sets it;
+  selectors `ownerOf` / `ownedRegionsOf`. The Sybil rule is **1 person = 1 ID** (an ID can
+  be resident and/or founder); an ID may govern **multiple** regions (no one-region cap).
+  Regions are **never deleted** (append-only; the market transfers ownership instead).
 - `makeInstitutions` defaults are asymmetric: `rejectUnknownSchemas: true`,
   `diplomacyPolicy.defaultStance: "reexamine"`. Build a "lenient" village by
   overriding.

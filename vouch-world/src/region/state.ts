@@ -85,7 +85,7 @@ export function ownerOf(state: RegionSlice, id: string): string | null | undefin
   return state.regions[id]?.owner;
 }
 
-/** Regions governed by a given account (one person = one region: expected length 0 or 1). */
+/** Regions governed by a given account/ID (an ID may govern 0..N regions). */
 export function ownedRegionsOf(state: RegionSlice, account: string): RegionState[] {
   return listRegions(state).filter((r) => r.owner === account);
 }
