@@ -50,6 +50,31 @@ npm run build
 npm start
 ```
 
+### Docker
+
+Run the application in a Docker container:
+
+```bash
+# Build and run with Docker Compose
+docker compose up -d
+
+# Or build manually
+docker build -t vouch .
+docker run -d -p 3000:3000 -v vouch-data:/app/data vouch
+
+# Check logs
+docker compose logs -f
+
+# Stop
+docker compose down
+```
+
+For development with hot reload:
+
+```bash
+docker compose --profile dev up vouch-dev
+```
+
 ## API Overview
 
 ### Endpoints

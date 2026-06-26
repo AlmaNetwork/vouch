@@ -83,7 +83,7 @@ function validateCommandPayload(rawCommand: { name: string; [key: string]: unkno
 
   return {
     name: commandName as CommandPacket["name"],
-    payload: payload as CommandPacket["payload"],
+    payload: payload as unknown as CommandPacket["payload"],
   };
 }
 

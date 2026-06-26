@@ -1,0 +1,43 @@
+services:
+  vouch:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vouch-node
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - VOUCH_DB_PATH=/app/data/vouch.db
+    volumes:
+      - vouch-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # Development service with hot reload
+  vouch-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: vouch-dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - VOUCH_DB_PATH=/app/data/vouch.db
+    volumes:
+      - ./src:/app/src:ro
+      - vouch-dev-data:/app/data
+    profiles:
+      - dev
+
+volumes:
+  vouch-data:
+  vouch-dev-data:
