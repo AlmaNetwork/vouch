@@ -1,12 +1,19 @@
 # Part 2 — Create & operate a region
 
-> **`not-yet-HTTP`.** Everything here is a real operation in the node's engine, described
-> as a **logical contract**: what it takes, what it returns, what event it records. There
-> is **no write HTTP API on this build** — the request envelope, auth, and routes are
-> defined by the network-node work and are not frozen. Use this to understand *what the
-> operations are*; do not assume an endpoint shape. Server-side arguments (the commit
-> handle, the sim `tick`, the region **notary key pair**) are the node's, never a
-> client's. See [`../capabilities.yaml`](../capabilities.yaml) for the catalog form.
+> **Two layers — read both.** This page lists the simulator's **in-process engine
+> operations** (the *logical contracts*: what each takes, returns, and records). The
+> **HTTP write API** that exposes them is **Track B's** command-driven node (PR #3): routes
+> `POST /v1/execute` (command bus) + `/v1/simulate` + per-action `/v1/{found,admit,amend,
+> transact,migrate}`, **`Authorization: Bearer account:<accountId>`**, an **`Idempotency-Key`**
+> on POSTs, over Node + SQLite. Its full contract is mirrored in
+> [`../../openapi/write.draft.yaml`](../../openapi/write.draft.yaml).
+>
+> ⚠️ **Track B's HTTP domain differs from the engine vocabulary below**: it speaks
+> **account / UUID / email** (e.g. `found {regionId, ownerEmail}`, `transact {fromResidentId,
+> toResidentId, amount, memo}`), not the engine's `name@region`. Use the engine contracts here
+> to understand *semantics*; use the mirrored spec for the *HTTP shape*. Server-side arguments
+> (the commit handle, the sim `tick`, the region **notary key pair**) are the node's, never a
+> client's — and a client never sends a private key.
 
 Each entry lists its **logical input** (what a caller provides) and **server-supplied**
 arguments (held by the node). Shapes and enums are in `capabilities.yaml`.

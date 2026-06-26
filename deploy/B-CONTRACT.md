@@ -29,11 +29,20 @@ target `main` with overlapping root files (`README.md`, `.gitignore`) and incomp
 layouts (2-package monorepo vs single root `src/`). Merging both as-is conflicts.
 
 **Track C impact:** the simulator-based read artifacts (read OpenAPI, observation client,
-docs, determinism gate) remain valid for the simulator. The **write-side** artifacts
-(`openapi/write.draft.yaml`, SKILL.md parts 2–3, `capabilities.yaml`) describe the
-simulator's logical ops and do **not** match Track B's real `/v1/execute` contract — they
-stay marked speculative until the team decides the direction. Do not silently rewrite them
-to Track B's shape; that presupposes the architecture decision.
+docs, determinism gate) remain valid for the simulator.
+
+**RESOLVED on the user's call (2026-06-26): Track C's write artifacts now reflect Track B's
+real spec.** `openapi/write.draft.yaml` is a **verbatim mirror** of Track B's own OpenAPI
+(`feat/impl-app:src/http/openapi.ts`, regen instructions in that file's header); the deploy
+stub (`node/write-stub.ts`), the C11 integration gate, and SKILL parts now target Track B's
+real routes (`/v1/execute` + per-action + Bearer + Idempotency-Key). `capabilities.yaml`
+stays as the **simulator engine's** logical ops (a different thing — the in-process API),
+and the SKILL is explicit that Track B's HTTP **domain differs** (account/UUID/email vs
+`name@region`).
+
+**Still an OPEN team decision (not Track C's to make):** whether Track B's account/UUID/email
+domain and the simulator's `name@region` domain CONVERGE, and the repo-layout collision below.
+Track C now records Track B's contract faithfully but takes no position on that convergence.
 
 ## Track B — to freeze (original assumptions, kept as the record)
 

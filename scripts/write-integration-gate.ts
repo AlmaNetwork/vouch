@@ -1,13 +1,14 @@
 // Track C — write-API integration gate (task C11).
 //
 // Boots the node (node/main.ts) and exercises the WRITE surface end-to-end. Today that
-// surface is the STUB (node/write-stub.ts), so the asserts are about CONTRACT SHAPE, not
-// real semantics: routes exist, statuses are right, the request envelope round-trips, and
-// transact names the receipt schema it will mint.
+// surface is the STUB (node/write-stub.ts), which mirrors Track B's route set (PR #3 —
+// /v1/execute + /v1/simulate + per-action routes). The asserts are about CONTRACT SHAPE,
+// not real semantics: the routes exist, statuses are right, and the request envelope
+// round-trips.
 //
-// The REAL-semantics asserts (a real transact returns a signed receipt; currency is
-// conserved; durable replay-on-boot) are gated behind REAL_WRITE=1 and stay skipped until
-// Track B's node replaces the stub. See deploy/B-CONTRACT.md.
+// The REAL-semantics asserts (a real /v1/execute applies the command, the ledger reflects
+// it, durable replay-on-boot holds) are gated behind REAL_WRITE=1 and stay skipped until
+// Track B's node replaces the stub. See deploy/B-CONTRACT.md + openapi/write.draft.yaml.
 //
 // Run: `bun scripts/write-integration-gate.ts`. Exits non-zero on any failure.
 
@@ -42,7 +43,8 @@ try {
   // The write stub advertises itself + the 5 routes.
   const wh = await (await fetch(`${write}/health`)).json();
   check("write /health ok=true", wh.ok === true);
-  check("write /health lists exactly the 5 /v1 routes", Array.isArray(wh.routes) && wh.routes.length === V1_ROUTES.length);
+  check("write /health lists Track B's /v1 routes", Array.isArray(wh.routes) && wh.routes.length === V1_ROUTES.length);
+  check("routes include the /v1/execute command bus", (wh.routes as string[]).includes("/v1/execute"));
 
   // Every /v1 route: 501 + not-implemented + the posted envelope echoes back.
   for (const route of V1_ROUTES) {
@@ -53,19 +55,17 @@ try {
     check(`${route} echoes the request envelope`, JSON.stringify(json.received) === JSON.stringify(body));
   }
 
-  // transact names the receipt schema the real route will mint.
-  const tx = await postJson(`${write}/v1/transact`, { from: "alice@umi", to: "bob@umi", amount: 10 });
-  check("transact echoes receipt schemaId alma.tx/receipt/v1", tx.json.expected?.receiptSchemaId === "alma.tx/receipt/v1");
-
   // Unknown route → 404 (not a blanket 501).
   const nf = await fetch(`${write}/v1/does-not-exist`);
   check("unknown /v1 route → 404", nf.status === 404);
 
-  // REAL-semantics asserts — enabled when Track B's node is wired in.
+  // REAL-semantics asserts — enabled when Track B's node is wired in. Track B's domain is
+  // account/UUID/email with Bearer auth + Idempotency-Key, so a real run needs those headers
+  // and the command-bus body (see openapi/write.draft.yaml); shape pinned once the node lands.
   if (process.env.REAL_WRITE === "1") {
-    const real = await postJson(`${write}/v1/transact`, { from: "alice@umi", to: "bob@umi", amount: 10 });
-    check("REAL transact → 200", real.status === 200);
-    check("REAL transact returns a receipt (alma.tx/receipt/v1)", real.json?.receipt?.schemaId === "alma.tx/receipt/v1");
+    const real = await postJson(`${write}/v1/execute`, { command: { type: "transact" } });
+    check("REAL /v1/execute → 200", real.status === 200);
+    check("REAL /v1/execute returns a CommandResponse", typeof real.json === "object" && real.json !== null);
   } else {
     console.log("  · real-semantics asserts skipped (set REAL_WRITE=1 once Track B's node replaces the stub)");
   }

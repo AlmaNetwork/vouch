@@ -12,11 +12,14 @@ rules:
   operation-4xx-response: off
   # The default server is a localhost dev address, not a forgotten example.com placeholder.
   no-server-example.com: off
+  # openapi/write.draft.yaml is a verbatim MIRROR of Track B's spec (license "ISC", no SPDX
+  # id) — not Track C's to "fix". It is still linted (via openapi/lint.sh, by path).
+  info-license-strict: off
+# Only the read spec is registered here (openapi-typescript generates its types). The write
+# mirror is linted by path in openapi/lint.sh, so it stays out of `apis` to keep type-gen clean.
 apis:
   read:
     root: openapi/read.yaml
     # openapi-typescript reads this: `bunx openapi-typescript` generates the web client types.
     x-openapi-ts:
       output: apps/web/src/api/schema.d.ts
-  write:                        # task C10 — speculative, pending Track B ratification
-    root: openapi/write.draft.yaml

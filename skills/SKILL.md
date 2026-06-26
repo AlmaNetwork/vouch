@@ -39,21 +39,21 @@ The machine-readable companions to this skill:
 
 ## ⚠️ Status: what is wired today
 
-> **The read surface is HTTP; the write surface is not — yet.**
+> **Reading is live here; writing is Track B's node (defined, not yet co-deployed).**
 >
 > - **Reading is live.** The observation server (10 GET routes, part 1) is a real HTTP
->   surface you can connect to right now.
-> - **Writing is in-process only.** Founding, admission, recognition, value transfer, and
->   credential issuance (parts 2–3) exist as **functions inside the engine**. There is
->   **no write HTTP API on this build** — no `/v1`, no found/admit/transact/migrate
->   routes, no command envelope. Their HTTP shape is being defined by the network-node
->   work and is **not frozen yet**.
+>   surface you can connect to right now (this build).
+> - **Writing has a contract.** The write API is **Track B's command-driven node** (PR #3):
+>   `POST /v1/execute` (command bus) + `/v1/simulate` + per-action `/v1/{found,admit,amend,
+>   transact,migrate}`, **Bearer auth** + **`Idempotency-Key`**, on Node + SQLite. Its full
+>   spec is mirrored in [`../openapi/write.draft.yaml`](../openapi/write.draft.yaml). On *this*
+>   build the write surface is a **501 stub** (the deploy skeleton) until Track B's node is
+>   wired in.
 >
-> So: treat part 1 as an API you call, and parts 2–3 as **logical contracts** —
-> authoritative about *what each operation takes and guarantees*, deliberately silent
-> about *the HTTP request that will carry it*. Each write entry is tagged
-> `not-yet-HTTP`. The speculative write spec, when it exists, lives at
-> `../openapi/write.draft.yaml` and is marked pending ratification.
+> So: treat part 1 as a live API you call; the part-2/3 engine operations as **logical
+> contracts** (the *semantics*); and the mirrored write spec as the **HTTP shape** Track B's
+> node serves. ⚠️ Track B's HTTP domain is **account / UUID / email**, not the engine's
+> `name@region` — see part 2's banner and `deploy/B-CONTRACT.md`.
 
 ## 🔑 Safety: never send a private key
 

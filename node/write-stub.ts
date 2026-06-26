@@ -1,9 +1,10 @@
-// Track C — the WRITE side, as a STUB (task C8). There is no write HTTP API on this build;
-// the real one is Track B's (createParticipateApp, command envelope, single-writer commit).
-// This placeholder exists so the deploy skeleton, graceful shutdown, and the C11 integration
-// test have an end-to-end write surface to talk to NOW. Every /v1 route returns 501 and
-// echoes the request body, so a test can assert the envelope round-trips without asserting
-// any real semantics. Replace this whole module with Track B's app when its contract lands.
+// Track C — the WRITE side, as a STUB (task C8). The real write node is Track B's
+// (PR #3 feat/impl-app: a command-driven Node/@hono/node-server app with /v1/execute +
+// /v1/simulate + per-action routes, Bearer auth, Idempotency-Key, SQLite journal). Its
+// contract is mirrored in openapi/write.draft.yaml. This placeholder exists so the deploy
+// skeleton, graceful shutdown, and the C11 integration test have an end-to-end write surface
+// to talk to NOW: every route returns 501 and echoes the request body, so a test can assert
+// the route surface round-trips without real semantics. Swap this for Track B's app when wired.
 //
 // Framework-free (raw Bun.serve) on purpose — no hono here, so swapping in Track B's hono
 // app is a clean replacement, and the stub adds zero dependencies.
@@ -11,10 +12,18 @@
 import type { NodeConfig } from "./config";
 import type { ServerHandle } from "./read-server";
 
-/** The speculative /v1 routes — kept in lockstep with openapi/write.draft.yaml (task C10). */
-export const V1_ROUTES = ["/v1/found", "/v1/amend", "/v1/admit", "/v1/transact", "/v1/migrate"] as const;
+/** Track B's POST write routes (mirrors openapi/write.draft.yaml — PR #3's command-driven node). */
+export const V1_ROUTES = [
+  "/v1/found",
+  "/v1/execute", // the command bus
+  "/v1/simulate", // dry-run
+  "/v1/amend",
+  "/v1/admit",
+  "/v1/transact",
+  "/v1/migrate",
+] as const;
 
-const PENDING = "pending Track B — the write surface is not implemented on this build";
+const PENDING = "pending Track B — the write node (PR #3 command-driven API) is not wired on this build";
 
 /** Serve the write-node STUB. Returns a handle with stop() for graceful shutdown. */
 export function serveWriteStub(config: NodeConfig): ServerHandle {
@@ -38,11 +47,8 @@ export function serveWriteStub(config: NodeConfig): ServerHandle {
             received = null;
           }
         }
-        // For transact, name the receipt schema the real route WILL mint (alma.tx/receipt/v1),
-        // so an integration test can assert the contract surface without real semantics.
-        const expected = url.pathname === "/v1/transact" ? { receiptSchemaId: "alma.tx/receipt/v1" } : undefined;
         return Response.json(
-          { error: "not-implemented", detail: PENDING, path: url.pathname, received, expected },
+          { error: "not-implemented", detail: PENDING, path: url.pathname, received },
           { status: 501 },
         );
       }
