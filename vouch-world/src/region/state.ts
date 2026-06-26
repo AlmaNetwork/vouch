@@ -28,6 +28,8 @@ function applyInstitutionChange(institutions: Institutions, payload: Institution
       return { ...institutions, diplomacyPolicy: payload.change.value };
     case "schemaLedger":
       return { ...institutions, schemaLedger: payload.change.value };
+    case "decisionMechanism":
+      return { ...institutions, decisionMechanism: payload.change.value };
   }
 }
 

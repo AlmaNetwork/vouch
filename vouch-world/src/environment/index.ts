@@ -24,3 +24,4 @@ export {
 export { type AdmitSpec, admitAgent, admitTreasury, immigrate } from "./population";
 export { type EconomyConfig, economyStep, runEconomy, detectEmergence, regionStance } from "./driver";
 export { type CertAssessment, stanceToward, assessCertificate, canTransactAcross, recognizeRegion } from "./diplomacy";
+export { evaluateQualifier, openDecision, castBallot, tryResolve } from "./decision";

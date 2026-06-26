@@ -28,8 +28,10 @@ vouch-world/  (this repo, the simulator)
     foundation/  ✅ Foundations A/B Event log + deterministic RNG + tick loop + replay (M1)
                     + read-only WorldLog facade + CommitSink (M2.5 hardening)
     region/      ✅ Layer 2 Villages: institutions vocab + slice reducer + selectors (M2)
+                    + decision-mechanism vocab & fold (governance form as data, T1)
     agent/       ✅ Layer 3 Residents: brains (view→intent) + agent-slice fold (M3)
     environment/ ✅ Layer 4 Composition root + founding + economy + diplomacy + driver (M2.5/M3/M4)
+                    + decision engine (propose→ballot→resolve→execute, T1)
     credential/  ✅ Typed, validated certificate types on the universal envelope
     observation/ 🟡 Layer 5 Read-only HTTP (hono) + metrics (M5); broadcast next
   examples/      m0-m1-demo.ts — uses vouch-core + foundation together
@@ -59,6 +61,7 @@ bun run typecheck # tsc --noEmit (optional)
 | **Credentials** | Typed, validated certificate types on the universal envelope (skill/membership/asset/endorsement + custom) | ✅ implemented, tests green |
 | **M4** | Diplomacy: cert translation (absorb/map/reexamine/reject) + recognition flow + cross-region trade gate | 🟡 in progress — emergent cross-border (scarcity) next |
 | **M5** | Observation: read-only HTTP server (hono) + metrics — external clients connect to watch (§2-6) | 🟡 in progress — broadcast / newspaper next |
+| **T1** | Decision mechanism as data: governance form (proposal/eligibility/weight/selection/execution/veto/appeal/emergency) carried in institutions; dictatorship + M-of-N council wired; same action, different result by form | ✅ implemented, tests green |
 
 ## M0 — Trust Core (Layer 1) — extracted to the `vouch-core` package
 
@@ -194,3 +197,49 @@ world.run(3);                                    // world is live
 proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova")));
 // nova exists, status "unrecognized", proposer recorded in the log (foundedAtSeq from log seq).
 ```
+
+## T1 — Decision mechanism as data (governance form as a variable)
+
+Before T1, *who decides and how* was hardcoded: founding, recognition, and
+amendment were all executed directly by `SYSTEM_ACTOR` (the "god hand"), so the
+governance **form** was an implicit constant — the research had no independent
+variable. T1 lifts that form into data a region carries, exactly like its other
+institutions.
+
+- **Form as data** ([types.ts](src/region/types.ts)) — a `DecisionMechanism` is eight
+  independent slots: *proposal / eligibility / weighting / selection / execution /
+  veto / appeal / emergency*. Voting is **not** the abstraction; it is one
+  `selectionRule` among many. The slots share one predicate vocabulary (`Qualifier`),
+  so a region can **mix** them (e.g. propose = reputation, decide = council, override =
+  one key). The type is the general shape the 12 legitimacy classes reduce to; the MVP
+  wires two of them.
+- **Decision lifecycle = propose / ballot / resolve / execute**
+  ([decision.ts](src/environment/decision.ts)) — `openDecision` checks the proposal
+  rule and snapshots the mechanism; `castBallot` checks eligibility and records a
+  ballot; resolution is a **pure fold** of the snapshot over the accumulated ballots
+  (no clock; any randomness would go through the engine RNG). An approved decision
+  executes through the engine that already owns the write (`amendInstitution`,
+  `recognizeRegion`), always via `SYSTEM_ACTOR` — so the reducer stays the single
+  chokepoint (§2-5). Every step is an event, so the whole decision replays.
+- **Two MVP forms, data only** — **dictatorship** (`singleAuthority`: one approving
+  ballot from the named authority decides) and **M-of-N council** (`threshold`). The
+  default (`makeInstitutions()`) is the pre-T1 god hand expressed as data: only
+  `SYSTEM_ACTOR` proposes and a single act decides.
+
+```ts
+const action = { kind: "amendInstitution", change: { policy: "verification",
+  value: { acceptedSchemaIds: [], rejectUnknownSchemas: false } } } as const;
+
+// Same action, different FORM → different result:
+const dEdo = openDecision(world, "edo", action, "shogun@edo");   // dictatorship
+castBallot(world, dEdo.id, "shogun@edo", true);                  // → approved + executed
+
+const dKyo = openDecision(world, "kyo", action, "a@kyo");        // council 2-of-3
+castBallot(world, dKyo.id, "a@kyo", true);                       // → still open (1 of 2)
+```
+
+The remaining slots (veto / appeal / emergency) and the RNG-driven selection rules
+(`sortition` / `randomBeacon`) are **typed but not wired** — reserved like the
+emergence trigger. Real cryptographic voting / threshold signatures are out of scope:
+a "ballot" is a logged event and "M-of-N" is a count. Authority checks (T2) are meant
+to read the very same `Qualifier` slots — see `evaluateQualifier`.

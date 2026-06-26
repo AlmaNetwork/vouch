@@ -13,3 +13,10 @@ export {
   getRegion,
   regionsByStatus,
 } from "./state";
+export {
+  type DecisionSlice,
+  decisionReducer,
+  getDecision,
+  listDecisions,
+  openDecisionsOf,
+} from "./decision-state";
