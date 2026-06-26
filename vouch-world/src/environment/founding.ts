@@ -40,7 +40,7 @@ function birthStatus(proposer: Proposer): RecognitionStatus {
  * emitted event being folded — nothing is mutated directly.
  */
 export function proposeFounding(env: Commit, proposal: FoundingProposal): RegionState {
-  const { definition, proposer } = proposal;
+  const { definition, proposer, owner } = proposal;
 
   if (!isValidRegion(definition.id)) {
     throw new Error(`founding: invalid region id "${definition.id}" (must be lowercase alphanumeric)`);
@@ -53,6 +53,7 @@ export function proposeFounding(env: Commit, proposal: FoundingProposal): Region
     region: definition,
     proposer,
     status: birthStatus(proposer),
+    owner,
   });
 
   // The reducer has folded the event; read back the resulting region.
@@ -63,9 +64,13 @@ export function proposeFounding(env: Commit, proposal: FoundingProposal): Region
 
 // --- proposal constructors: both flow into the one engine above ----------
 
-/** (a) external injection — the experimenter founds a village mid-run (god view; sim-only). */
-export function experimenterProposal(definition: RegionDefinition, note?: string): FoundingProposal {
-  return { definition, proposer: { kind: "experimenter", note } };
+/**
+ * (a) external injection — the experimenter founds a village mid-run (god view; sim-only).
+ * `owner` is the account that will GOVERN the region (one person = one region); pass null for
+ * a system/unowned region. This is the path a human participant founds-and-governs through.
+ */
+export function experimenterProposal(definition: RegionDefinition, note?: string, owner: string | null = null): FoundingProposal {
+  return { definition, proposer: { kind: "experimenter", note }, owner };
 }
 
 /**
@@ -74,12 +79,13 @@ export function experimenterProposal(definition: RegionDefinition, note?: string
  * exist. Calling it today simply proves the entry point is shared.
  */
 export function emergenceProposal(definition: RegionDefinition, sourceRegion: string, reason: string, cohort: readonly string[]): FoundingProposal {
-  return { definition, proposer: { kind: "emergence", sourceRegion, reason, cohort } };
+  // A seceded region is system/unowned at birth; the market or a claim assigns an owner later.
+  return { definition, proposer: { kind: "emergence", sourceRegion, reason, cohort }, owner: null };
 }
 
-/** Seed the genesis villages (born recognized) through the same execution engine. */
+/** Seed the genesis villages (born recognized) through the same execution engine. System-owned. */
 export function seedGenesis(env: Commit, definitions: readonly RegionDefinition[]): RegionState[] {
-  return definitions.map((definition) => proposeFounding(env, { definition, proposer: { kind: "genesis" } }));
+  return definitions.map((definition) => proposeFounding(env, { definition, proposer: { kind: "genesis" }, owner: null }));
 }
 
 // --- legislator plumbing (§8): institutions are swappable + every change is logged ---

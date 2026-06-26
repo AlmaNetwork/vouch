@@ -73,6 +73,10 @@ export type RecognitionStatus = "unrecognized" | "recognized";
 export interface FoundingProposal {
   readonly definition: RegionDefinition;
   readonly proposer: Proposer;
+  // Who will GOVERN the founded region (one person = one region). An account/principal
+  // id, or null for a system/unowned region (genesis, emergence). Owner is orthogonal
+  // to `proposer` (who proposed it): a human founds AND governs; the world seeds genesis.
+  readonly owner: string | null;
 }
 
 /** An institution amendment (the legislator plumbing; §8). Logged, never silent. */
@@ -90,6 +94,9 @@ export interface RegionState {
   readonly status: RecognitionStatus;
   readonly proposer: Proposer;
   readonly foundedAtSeq: number; // log seq, NOT sim tick (audit G5: protocol state orders by seq)
+  // The account that GOVERNS this region (one person = one region). null = system/unowned
+  // (genesis, emergence). The region market later transfers this; the region is never deleted.
+  readonly owner: string | null;
   // residency is NOT stored here — it is derived from the agent slice (AgentState.region,
   // via agentsInRegion), keeping a single source of truth (audit 3-A / EMG-2).
 }
@@ -104,6 +111,7 @@ export type RegionFoundedPayload = {
   region: RegionDefinition;
   proposer: Proposer;
   status: RecognitionStatus;
+  owner: string | null;
 };
 
 export type InstitutionChangedPayload = {

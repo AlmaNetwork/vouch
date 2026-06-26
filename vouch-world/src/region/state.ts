@@ -44,6 +44,7 @@ export const regionReducer: Reducer<RegionSlice> = (state, event) => {
         proposer: p.proposer,
         // ordered by the log's seq, NOT by the sim engine's tick (audit G5).
         foundedAtSeq: event.seq,
+        owner: p.owner,
       };
       return { ...state, regions: { ...state.regions, [region.id]: region } };
     }
@@ -77,4 +78,14 @@ export function getRegion(state: RegionSlice, id: string): RegionState | undefin
 
 export function regionsByStatus(state: RegionSlice, status: RegionState["status"]): RegionState[] {
   return listRegions(state).filter((r) => r.status === status);
+}
+
+/** The account that governs a region, or null (system/unowned); undefined if no such region. */
+export function ownerOf(state: RegionSlice, id: string): string | null | undefined {
+  return state.regions[id]?.owner;
+}
+
+/** Regions governed by a given account (one person = one region: expected length 0 or 1). */
+export function ownedRegionsOf(state: RegionSlice, account: string): RegionState[] {
+  return listRegions(state).filter((r) => r.owner === account);
 }

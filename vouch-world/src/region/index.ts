@@ -12,4 +12,6 @@ export {
   listRegions,
   getRegion,
   regionsByStatus,
+  ownerOf,
+  ownedRegionsOf,
 } from "./state";

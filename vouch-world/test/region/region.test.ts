@@ -17,6 +17,8 @@ import {
   getRegion,
   listRegions,
   makeInstitutions,
+  ownedRegionsOf,
+  ownerOf,
   regionsByStatus,
 } from "../../src/region";
 
@@ -129,6 +131,53 @@ describe("M2 — founding (propose/execute split)", () => {
     expect(() => proposeFounding(world, experimenterProposal(defineRegion("yama", "dup")))).toThrow();
 
     expect(world.log.length).toBe(before); // nothing was logged
+  });
+});
+
+describe("Track A — region ownership (one person = one region)", () => {
+  test("genesis & emergence are system-owned (owner null); the experimenter path can own", () => {
+    const world = createAlmaWorld("owner");
+    seedGenesis(world, [STRICT, LENIENT]);
+
+    // Genesis villages are the established society — system/unowned.
+    expect(getRegion(world.getState(), "yama")?.owner).toBeNull();
+    expect(ownerOf(world.getState(), "umi")).toBeNull();
+
+    // A human participant founds AND governs their one region.
+    proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova"), undefined, "acct:alice"));
+    expect(ownerOf(world.getState(), "nova")).toBe("acct:alice");
+    expect(ownedRegionsOf(world.getState(), "acct:alice").map((r) => r.id)).toEqual(["nova"]);
+    expect(ownedRegionsOf(world.getState(), "acct:nobody")).toEqual([]);
+
+    // A seceded region is system/unowned at birth (the market/claim assigns an owner later).
+    proposeFounding(world, emergenceProposal(defineRegion("rift", "Rift"), "yama", "too strict", ["alice@yama"]));
+    expect(ownerOf(world.getState(), "rift")).toBeNull();
+
+    // owner is part of the derived state and survives replay.
+    const rebuilt = replayState(world.log.all(), INITIAL_WORLD_STATE, rootReducer);
+    expect(rebuilt.state).toEqual(world.getState());
+  });
+});
+
+describe("Track A — regions are never deleted (append-only; sold, not destroyed)", () => {
+  test("no event ever removes a region from the slice", () => {
+    const world = createAlmaWorld("nodelete");
+    seedGenesis(world, [STRICT, LENIENT]);
+    world.run(2);
+    proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova"), undefined, "acct:alice"));
+    amendInstitution(world, "umi", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, { kind: "experimenter" });
+    world.run(2);
+
+    // Fold the whole log event-by-event; the set of region ids must never shrink.
+    let state = INITIAL_WORLD_STATE;
+    let seen = 0;
+    for (const event of world.log.all()) {
+      state = rootReducer(state, event);
+      const count = Object.keys(state.regions).length;
+      expect(count).toBeGreaterThanOrEqual(seen); // append-only: regions are never removed
+      seen = count;
+    }
+    expect(Object.keys(state.regions).sort()).toEqual(["nova", "umi", "yama"]);
   });
 });
 
