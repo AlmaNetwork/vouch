@@ -314,7 +314,7 @@ The PoC deliberately excludes things that would look reasonable to add:
 - **No auto-triggered institution amendments.** `amendInstitution` is plumbed but
   no code auto-calls it; provenance gating is deferred. Leave the valve shut.
 - **Observation stays read-only.** Do not add a write tier without an explicit
-  decision; the "watch"口 is the only sanctioned external surface today.
+  decision; the read-only "watch" surface is the only sanctioned external surface today.
 
 ---
 
