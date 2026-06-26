@@ -223,6 +223,7 @@ Reproduce these verbatim; tests assert on them and reducers match on them.
 - Agent/economy: `agent.admitted`, `agent.migrated`, `agent.decided`,
   `agent.vouched`, `economy.settled`, `economy.minted`.
 - Items: `item.minted`, `item.transferred`.
+- Resource: `resource.regenerated`, `resource.drawn`.
 
 **Certificate / protocol**
 - `CERT_VERSION = "alma-cert/v1"`, `DEFAULT_SUITE = "ed25519"`.

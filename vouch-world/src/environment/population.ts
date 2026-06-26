@@ -43,6 +43,7 @@ export function admitAgent(env: CommitSink<WorldState>, spec: AdmitSpec): AgentS
     balances: { credit: spec.credit ?? 0, currency: spec.currency ?? 0 },
     reputation: 0,
     trust: 0,
+    resources: 0,
     valueProfile: spec.valueProfile,
   };
   env.commitSystem(EVENT_AGENT_ADMITTED, { agent });

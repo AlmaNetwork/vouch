@@ -22,11 +22,13 @@ import {
   executeTransfer,
   experimenterProposal,
   immigrate,
+  drawResource,
   isCurrencyConserving,
   isTransferable,
   listRegion,
   mintCurrency,
   proposeFounding,
+  regenerateResources,
   rootReducer,
   runEconomy,
   seedGenesis,
@@ -214,6 +216,54 @@ describe("Track A — explicit mint + auditable supply (conservation baseline)",
     expect(currencySupply(world.getState())).toBe(supply); // a transfer is zero-sum
     mintCurrency(world, "bob@umi", 10, "grant");
     expect(currencySupply(world.getState())).toBe(supply + 10);
+  });
+});
+
+describe("Track A P3 — scarcity / resource competition (the 'compete' substrate)", () => {
+  test("a finite pool regenerates per tick; residents compete to draw; conserved pool<->agent", () => {
+    const world = createAlmaWorld("scarcity");
+    // a region with a finite pool: holds 2, produces +2/tick
+    const scarce = makeInstitutions({
+      resourcePolicy: { capacity: 2, regenPerTick: 2 },
+      verificationPolicy: { acceptedSchemaIds: [], rejectUnknownSchemas: false },
+      diplomacyPolicy: { defaultStance: "absorb", overrides: {} },
+    });
+    seedGenesis(world, [defineRegion("umi", "Umi", scarce)]);
+    admitTreasury(world, "umi");
+    for (const n of ["a", "b", "c"]) admitAgent(world, { id: `${n}@umi`, region: "umi", role: "merchant", valueProfile: "lenient", publicKey: "", currency: 0 });
+
+    // the pool produces up to capacity, then caps (no overfill)
+    regenerateResources(world, "umi");
+    expect(getRegion(world.getState(), "umi")?.resourceLevel).toBe(2);
+    regenerateResources(world, "umi");
+    expect(getRegion(world.getState(), "umi")?.resourceLevel).toBe(2);
+
+    // three residents compete for 2 units: the first two win, the third is STARVED (scarcity)
+    expect(drawResource(world, "a@umi", 1).ok).toBe(true);
+    expect(drawResource(world, "b@umi", 1).ok).toBe(true);
+    const c = drawResource(world, "c@umi", 1);
+    expect(c.ok).toBe(false);
+    if (!c.ok) expect(c.reason).toBe("insufficient-resource");
+
+    // a draw is conserved pool<->agent: pool 0; a & b hold 1 each; c holds 0
+    expect(getRegion(world.getState(), "umi")?.resourceLevel).toBe(0);
+    expect(getAgent(world.getState(), "a@umi")?.resources).toBe(1);
+    expect(getAgent(world.getState(), "b@umi")?.resources).toBe(1);
+    expect(getAgent(world.getState(), "c@umi")?.resources).toBe(0);
+
+    // bad draw amounts are rejected
+    expect(drawResource(world, "a@umi", 0).ok).toBe(false);
+
+    // the whole thing replays exactly
+    expect(replayState(world.log.all(), INITIAL_WORLD_STATE, rootReducer).state).toEqual(world.getState());
+  });
+
+  test("regions with no pool (default policy) produce nothing — no resource events", () => {
+    const world = createAlmaWorld("nopool");
+    seedGenesis(world, [defineRegion("umi", "Umi", lenient())]); // default resourcePolicy {0,0}
+    regenerateResources(world, "umi");
+    expect(getRegion(world.getState(), "umi")?.resourceLevel).toBe(0);
+    expect(world.log.all().some((e) => e.type === "resource.regenerated")).toBe(false);
   });
 });
 

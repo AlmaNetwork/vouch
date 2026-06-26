@@ -5,6 +5,7 @@
 // real §2-4 conservation chokepoint — a self-asserted balance event is ignored.
 
 import { SYSTEM_ACTOR, type Reducer } from "../foundation";
+import { EVENT_RESOURCE_DRAWN, type ResourceDrawnPayload } from "../region";
 import {
   EVENT_AGENT_ADMITTED,
   EVENT_AGENT_MIGRATED,
@@ -71,6 +72,14 @@ export const agentReducer: Reducer<AgentSlice> = (state, event) => {
       const a = state.agents[to];
       if (!a) return state;
       return { agents: { ...state.agents, [to]: { ...a, trust: a.trust + weight } } };
+    }
+    case EVENT_RESOURCE_DRAWN: {
+      // P3 scarcity: a draw moves the amount from the region pool (region reducer) onto the
+      // agent (here) — conserved between the two slices of the same env-authored event.
+      const { agentId, amount } = event.payload as ResourceDrawnPayload;
+      const a = state.agents[agentId];
+      if (!a) return state;
+      return { agents: { ...state.agents, [agentId]: { ...a, resources: a.resources + amount } } };
     }
     // agent.decided is a journaled record only — it changes no protected state.
     default:

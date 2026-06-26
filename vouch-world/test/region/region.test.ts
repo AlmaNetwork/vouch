@@ -134,6 +134,18 @@ describe("M2 — founding (propose/execute split)", () => {
 
     expect(world.log.length).toBe(before); // nothing was logged
   });
+
+  test("founding validates institutions — a hand-built degenerate policy is rejected (no makeInstitutions bypass)", () => {
+    const world = createAlmaWorld("foundval");
+    seedGenesis(world, [STRICT]);
+    const before = world.log.length;
+    // hand-built Institutions that skip makeInstitutions' validation
+    const badResource = { ...makeInstitutions(), resourcePolicy: { capacity: Number.NaN, regenPerTick: 5 } };
+    const badEconomy = { ...makeInstitutions(), economyPolicy: { baseCostRate: 1.5, minCostRate: 1.5, repDiscount: 0, creditPerTx: 1 } };
+    expect(() => proposeFounding(world, experimenterProposal(defineRegion("badr", "Bad", badResource), undefined, "acct:x"))).toThrow();
+    expect(() => proposeFounding(world, experimenterProposal(defineRegion("bade", "Bad", badEconomy), undefined, "acct:x"))).toThrow();
+    expect(world.log.length).toBe(before); // nothing founded
+  });
 });
 
 describe("Track A — region ownership (governed by an account/ID; 1 person = 1 ID)", () => {

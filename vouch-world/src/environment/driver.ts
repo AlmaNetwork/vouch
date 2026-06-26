@@ -28,6 +28,7 @@ import { type RegionState, defineRegion, getRegion, listRegions, makeInstitution
 import { executeTransfer } from "./economy";
 import { emergenceProposal, proposeFounding } from "./founding";
 import { admitTreasury, immigrate } from "./population";
+import { regenerateResources } from "./resource";
 import type { WorldState } from "./state";
 
 const DEFAULT_CRITICAL_MASS = 3;
@@ -83,6 +84,9 @@ export function economyStep(env: World<WorldState>, ctx: { tick: number; rng: Rn
     env.emit(EVENT_AGENT_DECIDED, id, { agentId: id, intent } satisfies AgentDecidedPayload);
     dispatchIntent(env, id, intent, ctx.tick, config.notary);
   }
+
+  // P3: produce into each region's resource pool for this tick (id-sorted, deterministic).
+  for (const r of listRegions(env.getState()).sort((a, b) => (a.id < b.id ? -1 : 1))) regenerateResources(env, r.id);
 
   detectEmergence(env, config.criticalMass ?? DEFAULT_CRITICAL_MASS);
 }

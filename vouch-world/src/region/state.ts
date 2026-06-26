@@ -15,9 +15,13 @@ import {
   EVENT_REGION_LISTED,
   EVENT_REGION_OWNERSHIP_TRANSFERRED,
   EVENT_REGION_RECOGNIZED,
+  EVENT_RESOURCE_DRAWN,
+  EVENT_RESOURCE_REGENERATED,
   type GovProposalOpenedPayload,
   type GovVoteCastPayload,
   type InstitutionChange,
+  type ResourceDrawnPayload,
+  type ResourceRegeneratedPayload,
   type InstitutionChangedPayload,
   type Institutions,
   type RegionFoundedPayload,
@@ -43,6 +47,8 @@ function applyInstitutionChange(institutions: Institutions, change: InstitutionC
       return { ...institutions, governance: change.value };
     case "economy":
       return { ...institutions, economyPolicy: change.value };
+    case "resource":
+      return { ...institutions, resourcePolicy: change.value };
   }
 }
 
@@ -82,6 +88,7 @@ export const regionReducer: Reducer<RegionSlice> = (state, event) => {
         lifecycle: "active", // born active; the owner may hibernate it later (P3)
         salePrice: null,
         openProposal: null,
+        resourceLevel: 0, // the pool starts empty and is produced into per tick (P3)
       };
       return { ...state, regions: { ...state.regions, [region.id]: region } };
     }
@@ -145,6 +152,21 @@ export const regionReducer: Reducer<RegionSlice> = (state, event) => {
       if (existing.openProposal.votes.includes(p.voter)) return state; // no double vote
       const voted: RegionState = { ...existing, openProposal: { ...existing.openProposal, votes: [...existing.openProposal.votes, p.voter] } };
       return { ...state, regions: { ...state.regions, [p.regionId]: resolveIfPassed(voted) } };
+    }
+    case EVENT_RESOURCE_REGENERATED: {
+      const p = event.payload as ResourceRegeneratedPayload;
+      const existing = state.regions[p.regionId];
+      if (!existing) return state;
+      // never overfill: the env already caps the amount, but clamp here as defence in depth.
+      const level = Math.min(existing.institutions.resourcePolicy.capacity, existing.resourceLevel + p.amount);
+      return { ...state, regions: { ...state.regions, [p.regionId]: { ...existing, resourceLevel: level } } };
+    }
+    case EVENT_RESOURCE_DRAWN: {
+      const p = event.payload as ResourceDrawnPayload;
+      const existing = state.regions[p.regionId];
+      if (!existing) return state;
+      // pool -> agent is conserved; the env guarantees amount <= level, clamp at 0 in case.
+      return { ...state, regions: { ...state.regions, [p.regionId]: { ...existing, resourceLevel: Math.max(0, existing.resourceLevel - p.amount) } } };
     }
     default:
       return state;

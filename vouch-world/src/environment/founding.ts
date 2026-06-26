@@ -26,6 +26,7 @@ import {
   getRegion,
   validateEconomyPolicy,
   validateGovernance,
+  validateResourcePolicy,
 } from "../region";
 import type { WorldState } from "./state";
 
@@ -53,6 +54,12 @@ export function proposeFounding(env: Commit, proposal: FoundingProposal): Region
   if (getRegion(env.getState(), definition.id)) {
     throw new Error(`founding: region "${definition.id}" already exists`);
   }
+  // Validate the institutions at founding too: makeInstitutions validates, but a hand-built
+  // Institutions literal would otherwise install a degenerate policy that bypasses every
+  // amend-time check (e.g. an empty council, a fee > amount, a NaN resource capacity).
+  validateGovernance(definition.institutions.governance);
+  validateEconomyPolicy(definition.institutions.economyPolicy);
+  validateResourcePolicy(definition.institutions.resourcePolicy);
 
   env.commitSystem(EVENT_REGION_FOUNDED, {
     region: definition,
@@ -122,6 +129,7 @@ export function amendInstitution(env: Commit, regionId: string, change: Institut
     }
   }
   if (change.policy === "economy") validateEconomyPolicy(change.value);
+  if (change.policy === "resource") validateResourcePolicy(change.value);
 
   env.commitSystem(EVENT_REGION_INSTITUTION_CHANGED, { regionId, change, by });
 
@@ -152,6 +160,7 @@ export function openProposal(env: Commit, regionId: string, change: InstitutionC
     }
   }
   if (change.policy === "economy") validateEconomyPolicy(change.value);
+  if (change.policy === "resource") validateResourcePolicy(change.value);
   env.commitSystem(EVENT_GOV_PROPOSAL_OPENED, { regionId, change, by });
   const updated = getRegion(env.getState(), regionId);
   if (!updated) throw new Error("openProposal: invariant violated");

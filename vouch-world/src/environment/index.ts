@@ -30,6 +30,7 @@ export {
 export { type AdmitSpec, admitAgent, admitTreasury, immigrate } from "./population";
 export { type VouchResult, vouchFor } from "./social";
 export { type ItemResult, mintItem, transferItem } from "./items";
+export { type ResourceResult, regenerateResources, drawResource } from "./resource";
 export { type MarketResult, setRegionLifecycle, listRegion, transferRegionOwnership } from "./market";
 export { type EconomyConfig, economyStep, runEconomy, detectEmergence, regionStance } from "./driver";
 export { type CertAssessment, stanceToward, assessCertificate, canTransactAcross, recognizeRegion } from "./diplomacy";

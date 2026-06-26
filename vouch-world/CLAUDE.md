@@ -85,6 +85,13 @@ through `environment`**. `region` exports only types/reducer/slice/selectors and
     when `owner === null` (both would brick the region — no one could ever govern it).
   - The reducer's top actor-gate makes all of this unforgeable (a non-system institution/vote
     event is ignored, live + replay).
+- **Scarcity / resources (P3, the "compete" substrate):** `Institutions.resourcePolicy`
+  `{capacity, regenPerTick}` + `RegionState.resourceLevel`. `regenerateResources` (driven each
+  tick by the driver, id-sorted) produces into the pool up to capacity; `drawResource(env,
+  agentId, amount)` moves pool → the agent's `resources` in one conserved event (refused if the
+  pool is too low = scarcity, or the region is dormant). `validateResourcePolicy` is checked at
+  founding **and** amend (founding now validates ALL policies — `makeInstitutions` validates,
+  but a hand-built `Institutions` literal would otherwise bypass it).
 - **`economyPolicy`** on `Institutions` = the region's own fee/tax schedule
   (`baseCostRate`/`minCostRate`/`repDiscount`/`creditPerTx`); `executeTransfer` reads the
   SENDER region's policy. Owner-amendable (`InstitutionChange` "economy"), **validated** by
@@ -99,9 +106,10 @@ through `environment`**. `region` exports only types/reducer/slice/selectors and
 ## agent (L3) — residents & brains
 
 - `AgentState`: `{ id (name@region), region, role, publicKey, balances:{credit,
-  currency}, reputation, trust, valueProfile }`. `id` is stable across migration; `region`
-  changes on migration. `reputation` is economy-derived; **`trust` is social capital from
-  being vouched for** — kept distinct (a vouch doesn't buy a cheaper fee).
+  currency}, reputation, trust, resources, valueProfile }`. `id` is stable across migration;
+  `region` changes on migration. `reputation` is economy-derived; **`trust` is social capital
+  from being vouched for** — kept distinct (a vouch doesn't buy a cheaper fee). `resources` is
+  the amount drawn from region resource pools (P3 scarcity).
 - **`vouchFor(env, from, to, weight)`** (the brand verb, `environment/social.ts`) → an
   env-authored `agent.vouched` event → the reducer adds `weight` (1..5) to the subject's
   `trust`. Sybil-resistance of the vouch graph is P3.

@@ -24,6 +24,7 @@ export interface AgentState {
   readonly balances: Balances;
   readonly reputation: number; // economy-derived standing (accrues on settled trades)
   readonly trust: number; // accumulated social capital from being VOUCHED for (§ the brand verb)
+  readonly resources: number; // amount DRAWN from region resource pools (P3 scarcity)
   readonly valueProfile: ValueProfile;
 }
 

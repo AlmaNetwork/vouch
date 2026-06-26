@@ -61,6 +61,17 @@ export interface EconomyPolicy {
   readonly creditPerTx: number; // credit accrued per settlement leg
 }
 
+/**
+ * A region's finite RESOURCE pool config (P3 scarcity, the "competition" substrate): the pool
+ * holds up to `capacity` and is produced into at `regenPerTick` each tick. Owner-set. Default
+ * {0,0} means the region has no resource (backward-compatible). Agents compete to DRAW the
+ * limited flow — when the pool is depleted, late drawers get nothing.
+ */
+export interface ResourcePolicy {
+  readonly capacity: number;
+  readonly regenPerTick: number;
+}
+
 /** The minimal institution set a village holds (§2-A). */
 export interface Institutions {
   readonly schemaLedger: readonly SchemaLedgerEntry[];
@@ -68,6 +79,7 @@ export interface Institutions {
   readonly diplomacyPolicy: DiplomacyPolicy;
   readonly governance: Governance;
   readonly economyPolicy: EconomyPolicy;
+  readonly resourcePolicy: ResourcePolicy;
 }
 
 /** A village definition — pure data. Adding a village = adding one of these. */
@@ -118,7 +130,8 @@ export type InstitutionChange =
   | { readonly policy: "diplomacy"; readonly value: DiplomacyPolicy }
   | { readonly policy: "schemaLedger"; readonly value: readonly SchemaLedgerEntry[] }
   | { readonly policy: "governance"; readonly value: Governance } // constitutional change (P2)
-  | { readonly policy: "economy"; readonly value: EconomyPolicy }; // fee/tax policy (P2)
+  | { readonly policy: "economy"; readonly value: EconomyPolicy } // fee/tax policy (P2)
+  | { readonly policy: "resource"; readonly value: ResourcePolicy }; // resource pool config (P3)
 
 /**
  * An OPEN council amendment proposal (P3 voting): the proposed change plus who has voted
@@ -143,6 +156,7 @@ export interface RegionState {
   readonly lifecycle: RegionLifecycle; // active | dormant (P3); born active
   readonly salePrice: number | null; // asking price when listed on the market; null = not for sale
   readonly openProposal: GovProposal | null; // the council's one in-flight amendment vote (P3); null when none
+  readonly resourceLevel: number; // current amount in the region's resource pool (P3); born 0
   // residency is NOT stored here — it is derived from the agent slice (AgentState.region,
   // via agentsInRegion), keeping a single source of truth (audit 3-A / EMG-2).
 }
@@ -157,6 +171,8 @@ export const EVENT_REGION_LISTED = "region.listed"; // P3: owner sets an asking 
 export const EVENT_REGION_OWNERSHIP_TRANSFERRED = "region.ownership.transferred"; // P3: sold/handed over (never deleted)
 export const EVENT_GOV_PROPOSAL_OPENED = "gov.proposal.opened"; // P3: a council member proposes an amendment
 export const EVENT_GOV_VOTE_CAST = "gov.vote.cast"; // P3: a council member votes; resolves at threshold
+export const EVENT_RESOURCE_REGENERATED = "resource.regenerated"; // P3: the region pool is produced into
+export const EVENT_RESOURCE_DRAWN = "resource.drawn"; // P3: an agent draws from the pool (pool -> agent)
 
 export type RegionFoundedPayload = {
   region: RegionDefinition;
@@ -181,6 +197,8 @@ export type RegionListedPayload = { regionId: string; salePrice: number | null }
 export type RegionOwnershipTransferredPayload = { regionId: string; from: string; to: string; price: number | null };
 export type GovProposalOpenedPayload = { regionId: string; change: InstitutionChange; by: string };
 export type GovVoteCastPayload = { regionId: string; voter: string };
+export type ResourceRegeneratedPayload = { regionId: string; amount: number };
+export type ResourceDrawnPayload = { regionId: string; agentId: string; amount: number };
 
 // --- builders (convenience; villages are still just data) ----------------
 
@@ -222,17 +240,26 @@ export function validateEconomyPolicy(p: EconomyPolicy): void {
   }
 }
 
+/** Reject a degenerate resource policy: capacity and per-tick production must be non-negative integers. */
+export function validateResourcePolicy(p: ResourcePolicy): void {
+  if (!Number.isInteger(p.capacity) || p.capacity < 0) throw new Error("resourcePolicy: capacity must be an integer >= 0");
+  if (!Number.isInteger(p.regenPerTick) || p.regenPerTick < 0) throw new Error("resourcePolicy: regenPerTick must be an integer >= 0");
+}
+
 export function makeInstitutions(partial: Partial<Institutions> = {}): Institutions {
   const governance: Governance = partial.governance ?? { kind: "dictatorship" };
   const economyPolicy: EconomyPolicy = partial.economyPolicy ?? { baseCostRate: 0.2, minCostRate: 0.05, repDiscount: 0.02, creditPerTx: 1 };
+  const resourcePolicy: ResourcePolicy = partial.resourcePolicy ?? { capacity: 0, regenPerTick: 0 };
   validateGovernance(governance);
   validateEconomyPolicy(economyPolicy);
+  validateResourcePolicy(resourcePolicy);
   return {
     schemaLedger: partial.schemaLedger ?? [],
     verificationPolicy: partial.verificationPolicy ?? { acceptedSchemaIds: [], rejectUnknownSchemas: true },
     diplomacyPolicy: partial.diplomacyPolicy ?? { defaultStance: "reexamine", overrides: {} },
     governance,
     economyPolicy,
+    resourcePolicy,
   };
 }
 
