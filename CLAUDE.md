@@ -159,9 +159,10 @@ breaking change requiring deliberate sign-off.
 - **System authoring is unforgeable at write time + reducer-gated.** `World.emit`
   **rejects** `actor === SYSTEM_ACTOR` (throws) — system/conserved events are authored
   only via `World.commitSystem`, exposed on the env-only `CommitSink`. As defence in
-  depth, the `agentReducer` also honors value events (`economy.settled`/`economy.minted`)
-  only when `event.actor === SYSTEM_ACTOR` (`"world"`), so a forged event is ignored on
-  replay too.
+  depth, the agent AND region reducers gate at the top — they apply **every** state-changing
+  event (admit/migrate/settle/mint, found/recognize/institution.changed) only when
+  `event.actor === SYSTEM_ACTOR` (`"world"`), so a forged non-system event is ignored on
+  live fold and replay too.
 - **Settlements apply atomically.** If any entry references an unknown agent, the
   whole settlement is rejected — never apply a partial set of legs (would strand
   currency).

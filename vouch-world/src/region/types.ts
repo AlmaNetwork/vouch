@@ -38,11 +38,23 @@ export interface DiplomacyPolicy {
   readonly overrides: Readonly<Record<string, ForeignCertStance>>;
 }
 
+/**
+ * WHO may govern (amend) a village — its constitution (§8). Data, so a village can
+ * pick its own template and even amend it (a dictator can open a council).
+ *   dictatorship — the region's `owner` is the sole authority.
+ *   council      — any listed member may act (P2). `threshold` is reserved for the
+ *                  P3 proposal/vote mechanism; in P2 a single member may amend.
+ */
+export type Governance =
+  | { readonly kind: "dictatorship" }
+  | { readonly kind: "council"; readonly members: readonly string[]; readonly threshold: number };
+
 /** The minimal institution set a village holds (§2-A). */
 export interface Institutions {
   readonly schemaLedger: readonly SchemaLedgerEntry[];
   readonly verificationPolicy: VerificationPolicy;
   readonly diplomacyPolicy: DiplomacyPolicy;
+  readonly governance: Governance;
 }
 
 /** A village definition — pure data. Adding a village = adding one of these. */
@@ -84,7 +96,8 @@ export interface FoundingProposal {
 export type InstitutionChange =
   | { readonly policy: "verification"; readonly value: VerificationPolicy }
   | { readonly policy: "diplomacy"; readonly value: DiplomacyPolicy }
-  | { readonly policy: "schemaLedger"; readonly value: readonly SchemaLedgerEntry[] };
+  | { readonly policy: "schemaLedger"; readonly value: readonly SchemaLedgerEntry[] }
+  | { readonly policy: "governance"; readonly value: Governance }; // constitutional change (P2)
 
 // --- runtime state (derived from events) ---------------------------------
 
@@ -119,7 +132,7 @@ export type RegionFoundedPayload = {
 export type InstitutionChangedPayload = {
   regionId: string;
   change: InstitutionChange;
-  proposer: Proposer;
+  by: string; // the acting principal (account/ID) that amended — provenance + authorization
 };
 
 export type RegionRecognizedPayload = {
@@ -129,11 +142,30 @@ export type RegionRecognizedPayload = {
 
 // --- builders (convenience; villages are still just data) ----------------
 
+/**
+ * Reject incoherent governance. An empty (or all-self-excluding) council can NEVER be
+ * amended again — `canGovern` would return false for everyone, permanently bricking the
+ * region — so an empty member set is forbidden. The threshold must be a sane integer.
+ */
+export function validateGovernance(g: Governance): void {
+  if (g.kind === "council") {
+    if (g.members.length === 0) {
+      throw new Error("governance: a council must have at least one member (an empty council can never be amended)");
+    }
+    if (!Number.isInteger(g.threshold) || g.threshold < 1 || g.threshold > g.members.length) {
+      throw new Error(`governance: council threshold must be an integer in [1, ${g.members.length}]`);
+    }
+  }
+}
+
 export function makeInstitutions(partial: Partial<Institutions> = {}): Institutions {
+  const governance: Governance = partial.governance ?? { kind: "dictatorship" };
+  validateGovernance(governance);
   return {
     schemaLedger: partial.schemaLedger ?? [],
     verificationPolicy: partial.verificationPolicy ?? { acceptedSchemaIds: [], rejectUnknownSchemas: true },
     diplomacyPolicy: partial.diplomacyPolicy ?? { defaultStance: "reexamine", overrides: {} },
+    governance,
   };
 }
 

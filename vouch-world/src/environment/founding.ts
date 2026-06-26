@@ -20,7 +20,9 @@ import {
   type RecognitionStatus,
   type RegionDefinition,
   type RegionState,
+  canGovern,
   getRegion,
+  validateGovernance,
 } from "../region";
 import type { WorldState } from "./state";
 
@@ -89,20 +91,25 @@ export function seedGenesis(env: Commit, definitions: readonly RegionDefinition[
   return definitions.map((definition) => proposeFounding(env, { definition, proposer: { kind: "genesis" }, owner: null }));
 }
 
-// --- legislator plumbing (§8): institutions are swappable + every change is logged ---
+// --- legislator (§8): institutions are swappable, every change is logged + AUTHORIZED ---
 //
-// The future viewer-voting hook. The MECHANISM exists (function + event + reducer
-// case) so institutions can be replaced and the change is part of the immutable
-// history. There is deliberately NO external UI/API and nothing auto-calls this —
-// the tap is plumbed, the valve is shut (§8, §2-9). NOTE (audit G8, deferred to
-// M3): provenance gating (only collective-origin proposers may amend) belongs at
-// the reducer fold point, since World.emit is public.
+// The owner-scoped governance gate (the once-deferred provenance gating, audit G8).
+// An amendment to region R is honored ONLY if the acting principal `by` satisfies R's
+// governance (dictatorship → the owner; council → a member; see canGovern). This is the
+// "valve" — now OPEN but gated: a participant can rewrite ONLY the rules of a region they
+// govern, including its governance itself (a dictator may open a council). Quorum/vote for
+// council decisions is P3; in P2 a single authorized principal may amend.
 
-export function amendInstitution(env: Commit, regionId: string, change: InstitutionChange, proposer: Proposer): RegionState {
+export function amendInstitution(env: Commit, regionId: string, change: InstitutionChange, by: string): RegionState {
   const region = getRegion(env.getState(), regionId);
   if (!region) throw new Error(`amendInstitution: region "${regionId}" does not exist`);
+  if (!canGovern(region, by)) {
+    throw new Error(`amendInstitution: "${by}" may not amend region "${regionId}" under its ${region.institutions.governance.kind} governance`);
+  }
+  // A constitutional change must leave the region governable (no empty-council brick).
+  if (change.policy === "governance") validateGovernance(change.value);
 
-  env.commitSystem(EVENT_REGION_INSTITUTION_CHANGED, { regionId, change, proposer });
+  env.commitSystem(EVENT_REGION_INSTITUTION_CHANGED, { regionId, change, by });
 
   const updated = getRegion(env.getState(), regionId);
   if (!updated) throw new Error("amendInstitution: invariant violated");

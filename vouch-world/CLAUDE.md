@@ -64,6 +64,14 @@ through `environment`**. `region` exports only types/reducer/slice/selectors and
   selectors `ownerOf` / `ownedRegionsOf`. The Sybil rule is **1 person = 1 ID** (an ID can
   be resident and/or founder); an ID may govern **multiple** regions (no one-region cap).
   Regions are **never deleted** (append-only; the market transfers ownership instead).
+- **Governance (§8 valve, now OPEN+gated):** `Institutions.governance` = `dictatorship` (the
+  owner is sole authority) | `council` (any listed member; `threshold` reserved for P3 voting).
+  `amendInstitution(env, regionId, change, by)` throws unless `canGovern(region, by)` — so a
+  participant rewrites only the rules of a region they govern, **including governance itself**
+  (a dictator can open a council). `validateGovernance` rejects an empty council (permanent
+  brick). The reducer's top actor-gate makes this unforgeable (a non-system institution change
+  is ignored). Authorization of WHICH principal lives at write-time (`canGovern`); the reducer
+  gate only enforces env-authorship.
 - `makeInstitutions` defaults are asymmetric: `rejectUnknownSchemas: true`,
   `diplomacyPolicy.defaultStance: "reexamine"`. Build a "lenient" village by
   overriding.
@@ -78,11 +86,13 @@ through `environment`**. `region` exports only types/reducer/slice/selectors and
   Stochasticity arrives only as `view.roll` (a single deterministic draw the driver
   supplies). `Intent` is `idle | transfer | emigrate`; `transfer` moves currency
   only.
-- **Actor-gate (defence in depth):** the reducer honors value events (`economy.settled`,
-  `economy.minted`) only when `event.actor === SYSTEM_ACTOR` (`"world"`), so a forged
-  event is ignored on replay. Write-time, `World.emit` already rejects `SYSTEM_ACTOR`
-  and system events go through `commitSystem` (env-only `CommitSink`) — so a forge is
-  blocked before it can enter the log, AND ignored if one ever did.
+- **Actor-gate (defence in depth):** BOTH the agent and region reducers gate at the top —
+  `if (event.actor !== SYSTEM_ACTOR) return state;` — so **every** state-changing event
+  (admit/migrate/settle/mint, found/recognize/institution.changed) is honored only when
+  env-authored; a forged non-system event is ignored on live fold and replay. Write-time,
+  `World.emit` already rejects `SYSTEM_ACTOR` and system events go through `commitSystem`
+  (env-only `CommitSink`) — so a forge is blocked before the log AND ignored if one slipped
+  in. (`agent.decided`, actor = the agent, is principal-authored and a reducer no-op.)
 - **Atomic settlement:** if any entry's agent is unknown, reject the whole event
   (`CC-1`). Never apply a partial set of legs.
 - `agent.decided` changes no state — it journals the brain's decision for

@@ -5,7 +5,7 @@
 // environment/ (audit G2). So region imports only foundation (event/reducer
 // types) — never the composite WorldState, never the write engine.
 
-import type { Reducer } from "../foundation";
+import { SYSTEM_ACTOR, type Reducer } from "../foundation";
 import {
   EVENT_REGION_FOUNDED,
   EVENT_REGION_INSTITUTION_CHANGED,
@@ -28,11 +28,18 @@ function applyInstitutionChange(institutions: Institutions, payload: Institution
       return { ...institutions, diplomacyPolicy: payload.change.value };
     case "schemaLedger":
       return { ...institutions, schemaLedger: payload.change.value };
+    case "governance":
+      return { ...institutions, governance: payload.change.value };
   }
 }
 
 /** Folds region-level events into the region slice. Ignores everything else. */
 export const regionReducer: Reducer<RegionSlice> = (state, event) => {
+  // Defence in depth (audit G8, matching the economy reducer): every region event is
+  // env-authored (SYSTEM_ACTOR via commitSystem). A forged non-system event — e.g. a
+  // self-asserted region.institution.changed that would walk around the write-time
+  // canGovern gate — is ignored here, on both live fold and replay.
+  if (event.actor !== SYSTEM_ACTOR) return state;
   switch (event.type) {
     case EVENT_REGION_FOUNDED: {
       const p = event.payload as RegionFoundedPayload;
@@ -88,4 +95,15 @@ export function ownerOf(state: RegionSlice, id: string): string | null | undefin
 /** Regions governed by a given account/ID (an ID may govern 0..N regions). */
 export function ownedRegionsOf(state: RegionSlice, account: string): RegionState[] {
   return listRegions(state).filter((r) => r.owner === account);
+}
+
+/**
+ * Does `principal` satisfy a region's governance rule — may it amend the institutions?
+ * dictatorship → the principal IS the owner; council → the principal is a member.
+ * (§8 owner-scoped gate. P2: a single member suffices; quorum/vote is P3.)
+ */
+export function canGovern(region: RegionState, principal: string): boolean {
+  const g = region.institutions.governance;
+  if (g.kind === "dictatorship") return region.owner !== null && principal === region.owner;
+  return g.members.includes(principal);
 }

@@ -167,7 +167,7 @@ describe("Track A — regions are never deleted (append-only; sold, not destroye
     seedGenesis(world, [STRICT, LENIENT]);
     world.run(2);
     proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova"), undefined, "acct:alice"));
-    amendInstitution(world, "umi", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, { kind: "experimenter" });
+    amendInstitution(world, "nova", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, "acct:alice");
     world.run(2);
 
     // Fold the whole log event-by-event; the set of region ids must never shrink.
@@ -208,26 +208,89 @@ describe("M2 — determinism still holds (replay reconstructs the regions)", () 
   });
 });
 
-describe("M2 — legislator plumbing (§8): institution changes are swappable + logged", () => {
-  test("an amendment replaces the policy as data and is recorded in the log", () => {
+describe("Track A — owner-scoped governance gate (§8 legislator, valve now OPEN+gated)", () => {
+  test("dictatorship: only the owner may amend; a non-owner is rejected and writes nothing", () => {
     const world = createAlmaWorld("amend");
     seedGenesis(world, [LENIENT]);
+    proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova", makeInstitutions()), undefined, "acct:alice"));
 
+    // the owner amends — allowed, recorded with the acting principal `by`
     const updated = amendInstitution(
       world,
-      "umi",
+      "nova",
       { policy: "verification", value: { acceptedSchemaIds: ["alma.trust/artisan/v1"], rejectUnknownSchemas: true } },
-      { kind: "experimenter", note: "tightened by hand" },
+      "acct:alice",
     );
-
     expect(updated.institutions.verificationPolicy.rejectUnknownSchemas).toBe(true);
-
     const change = world.log.all().find((e) => e.type === "region.institution.changed");
-    expect(change).toBeDefined();
-    expect((change!.payload as { proposer: { kind: string } }).proposer.kind).toBe("experimenter");
+    expect((change!.payload as { by: string }).by).toBe("acct:alice");
 
-    // and it replays deterministically
-    const rebuilt = replayState(world.log.all(), INITIAL_WORLD_STATE, rootReducer);
-    expect(rebuilt.state).toEqual(world.getState());
+    // a non-owner may NOT amend — throws, and nothing is logged
+    expect(() =>
+      amendInstitution(world, "nova", { policy: "verification", value: { acceptedSchemaIds: [], rejectUnknownSchemas: false } }, "acct:mallory"),
+    ).toThrow();
+    expect(world.log.all().filter((e) => e.type === "region.institution.changed").length).toBe(1);
+
+    // replays deterministically
+    expect(replayState(world.log.all(), INITIAL_WORLD_STATE, rootReducer).state).toEqual(world.getState());
+  });
+
+  test("council: any member may amend; a non-member is rejected", () => {
+    const world = createAlmaWorld("council");
+    seedGenesis(world, [LENIENT]);
+    const council = makeInstitutions({ governance: { kind: "council", members: ["acct:a", "acct:b"], threshold: 1 } });
+    proposeFounding(world, experimenterProposal(defineRegion("rep", "Rep", council), undefined, "acct:a"));
+
+    // a council member (not the owner) may amend
+    amendInstitution(world, "rep", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, "acct:b");
+    expect(getRegion(world.getState(), "rep")?.institutions.diplomacyPolicy.defaultStance).toBe("reject");
+    // a non-member is rejected
+    expect(() => amendInstitution(world, "rep", { policy: "diplomacy", value: { defaultStance: "absorb", overrides: {} } }, "acct:x")).toThrow();
+  });
+
+  test("governance itself is amendable: a dictator can open a council, shifting who may govern", () => {
+    const world = createAlmaWorld("constitution");
+    seedGenesis(world, [LENIENT]);
+    proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova", makeInstitutions()), undefined, "acct:alice"));
+
+    // the dictator (owner) opens a council
+    amendInstitution(world, "nova", { policy: "governance", value: { kind: "council", members: ["acct:alice", "acct:bob"], threshold: 1 } }, "acct:alice");
+    expect(getRegion(world.getState(), "nova")?.institutions.governance.kind).toBe("council");
+
+    // now bob (a council member, NOT the owner) can amend
+    amendInstitution(world, "nova", { policy: "diplomacy", value: { defaultStance: "absorb", overrides: {} } }, "acct:bob");
+    expect(getRegion(world.getState(), "nova")?.institutions.diplomacyPolicy.defaultStance).toBe("absorb");
+    // a stranger still cannot
+    expect(() => amendInstitution(world, "nova", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, "acct:stranger")).toThrow();
+  });
+
+  test("a FORGED region.institution.changed (non-system actor) is ignored at the fold — can't seize governance (audit G8)", () => {
+    const world = createAlmaWorld("forge");
+    seedGenesis(world, [LENIENT]);
+    proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova", makeInstitutions()), undefined, "acct:alice"));
+    const before = getRegion(world.getState(), "nova")?.institutions.governance.kind;
+
+    // mallory (not the owner) forges an institution change with a self-asserted, non-system
+    // actor — walking around the write-time canGovern gate. The reducer's actor-gate ignores it.
+    world.emit("region.institution.changed", "acct:mallory", {
+      regionId: "nova",
+      change: { policy: "governance", value: { kind: "council", members: ["acct:mallory"], threshold: 1 } },
+      by: "acct:mallory",
+    });
+
+    expect(getRegion(world.getState(), "nova")?.institutions.governance.kind).toBe(before); // no seizure
+    expect(replayState(world.log.all(), INITIAL_WORLD_STATE, rootReducer).state).toEqual(world.getState());
+  });
+
+  test("a governance change to an EMPTY council is rejected (no permanent brick)", () => {
+    const world = createAlmaWorld("brick");
+    seedGenesis(world, [LENIENT]);
+    proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova", makeInstitutions()), undefined, "acct:alice"));
+
+    expect(() =>
+      amendInstitution(world, "nova", { policy: "governance", value: { kind: "council", members: [], threshold: 1 } }, "acct:alice"),
+    ).toThrow();
+    // unchanged — still a governable dictatorship
+    expect(getRegion(world.getState(), "nova")?.institutions.governance.kind).toBe("dictatorship");
   });
 });

@@ -19,6 +19,11 @@ import {
 } from "./types";
 
 export const agentReducer: Reducer<AgentSlice> = (state, event) => {
+  // §2-4 / audit G8 (defence in depth): every state-changing agent event is env-authored
+  // (SYSTEM_ACTOR via commitSystem), so a forged non-system event is ignored at the fold
+  // point on live + replay. agent.decided (actor = the agent) is principal-authored and a
+  // no-op anyway. This is the real conservation chokepoint alongside the write-time guard.
+  if (event.actor !== SYSTEM_ACTOR) return state;
   switch (event.type) {
     case EVENT_AGENT_ADMITTED: {
       const { agent } = event.payload as AgentAdmittedPayload;
@@ -31,8 +36,6 @@ export const agentReducer: Reducer<AgentSlice> = (state, event) => {
       return { agents: { ...state.agents, [agentId]: { ...a, region: toRegion } } };
     }
     case EVENT_ECONOMY_SETTLED: {
-      // §2-4 / audit G8: only the environment can change value.
-      if (event.actor !== SYSTEM_ACTOR) return state;
       const { entries } = event.payload as SettlementPayload;
       // CC-1: apply ALL legs or NONE — match isCurrencyConserving (which sums over all
       // entries). Skipping a missing leg would strand currency; reject atomically instead.
@@ -53,8 +56,7 @@ export const agentReducer: Reducer<AgentSlice> = (state, event) => {
       return { agents };
     }
     case EVENT_ECONOMY_MINTED: {
-      // §2-4 / audit G8: minting is env-only — the explicit, logged origin of currency.
-      if (event.actor !== SYSTEM_ACTOR) return state;
+      // minting is env-only — the explicit, logged origin of currency (gated at the top).
       const { agentId, amount } = event.payload as MintPayload;
       const a = state.agents[agentId];
       if (!a) return state;
