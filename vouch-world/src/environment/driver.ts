@@ -125,16 +125,20 @@ export function detectEmergence(env: World<WorldState>, criticalMass: number): v
     // EMG-1: found the region ONCE; ALWAYS migrate the current cohort into it, so a
     // later wave immigrates rather than being silently stranded.
     if (!getRegion(env.getState(), newId)) {
-      const institutions =
-        profile === "strict"
-          ? makeInstitutions({
-              verificationPolicy: { acceptedSchemaIds: [], rejectUnknownSchemas: true },
-              diplomacyPolicy: { defaultStance: "reexamine", overrides: {} },
-            })
-          : makeInstitutions({
-              verificationPolicy: { acceptedSchemaIds: [], rejectUnknownSchemas: false },
-              diplomacyPolicy: { defaultStance: "absorb", overrides: {} },
-            });
+      // Emergence inheritance: the seceded village INHERITS the parent's certificate
+      // vocabulary (schemaLedger), and translates the parent's certs into its local
+      // vocabulary (a "map" diplomacy override toward the source). The dissatisfaction
+      // still shapes its verification stance (strict ⇄ lenient). The cohort carries its
+      // own balances/credentials across (immigration preserves them).
+      const parent = getRegion(env.getState(), sourceRegion);
+      const institutions = makeInstitutions({
+        schemaLedger: parent ? parent.institutions.schemaLedger : [],
+        verificationPolicy:
+          profile === "strict"
+            ? { acceptedSchemaIds: [], rejectUnknownSchemas: true }
+            : { acceptedSchemaIds: [], rejectUnknownSchemas: false },
+        diplomacyPolicy: { defaultStance: profile === "strict" ? "reexamine" : "absorb", overrides: { [sourceRegion]: "map" } },
+      });
 
       const def = defineRegion(newId, `${profile} secession from ${sourceRegion}`, institutions);
       proposeFounding(

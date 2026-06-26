@@ -451,6 +451,31 @@ describe("M3 — internal emergence founding (§3-D, reuses the M2 engine)", () 
     expect((founded?.payload as { proposer: { kind: string; cohort: string[] } }).proposer.cohort).toEqual(["a1@yama", "a2@yama", "a3@yama"]);
   });
 
+  test("a seceded region INHERITS the parent's schemaLedger + maps the parent's certs (emergence inheritance)", () => {
+    const world = createAlmaWorld("inherit");
+    const parent = makeInstitutions({
+      schemaLedger: [{ schemaId: "alma.trust/artisan/v1", label: "artisan" }],
+      verificationPolicy: { acceptedSchemaIds: ["alma.trust/artisan/v1"], rejectUnknownSchemas: true },
+      diplomacyPolicy: { defaultStance: "reexamine", overrides: {} },
+    });
+    seedGenesis(world, [defineRegion("yama", "Yama (strict)", parent)]);
+    admitTreasury(world, "yama");
+    for (let i = 1; i <= 3; i++) {
+      admitAgent(world, { id: `a${i}@yama`, region: "yama", role: "merchant", valueProfile: "lenient", publicKey: pub(10 + i), currency: 20 });
+    }
+    detectEmergence(world, 3);
+
+    const seceded = getRegion(world.getState(), "lenientyama");
+    expect(seceded).toBeDefined();
+    // inherited the parent's certificate vocabulary...
+    expect(seceded?.institutions.schemaLedger.map((e) => e.schemaId)).toEqual(["alma.trust/artisan/v1"]);
+    // ...and translates the parent's certs into the local vocabulary (map)
+    expect(seceded?.institutions.diplomacyPolicy.overrides.yama).toBe("map");
+    // the cohort carried its balances across the secession
+    expect(getAgent(world.getState(), "a1@yama")?.balances.currency).toBe(20);
+    expect(getAgent(world.getState(), "a1@yama")?.region).toBe("lenientyama");
+  });
+
   test("below critical mass, nothing secedes", () => {
     const world = createAlmaWorld("nomass");
     seedGenesis(world, [defineRegion("yama", "Yama", strict())]);
