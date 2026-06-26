@@ -27,5 +27,6 @@ export {
 } from "./economy";
 export { type AdmitSpec, admitAgent, admitTreasury, immigrate } from "./population";
 export { type VouchResult, vouchFor } from "./social";
+export { type MarketResult, setRegionLifecycle, listRegion, transferRegionOwnership } from "./market";
 export { type EconomyConfig, economyStep, runEconomy, detectEmergence, regionStance } from "./driver";
 export { type CertAssessment, stanceToward, assessCertificate, canTransactAcross, recognizeRegion } from "./diplomacy";

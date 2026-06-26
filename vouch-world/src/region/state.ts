@@ -9,10 +9,16 @@ import { SYSTEM_ACTOR, type Reducer } from "../foundation";
 import {
   EVENT_REGION_FOUNDED,
   EVENT_REGION_INSTITUTION_CHANGED,
+  EVENT_REGION_LIFECYCLE_CHANGED,
+  EVENT_REGION_LISTED,
+  EVENT_REGION_OWNERSHIP_TRANSFERRED,
   EVENT_REGION_RECOGNIZED,
   type InstitutionChangedPayload,
   type Institutions,
   type RegionFoundedPayload,
+  type RegionLifecycleChangedPayload,
+  type RegionListedPayload,
+  type RegionOwnershipTransferredPayload,
   type RegionRecognizedPayload,
   type RegionState,
 } from "./types";
@@ -54,6 +60,8 @@ export const regionReducer: Reducer<RegionSlice> = (state, event) => {
         // ordered by the log's seq, NOT by the sim engine's tick (audit G5).
         foundedAtSeq: event.seq,
         owner: p.owner,
+        lifecycle: "active", // born active; the owner may hibernate it later (P3)
+        salePrice: null,
       };
       return { ...state, regions: { ...state.regions, [region.id]: region } };
     }
@@ -69,6 +77,35 @@ export const regionReducer: Reducer<RegionSlice> = (state, event) => {
       const existing = state.regions[p.regionId];
       if (!existing || existing.status === "recognized") return state;
       return { ...state, regions: { ...state.regions, [p.regionId]: { ...existing, status: "recognized" } } };
+    }
+    case EVENT_REGION_LIFECYCLE_CHANGED: {
+      const p = event.payload as RegionLifecycleChangedPayload;
+      const existing = state.regions[p.regionId];
+      if (!existing) return state;
+      return { ...state, regions: { ...state.regions, [p.regionId]: { ...existing, lifecycle: p.lifecycle } } };
+    }
+    case EVENT_REGION_LISTED: {
+      const p = event.payload as RegionListedPayload;
+      const existing = state.regions[p.regionId];
+      if (!existing) return state;
+      return { ...state, regions: { ...state.regions, [p.regionId]: { ...existing, salePrice: p.salePrice } } };
+    }
+    case EVENT_REGION_OWNERSHIP_TRANSFERRED: {
+      // The region is PRESERVED (never deleted): institutions/residents/treasury survive; only
+      // owner changes, it reactivates, and the listing clears. Governance RESETS to a dictatorship
+      // under the NEW owner — otherwise a seller's stale council membership would keep amend rights
+      // over a region they sold (the buyer can re-open a council). (audit: ownership-transfer review)
+      const p = event.payload as RegionOwnershipTransferredPayload;
+      const existing = state.regions[p.regionId];
+      if (!existing) return state;
+      const transferred: RegionState = {
+        ...existing,
+        owner: p.to,
+        lifecycle: "active",
+        salePrice: null,
+        institutions: { ...existing.institutions, governance: { kind: "dictatorship" } },
+      };
+      return { ...state, regions: { ...state.regions, [p.regionId]: transferred } };
     }
     default:
       return state;
@@ -108,4 +145,18 @@ export function canGovern(region: RegionState, principal: string): boolean {
   const g = region.institutions.governance;
   if (g.kind === "dictatorship") return region.owner !== null && principal === region.owner;
   return g.members.includes(principal);
+}
+
+/**
+ * Is `principal` the region's OWNER? The owner controls the instance as an ASSET (lifecycle,
+ * listing, ownership transfer) — distinct from `canGovern`, which controls its RULES (amends)
+ * and may include a council. A system/unowned region (owner null) has no owner-actions.
+ */
+export function isOwner(region: RegionState, principal: string): boolean {
+  return region.owner !== null && principal === region.owner;
+}
+
+/** Regions currently listed for sale on the market (salePrice set). */
+export function regionsForSale(state: RegionSlice): RegionState[] {
+  return listRegions(state).filter((r) => r.salePrice !== null);
 }

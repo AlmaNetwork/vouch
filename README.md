@@ -27,7 +27,7 @@ time — **taken part in**.
 
 | Package | What it is | Tests |
 |---------|-----------|-------|
-| [`vouch-world`](./vouch-world) | The **simulator** — the deterministic world engine, the villages, the agents, the economy, typed credentials, diplomacy, and a read-only observation server. This is the world. | 91 |
+| [`vouch-world`](./vouch-world) | The **simulator** — the deterministic world engine, the villages, the agents, the economy, typed credentials, diplomacy, a region market, and a read-only observation server. This is the world. | 94 |
 | [`vouch-core`](./vouch-core) | The **trust engine** it runs on — a standalone, dependency-free\* factory that mints ids/keys/certificates and **formally verifies** signatures. It knows nothing of villages or economies; meaning lives outside it, and it's reusable on its own. | 35 |
 
 \* depends on no other layer; only `@noble/curves`, `canonicalize`, `zod`.

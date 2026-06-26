@@ -24,15 +24,18 @@ import {
   immigrate,
   isCurrencyConserving,
   isTransferable,
+  listRegion,
   mintCurrency,
   proposeFounding,
   rootReducer,
   runEconomy,
   seedGenesis,
+  setRegionLifecycle,
+  transferRegionOwnership,
   vouchFor,
 } from "../../src/environment";
 import { SYSTEM_ACTOR, replayState } from "../../src/foundation";
-import { defineRegion, getRegion, makeInstitutions } from "../../src/region";
+import { defineRegion, getRegion, makeInstitutions, ownedRegionsOf, regionsForSale } from "../../src/region";
 
 const NOTARY = keyPairFromSeed(new Uint8Array(32).fill(9));
 const pub = (n: number) => encodeBase64(keyPairFromSeed(new Uint8Array(32).fill(n)).publicKey);
@@ -211,6 +214,86 @@ describe("Track A — explicit mint + auditable supply (conservation baseline)",
     expect(currencySupply(world.getState())).toBe(supply); // a transfer is zero-sum
     mintCurrency(world, "bob@umi", 10, "grant");
     expect(currencySupply(world.getState())).toBe(supply + 10);
+  });
+});
+
+describe("Track A P3 — region market: ownership transfers, region never deleted (instance control)", () => {
+  test("hibernate -> list -> transfer; owner-gated; residents + treasury PRESERVED; replays", () => {
+    const world = createAlmaWorld("market");
+    seedGenesis(world, [defineRegion("umi", "Umi", lenient())]);
+    proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova", lenient()), undefined, "acct:alice"));
+    admitTreasury(world, "nova");
+    admitAgent(world, { id: "r@nova", region: "nova", role: "merchant", valueProfile: "lenient", publicKey: pub(1), currency: 50 });
+
+    // a non-owner cannot manage the instance; can't list while active
+    expect(setRegionLifecycle(world, "nova", "dormant", "acct:mallory").ok).toBe(false);
+    expect(listRegion(world, "nova", 100, "acct:alice").ok).toBe(false); // not-dormant
+
+    // owner hibernates, then lists
+    expect(setRegionLifecycle(world, "nova", "dormant", "acct:alice").ok).toBe(true);
+    expect(getRegion(world.getState(), "nova")?.lifecycle).toBe("dormant");
+    expect(listRegion(world, "nova", 100, "acct:alice").ok).toBe(true);
+    expect(getRegion(world.getState(), "nova")?.salePrice).toBe(100);
+    expect(regionsForSale(world.getState()).map((r) => r.id)).toEqual(["nova"]);
+
+    // can't transfer by a non-owner; owner sells/hands over to bob
+    expect(transferRegionOwnership(world, "nova", "acct:bob", "acct:mallory").ok).toBe(false);
+    expect(transferRegionOwnership(world, "nova", "acct:bob", "acct:alice").ok).toBe(true);
+
+    const nova = getRegion(world.getState(), "nova");
+    expect(nova?.owner).toBe("acct:bob"); // ownership moved
+    expect(nova?.lifecycle).toBe("active"); // reactivated
+    expect(nova?.salePrice).toBeNull(); // delisted
+
+    // the region is PRESERVED — residents + treasury survive with balances intact, never deleted
+    expect(getAgent(world.getState(), "r@nova")?.balances.currency).toBe(50);
+    expect(getAgent(world.getState(), treasuryId("nova"))).toBeDefined();
+    expect(getRegion(world.getState(), "nova")).toBeDefined();
+
+    // alice no longer owns it; bob does (an ID may own 0..N regions)
+    expect(ownedRegionsOf(world.getState(), "acct:alice").map((r) => r.id)).toEqual([]);
+    expect(ownedRegionsOf(world.getState(), "acct:bob").map((r) => r.id)).toEqual(["nova"]);
+
+    // can't transfer an unlisted region
+    expect(transferRegionOwnership(world, "nova", "acct:carol", "acct:bob").ok).toBe(false); // not-listed
+
+    expect(replayState(world.log.all(), INITIAL_WORLD_STATE, rootReducer).state).toEqual(world.getState());
+  });
+
+  test("selling a COUNCIL-governed region resets governance to the buyer (seller loses amend rights)", () => {
+    const world = createAlmaWorld("councilsale");
+    seedGenesis(world, [defineRegion("umi", "Umi", lenient())]);
+    const council = makeInstitutions({
+      governance: { kind: "council", members: ["acct:alice", "acct:dave"], threshold: 1 },
+      verificationPolicy: { acceptedSchemaIds: [], rejectUnknownSchemas: false },
+      diplomacyPolicy: { defaultStance: "absorb", overrides: {} },
+    });
+    proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova", council), undefined, "acct:alice"));
+    setRegionLifecycle(world, "nova", "dormant", "acct:alice");
+    listRegion(world, "nova", 100, "acct:alice");
+    expect(transferRegionOwnership(world, "nova", "acct:carol", "acct:alice").ok).toBe(true);
+
+    // governance RESET to dictatorship under the new owner; the seller's stale council seat is gone
+    expect(getRegion(world.getState(), "nova")?.institutions.governance.kind).toBe("dictatorship");
+    expect(getRegion(world.getState(), "nova")?.owner).toBe("acct:carol");
+    // the buyer can amend; the seller (former council member) cannot
+    amendInstitution(world, "nova", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, "acct:carol");
+    expect(() => amendInstitution(world, "nova", { policy: "diplomacy", value: { defaultStance: "absorb", overrides: {} } }, "acct:alice")).toThrow();
+  });
+
+  test("a DORMANT region's economy is frozen — residents cannot initiate transfers", () => {
+    const world = createAlmaWorld("frozen");
+    seedGenesis(world, [defineRegion("umi", "Umi", lenient())]);
+    proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova", lenient()), undefined, "acct:alice"));
+    admitTreasury(world, "nova");
+    admitAgent(world, { id: "x@nova", region: "nova", role: "merchant", valueProfile: "lenient", publicKey: pub(1), currency: 50 });
+    admitAgent(world, { id: "y@nova", region: "nova", role: "artisan", valueProfile: "lenient", publicKey: pub(2), currency: 0 });
+
+    expect(executeTransfer(world, { from: "x@nova", to: "y@nova", amount: 10 }, { tick: 0, notary: NOTARY }).ok).toBe(true);
+    setRegionLifecycle(world, "nova", "dormant", "acct:alice"); // hibernate
+    const r = executeTransfer(world, { from: "x@nova", to: "y@nova", amount: 10 }, { tick: 1, notary: NOTARY });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("region-dormant");
   });
 });
 

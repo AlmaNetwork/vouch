@@ -15,4 +15,6 @@ export {
   ownerOf,
   ownedRegionsOf,
   canGovern,
+  isOwner,
+  regionsForSale,
 } from "./state";

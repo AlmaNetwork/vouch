@@ -94,6 +94,13 @@ export type Proposer =
 /** Recognition status. Founded villages are born "unrecognized"; M4 grants "recognized". */
 export type RecognitionStatus = "unrecognized" | "recognized";
 
+/**
+ * Lifecycle (orthogonal to recognition): an "active" region runs; a "dormant" one is
+ * hibernated by its owner and can be listed + sold. A region is NEVER deleted — a defunct
+ * one is hibernated and its ownership transferred on the market (P3 "instance control").
+ */
+export type RegionLifecycle = "active" | "dormant";
+
 /** A founding proposal: the single interface both (a) and (b) flow through. */
 export interface FoundingProposal {
   readonly definition: RegionDefinition;
@@ -126,6 +133,8 @@ export interface RegionState {
   // An ID may govern MULTIPLE regions (Sybil resistance is 1-person-1-ID, NOT one-region-
   // per-person). The region market later transfers this; the region is never deleted.
   readonly owner: string | null;
+  readonly lifecycle: RegionLifecycle; // active | dormant (P3); born active
+  readonly salePrice: number | null; // asking price when listed on the market; null = not for sale
   // residency is NOT stored here — it is derived from the agent slice (AgentState.region,
   // via agentsInRegion), keeping a single source of truth (audit 3-A / EMG-2).
 }
@@ -135,6 +144,9 @@ export interface RegionState {
 export const EVENT_REGION_FOUNDED = "region.founded";
 export const EVENT_REGION_INSTITUTION_CHANGED = "region.institution.changed";
 export const EVENT_REGION_RECOGNIZED = "region.recognized"; // M4: a region joins the international society
+export const EVENT_REGION_LIFECYCLE_CHANGED = "region.lifecycle.changed"; // P3: active <-> dormant
+export const EVENT_REGION_LISTED = "region.listed"; // P3: owner sets an asking price (null = delist)
+export const EVENT_REGION_OWNERSHIP_TRANSFERRED = "region.ownership.transferred"; // P3: sold/handed over (never deleted)
 
 export type RegionFoundedPayload = {
   region: RegionDefinition;
@@ -153,6 +165,10 @@ export type RegionRecognizedPayload = {
   regionId: string;
   by: string; // the recognizing region
 };
+
+export type RegionLifecycleChangedPayload = { regionId: string; lifecycle: RegionLifecycle };
+export type RegionListedPayload = { regionId: string; salePrice: number | null };
+export type RegionOwnershipTransferredPayload = { regionId: string; from: string; to: string; price: number | null };
 
 // --- builders (convenience; villages are still just data) ----------------
 

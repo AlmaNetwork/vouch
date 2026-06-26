@@ -217,7 +217,8 @@ Reproduce these verbatim; tests assert on them and reducers match on them.
 - `EVENT_TICK = "system.tick"`.
 
 **Event types**
-- Region: `region.founded`, `region.institution.changed`, `region.recognized`.
+- Region: `region.founded`, `region.institution.changed`, `region.recognized`,
+  `region.lifecycle.changed`, `region.listed`, `region.ownership.transferred`.
 - Agent/economy: `agent.admitted`, `agent.migrated`, `agent.decided`,
   `agent.vouched`, `economy.settled`, `economy.minted`.
 

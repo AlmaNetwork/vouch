@@ -74,6 +74,8 @@ export function executeTransfer(env: CommitSink<WorldState>, move: TransferMove,
   // the SENDER's region sets its own fee/credit policy (sovereignty over its economy).
   const region = getRegion(state, from.region);
   if (!region) return { ok: false, reason: "unknown-region" };
+  // a hibernated (dormant / listed / mid-sale) region is shut down — its residents can't transact.
+  if (region.lifecycle !== "active") return { ok: false, reason: "region-dormant" };
   const policy = region.institutions.economyPolicy;
 
   const fee = Math.floor(move.amount * trustCostRate(from.reputation, policy));

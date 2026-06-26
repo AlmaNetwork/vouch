@@ -64,6 +64,14 @@ through `environment`**. `region` exports only types/reducer/slice/selectors and
   selectors `ownerOf` / `ownedRegionsOf`. The Sybil rule is **1 person = 1 ID** (an ID can
   be resident and/or founder); an ID may govern **multiple** regions (no one-region cap).
   Regions are **never deleted** (append-only; the market transfers ownership instead).
+- **Market / lifecycle (P3, the "instance control"):** `RegionState.lifecycle`
+  (`active`/`dormant`) + `salePrice`. `setRegionLifecycle` / `listRegion` (dormant-only) /
+  `transferRegionOwnership` (`environment/market.ts`) are **owner-only** (`isOwner`, the asset
+  right — distinct from `canGovern`, the rules right). A sale PRESERVES the region
+  (institutions/residents/treasury survive) and **resets governance to dictatorship** under the
+  new owner (so a seller's stale council seat can't retain control). A **dormant region's
+  economy is frozen** (`executeTransfer` refuses `region-dormant`). Price settlement in currency
+  is deferred (the account↔agent value bridge is Track B).
 - **Governance (§8 valve, now OPEN+gated):** `Institutions.governance` = `dictatorship` (the
   owner is sole authority) | `council` (any listed member; `threshold` reserved for P3 voting).
   `amendInstitution(env, regionId, change, by)` throws unless `canGovern(region, by)` — so a
