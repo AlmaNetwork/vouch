@@ -1,0 +1,333 @@
+openapi: 3.1.0
+info:
+  title: vouch — write API (DRAFT, speculative)
+  version: "0.0.0-draft"
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+  summary: SPECULATIVE write surface — pending Track B ratification. Do not build against this yet.
+  description: |
+    ⚠️ **DRAFT / speculative — pending Track B.** No write HTTP API exists on this build.
+    This file is a *proposed* contract derived from the in-process engine signatures
+    (`skills/capabilities.yaml`, task C9), written so Track B has something concrete to
+    react to and so the deploy skeleton's stub write node (`node/write-stub.ts`) has routes
+    to mirror. **Track B owns the final paths, the command envelope, auth/session, and the
+    response shapes.** Until they co-sign it, every operation here returns `501` from the
+    stub.
+
+    Two things are deliberately NOT modeled here because they are Track B's to define:
+      - the **command envelope** (signing, journaling, single-writer commit) that will wrap
+        each logical body below — see `x-envelope` notes;
+      - **auth / session**. (Whatever it is, a client never sends a private signing key —
+        the region notary key is server-held. See `skills/SKILL.md`.)
+
+    The request bodies ARE writable now: they are the logical inputs the engine already
+    takes. Server-side arguments (the commit handle, the sim tick, the notary key pair) are
+    never part of a request.
+servers:
+  - url: http://localhost:8788
+    description: Write node bind port (a stub on this build; Track B's real node later).
+
+x-status: speculative-pending-track-b
+
+tags:
+  - name: regions
+    description: Found and amend regions.
+  - name: population
+    description: Admit and move agents.
+  - name: economy
+    description: Move value.
+
+paths:
+  /v1/found:
+    post:
+      tags: [regions]
+      operationId: found
+      summary: Found a region (speculative).
+      description: "Logical body = FoundingProposal. x-envelope: Track B will wrap this in a signed command."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FoundingProposal" }
+      responses:
+        "200":
+          description: The founded region (intended contract).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegionState" }
+        "422": { $ref: "#/components/responses/DomainError" }
+        "501": { $ref: "#/components/responses/PendingTrackB" }
+
+  /v1/amend:
+    post:
+      tags: [regions]
+      operationId: amend
+      summary: Amend one of a region's institution policies (speculative).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AmendRequest" }
+      responses:
+        "200":
+          description: The amended region.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegionState" }
+        "422": { $ref: "#/components/responses/DomainError" }
+        "501": { $ref: "#/components/responses/PendingTrackB" }
+
+  /v1/admit:
+    post:
+      tags: [population]
+      operationId: admit
+      summary: Admit a resident agent (speculative).
+      description: "Logical body = AdmitSpec. `publicKey` is the agent's PUBLIC key — never a private key."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdmitSpec" }
+      responses:
+        "200":
+          description: The admitted agent.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentState" }
+        "422": { $ref: "#/components/responses/DomainError" }
+        "501": { $ref: "#/components/responses/PendingTrackB" }
+
+  /v1/transact:
+    post:
+      tags: [economy]
+      operationId: transact
+      summary: Move currency between agents (speculative).
+      description: |
+        Logical body = TransferMove `{ from, to, amount }`. The server supplies the sim tick
+        and the region notary key pair (which signs the receipt) — they are NEVER in the body.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransferMove" }
+      responses:
+        "200":
+          description: Settlement succeeded; the receipt is an ALMA certificate (alma.tx/receipt/v1).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransferOk" }
+        "422":
+          description: Settlement refused — a stable domain reason.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransferFail" }
+        "501": { $ref: "#/components/responses/PendingTrackB" }
+
+  /v1/migrate:
+    post:
+      tags: [population]
+      operationId: migrate
+      summary: Move an agent to another region (speculative).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MigrateRequest" }
+      responses:
+        "200":
+          description: The migrated agent.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentState" }
+        "422": { $ref: "#/components/responses/DomainError" }
+        "501": { $ref: "#/components/responses/PendingTrackB" }
+
+components:
+  responses:
+    PendingTrackB:
+      description: The current reality — the write surface is not implemented (stub).
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error, detail]
+            properties:
+              error: { type: string, const: "not-implemented" }
+              detail: { type: string }
+              path: { type: string }
+              received: { description: "the echoed request body (stub aid for tests)" }
+    DomainError:
+      description: A validation / domain error.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error]
+            properties:
+              error: { type: string }
+
+  schemas:
+    # --- enums (mirror the real TS unions) ----------------------------------
+    AgentRole: { type: string, enum: [artisan, merchant, broker, treasury] }
+    ValueProfile: { type: string, enum: [strict, lenient] }
+    RecognitionStatus: { type: string, enum: [unrecognized, recognized] }
+    ForeignCertStance: { type: string, enum: [absorb, map, reexamine, reject] }
+    TransferFailureReason:
+      type: string
+      description: The stable failure set of executeTransfer (task C9).
+      enum:
+        - unknown-agent
+        - self-transfer
+        - not-transferable
+        - bad-amount
+        - insufficient-funds
+        - no-treasury
+        - unknown-region
+        - sender-region-unrecognized
+        - receiver-region-unrecognized
+        - receiver-rejects-sender
+
+    # --- region / institutions ----------------------------------------------
+    SchemaLedgerEntry:
+      type: object
+      required: [schemaId]
+      properties: { schemaId: { type: string }, label: { type: string } }
+    VerificationPolicy:
+      type: object
+      required: [acceptedSchemaIds, rejectUnknownSchemas]
+      properties:
+        acceptedSchemaIds: { type: array, items: { type: string } }
+        rejectUnknownSchemas: { type: boolean }
+    DiplomacyPolicy:
+      type: object
+      required: [defaultStance, overrides]
+      properties:
+        defaultStance: { $ref: "#/components/schemas/ForeignCertStance" }
+        overrides:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/ForeignCertStance" }
+    Institutions:
+      type: object
+      required: [schemaLedger, verificationPolicy, diplomacyPolicy]
+      properties:
+        schemaLedger: { type: array, items: { $ref: "#/components/schemas/SchemaLedgerEntry" } }
+        verificationPolicy: { $ref: "#/components/schemas/VerificationPolicy" }
+        diplomacyPolicy: { $ref: "#/components/schemas/DiplomacyPolicy" }
+    RegionDefinition:
+      type: object
+      required: [id, displayName, institutions]
+      properties:
+        id: { type: string, description: "lowercase alphanumeric" }
+        displayName: { type: string }
+        institutions: { $ref: "#/components/schemas/Institutions" }
+    Proposer:
+      oneOf:
+        - { type: object, required: [kind], properties: { kind: { type: string, const: genesis } } }
+        - { type: object, required: [kind], properties: { kind: { type: string, const: experimenter }, note: { type: string } } }
+        - type: object
+          required: [kind, sourceRegion, reason, cohort]
+          properties:
+            kind: { type: string, const: emergence }
+            sourceRegion: { type: string }
+            reason: { type: string }
+            cohort: { type: array, items: { type: string } }
+    RegionState:
+      type: object
+      required: [id, displayName, institutions, status, proposer, foundedAtSeq]
+      properties:
+        id: { type: string }
+        displayName: { type: string }
+        institutions: { $ref: "#/components/schemas/Institutions" }
+        status: { $ref: "#/components/schemas/RecognitionStatus" }
+        proposer: { $ref: "#/components/schemas/Proposer" }
+        foundedAtSeq: { type: integer, minimum: 0 }
+    InstitutionChange:
+      description: Tagged by `policy`.
+      oneOf:
+        - { type: object, required: [policy, value], properties: { policy: { type: string, const: verification }, value: { $ref: "#/components/schemas/VerificationPolicy" } } }
+        - { type: object, required: [policy, value], properties: { policy: { type: string, const: diplomacy }, value: { $ref: "#/components/schemas/DiplomacyPolicy" } } }
+        - { type: object, required: [policy, value], properties: { policy: { type: string, const: schemaLedger }, value: { type: array, items: { $ref: "#/components/schemas/SchemaLedgerEntry" } } } }
+
+    # --- agents --------------------------------------------------------------
+    Balances:
+      type: object
+      required: [credit, currency]
+      properties: { credit: { type: number }, currency: { type: number } }
+    AgentState:
+      type: object
+      required: [id, region, role, publicKey, balances, reputation, valueProfile]
+      properties:
+        id: { type: string }
+        region: { type: string }
+        role: { $ref: "#/components/schemas/AgentRole" }
+        publicKey: { type: string, description: "base64 Ed25519 PUBLIC key" }
+        balances: { $ref: "#/components/schemas/Balances" }
+        reputation: { type: number }
+        valueProfile: { $ref: "#/components/schemas/ValueProfile" }
+    AdmitSpec:
+      type: object
+      required: [id, region, role, valueProfile, publicKey]
+      properties:
+        id: { type: string, description: "name@region; must end with @<region>" }
+        region: { type: string }
+        role: { $ref: "#/components/schemas/AgentRole" }
+        valueProfile: { $ref: "#/components/schemas/ValueProfile" }
+        publicKey: { type: string, description: "PUBLIC key only" }
+        currency: { type: number }
+        credit: { type: number }
+
+    # --- certificate / receipt ----------------------------------------------
+    Certificate:
+      type: object
+      required: [version, suite, issuer, subject, schemaId, claims, issuedAt, signature]
+      properties:
+        version: { type: string, const: "alma-cert/v1" }
+        suite: { type: string }
+        issuer: { type: string }
+        subject: { type: string }
+        schemaId: { type: string }
+        claims: { type: object, additionalProperties: true }
+        issuedAt: { type: string }
+        signature: { type: string }
+
+    # --- request / response bodies ------------------------------------------
+    FoundingProposal:
+      type: object
+      required: [definition, proposer]
+      properties:
+        definition: { $ref: "#/components/schemas/RegionDefinition" }
+        proposer: { $ref: "#/components/schemas/Proposer" }
+    AmendRequest:
+      type: object
+      required: [regionId, change, proposer]
+      properties:
+        regionId: { type: string }
+        change: { $ref: "#/components/schemas/InstitutionChange" }
+        proposer: { $ref: "#/components/schemas/Proposer" }
+    MigrateRequest:
+      type: object
+      required: [agentId, toRegion]
+      properties:
+        agentId: { type: string }
+        toRegion: { type: string }
+    TransferMove:
+      type: object
+      required: [from, to, amount]
+      properties:
+        from: { type: string }
+        to: { type: string }
+        amount: { type: integer, description: "positive integer of currency" }
+    TransferOk:
+      type: object
+      required: [ok, fee, receipt]
+      properties:
+        ok: { type: boolean, const: true }
+        fee: { type: integer }
+        receipt: { $ref: "#/components/schemas/Certificate" }
+    TransferFail:
+      type: object
+      required: [ok, reason]
+      properties:
+        ok: { type: boolean, const: false }
+        reason: { $ref: "#/components/schemas/TransferFailureReason" }

@@ -1,0 +1,27 @@
+{
+  "name": "vouch-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "vouch frontend — a one-page homepage + a typed client for the read-only observation API.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "bunx @biomejs/biome@2.5.1 lint src",
+    "gen:api": "cd .. && bunx openapi-typescript@7"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.7",
+    "vite-plugin-pwa": "^0.21.1"
+  }
+}

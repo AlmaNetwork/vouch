@@ -1,8 +1,8 @@
 # vouch-world
 
-A proof-of-concept for ALMA — a distributed identity / trust-protocol simulator.
-Built bottom-up, one milestone at a time. See `spec` for the full spec; this README
-tracks what is actually implemented.
+A proof-of-concept for ALMA — a protocol for portable identity and trust between
+self-governing communities, exercised as a simulator. Built bottom-up, one milestone at
+a time. See `spec` for the full spec; this README tracks what is actually implemented.
 
 ## Stack
 

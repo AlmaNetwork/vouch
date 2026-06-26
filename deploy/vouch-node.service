@@ -1,0 +1,30 @@
+# systemd unit for the vouch node. Install:
+#   sudo cp deploy/vouch-node.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now vouch-node
+[Unit]
+Description=vouch node (read observation + write stub, pending Track B)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Config lives here (KEY=VALUE per line). The "-" means "optional" — local-safe defaults apply if absent.
+EnvironmentFile=-/etc/vouch/node.env
+WorkingDirectory=/opt/vouch
+# Adjust if bun is elsewhere (the installer puts it on PATH; ~/.bun/bin/bun on a user install).
+ExecStart=/usr/local/bin/bun node/main.ts
+Restart=on-failure
+RestartSec=2
+
+# Graceful shutdown: SIGTERM → main.ts stops both servers → exit 0.
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+# Hardening (the node only reads its working dir; the log is in-memory on this build).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
