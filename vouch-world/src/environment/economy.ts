@@ -9,30 +9,30 @@
 
 import { type Certificate, type KeyPair, encodeBase64, issueCertificate } from "vouch-core";
 import {
+  EVENT_AGENT_ADMITTED,
   EVENT_ECONOMY_MINTED,
   EVENT_ECONOMY_SETTLED,
+  type AgentAdmittedPayload,
   type MintPayload,
   type SettlementEntry,
   type SettlementPayload,
+  currencySupply,
   getAgent,
   treasuryId,
 } from "../agent";
-import { type CommitSink } from "../foundation";
+import { type AlmaEvent, type CommitSink, SYSTEM_ACTOR, type WorldView } from "../foundation";
+import { type EconomyPolicy, getRegion } from "../region";
 import { canTransactAcross } from "./diplomacy";
 import type { WorldState } from "./state";
-
-const BASE_COST_RATE = 0.2;
-const MIN_COST_RATE = 0.05;
-const REP_DISCOUNT = 0.02;
-const CREDIT_PER_TX = 1; // credit accrues slowly (§3-B)
 
 /** M3: currency is transferable, credit is not (§3-B). A later milestone may let the village decide. */
 export function isTransferable(kind: "credit" | "currency"): boolean {
   return kind === "currency";
 }
 
-function trustCostRate(reputation: number): number {
-  return Math.min(BASE_COST_RATE, Math.max(MIN_COST_RATE, BASE_COST_RATE - reputation * REP_DISCOUNT));
+/** Fee rate under a region's economy policy: BASE at reputation 0, falling to MIN as reputation rises. */
+function trustCostRate(reputation: number, policy: EconomyPolicy): number {
+  return Math.min(policy.baseCostRate, Math.max(policy.minCostRate, policy.baseCostRate - reputation * policy.repDiscount));
 }
 
 /** PURE conservation law: the currency moved sums to zero (nothing minted/burned). */
@@ -71,10 +71,19 @@ export function executeTransfer(env: CommitSink<WorldState>, move: TransferMove,
   // the fee sink MUST exist, else the reducer would drop it and currency would leak.
   if (!getAgent(state, treasuryId(from.region))) return { ok: false, reason: "no-treasury" };
 
-  const fee = Math.floor(move.amount * trustCostRate(from.reputation));
+  // the SENDER's region sets its own fee/credit policy (sovereignty over its economy).
+  const region = getRegion(state, from.region);
+  if (!region) return { ok: false, reason: "unknown-region" };
+  const policy = region.institutions.economyPolicy;
+
+  const fee = Math.floor(move.amount * trustCostRate(from.reputation, policy));
+  // Defence in depth: a validated policy keeps the rate in [0,1], so the fee is in [0, amount]
+  // and no leg can drive a balance negative. If a bad policy ever slipped past validation,
+  // refuse here rather than emit a conserved-but-harmful settlement.
+  if (fee < 0 || fee > move.amount) throw new Error("executeTransfer: fee out of range (internal bug — invalid economy policy)");
   const entries: SettlementEntry[] = [
-    { agentId: from.id, currencyDelta: -move.amount, creditDelta: CREDIT_PER_TX, reputationDelta: 1 },
-    { agentId: to.id, currencyDelta: move.amount - fee, creditDelta: CREDIT_PER_TX, reputationDelta: 1 },
+    { agentId: from.id, currencyDelta: -move.amount, creditDelta: policy.creditPerTx, reputationDelta: 1 },
+    { agentId: to.id, currencyDelta: move.amount - fee, creditDelta: policy.creditPerTx, reputationDelta: 1 },
     { agentId: treasuryId(from.region), currencyDelta: fee, creditDelta: 0, reputationDelta: 0 },
   ];
   if (!isCurrencyConserving(entries)) {
@@ -116,4 +125,32 @@ export function mintCurrency(env: CommitSink<WorldState>, agentId: string, amoun
   if (!getAgent(env.getState(), agentId)) return { ok: false, reason: "unknown-agent" };
   env.commitSystem(EVENT_ECONOMY_MINTED, { agentId, amount, reason } satisfies MintPayload);
   return { ok: true };
+}
+
+/**
+ * Total currency ORIGIN recorded in the log: admission endowments + explicit mints. Only
+ * env-authored (SYSTEM_ACTOR) events count — a forged non-system admit/mint never changed
+ * state (reducer actor-gate), so it must not count toward the baseline.
+ */
+export function currencyOriginTotal(events: readonly AlmaEvent[]): number {
+  let total = 0;
+  for (const e of events) {
+    if (e.actor !== SYSTEM_ACTOR) continue;
+    if (e.type === EVENT_AGENT_ADMITTED) total += (e.payload as AgentAdmittedPayload).agent.balances.currency;
+    else if (e.type === EVENT_ECONOMY_MINTED) total += (e.payload as MintPayload).amount;
+  }
+  return total;
+}
+
+/**
+ * Runtime conservation invariant: the live supply MUST equal its logged origin (no leak, no
+ * unaccounted mint). Transfers are zero-sum, so supply only ever moves via admission + mint.
+ * Throws on violation — an operator/ops can call this periodically against a WorldView.
+ */
+export function assertCurrencyConserved(view: WorldView<WorldState>): void {
+  const supply = currencySupply(view.getState());
+  const origin = currencyOriginTotal(view.log.all());
+  if (supply !== origin) {
+    throw new Error(`assertCurrencyConserved: supply ${supply} != logged origin (admitted+minted) ${origin}`);
+  }
 }

@@ -22,7 +22,8 @@ export interface AgentState {
   readonly role: AgentRole;
   readonly publicKey: string; // base64 Ed25519 public key
   readonly balances: Balances;
-  readonly reputation: number;
+  readonly reputation: number; // economy-derived standing (accrues on settled trades)
+  readonly trust: number; // accumulated social capital from being VOUCHED for (§ the brand verb)
   readonly valueProfile: ValueProfile;
 }
 
@@ -40,6 +41,7 @@ export const EVENT_AGENT_MIGRATED = "agent.migrated";
 export const EVENT_AGENT_DECIDED = "agent.decided"; // the JOURNALED brain decision (audit G6)
 export const EVENT_ECONOMY_SETTLED = "economy.settled"; // env-authored value move (audit G7/G8)
 export const EVENT_ECONOMY_MINTED = "economy.minted"; // env-authored EXPLICIT currency origin (conservation baseline)
+export const EVENT_AGENT_VOUCHED = "agent.vouched"; // one agent VOUCHES for another -> trust (the brand verb)
 
 /** One agent's signed balance delta within a settlement. */
 export type SettlementEntry = {
@@ -60,3 +62,5 @@ export type AgentMigratedPayload = { agentId: string; toRegion: string };
 export type AgentDecidedPayload = { agentId: string; intent: Intent };
 /** An explicit currency mint — the ONLY sanctioned way new currency enters after genesis. */
 export type MintPayload = { agentId: string; amount: number; reason: string };
+/** One agent vouches for another (weight 1..5), raising the subject's trust. */
+export type VouchedPayload = { from: string; to: string; weight: number };

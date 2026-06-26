@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { type Certificate, encodeBase64, keyPairFromSeed, verifyCertificate } from "vouch-core";
 import {
   EVENT_AGENT_DECIDED,
+  EVENT_AGENT_VOUCHED,
   EVENT_ECONOMY_MINTED,
   EVENT_ECONOMY_SETTLED,
   currencySupply,
@@ -13,7 +14,10 @@ import {
   INITIAL_WORLD_STATE,
   admitAgent,
   admitTreasury,
+  amendInstitution,
+  assertCurrencyConserved,
   createAlmaWorld,
+  currencyOriginTotal,
   detectEmergence,
   executeTransfer,
   experimenterProposal,
@@ -25,6 +29,7 @@ import {
   rootReducer,
   runEconomy,
   seedGenesis,
+  vouchFor,
 } from "../../src/environment";
 import { SYSTEM_ACTOR, replayState } from "../../src/foundation";
 import { defineRegion, getRegion, makeInstitutions } from "../../src/region";
@@ -206,6 +211,106 @@ describe("Track A — explicit mint + auditable supply (conservation baseline)",
     expect(currencySupply(world.getState())).toBe(supply); // a transfer is zero-sum
     mintCurrency(world, "bob@umi", 10, "grant");
     expect(currencySupply(world.getState())).toBe(supply + 10);
+  });
+});
+
+describe("Track A — conservation runtime assertion (supply == logged origin)", () => {
+  test("supply equals admitted + minted; transfers are zero-sum; forged origins don't count", () => {
+    const world = umiWorld(); // alice 100, bob 0, treasury 0 => origin 100
+    expect(currencyOriginTotal(world.log.all())).toBe(100);
+    expect(currencySupply(world.getState())).toBe(100);
+    assertCurrencyConserved(world); // no throw
+
+    // a transfer is zero-sum — supply and origin both unchanged
+    executeTransfer(world, { from: "alice@umi", to: "bob@umi", amount: 40 }, { tick: 0, notary: NOTARY });
+    expect(currencySupply(world.getState())).toBe(100);
+    assertCurrencyConserved(world);
+
+    // an explicit mint moves supply AND origin together (stays conserved)
+    mintCurrency(world, "bob@umi", 25, "grant");
+    expect(currencySupply(world.getState())).toBe(125);
+    expect(currencyOriginTotal(world.log.all())).toBe(125);
+    assertCurrencyConserved(world);
+
+    // a FORGED (non-system) mint changes neither supply nor origin — they stay in lockstep
+    world.emit(EVENT_ECONOMY_MINTED, "acct:mallory", { agentId: "bob@umi", amount: 999, reason: "x" });
+    expect(currencySupply(world.getState())).toBe(125);
+    expect(currencyOriginTotal(world.log.all())).toBe(125);
+    assertCurrencyConserved(world);
+  });
+});
+
+describe("Track A — region-configurable fee policy (sovereignty over the economy)", () => {
+  test("a region sets its own fee schedule and its owner can amend it", () => {
+    const world = createAlmaWorld("feepolicy");
+    seedGenesis(world, [defineRegion("umi", "Umi", lenient())]);
+    // an owner founds a region with a steep 50% fee policy
+    const steep = makeInstitutions({
+      economyPolicy: { baseCostRate: 0.5, minCostRate: 0.1, repDiscount: 0, creditPerTx: 1 },
+      verificationPolicy: { acceptedSchemaIds: [], rejectUnknownSchemas: false },
+      diplomacyPolicy: { defaultStance: "absorb", overrides: {} },
+    });
+    proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova", steep), undefined, "acct:alice"));
+    admitTreasury(world, "nova");
+    admitAgent(world, { id: "a@nova", region: "nova", role: "merchant", valueProfile: "lenient", publicKey: pub(1), currency: 100 });
+    admitAgent(world, { id: "b@nova", region: "nova", role: "artisan", valueProfile: "lenient", publicKey: pub(2), currency: 0 });
+
+    // the region's own steep policy applies
+    const r1 = executeTransfer(world, { from: "a@nova", to: "b@nova", amount: 40 }, { tick: 0, notary: NOTARY });
+    expect(r1.ok).toBe(true);
+    if (r1.ok) expect(r1.fee).toBe(20); // floor(40 * 0.5)
+
+    // the owner amends to a cheaper policy (owner-scoped)
+    amendInstitution(world, "nova", { policy: "economy", value: { baseCostRate: 0.1, minCostRate: 0.05, repDiscount: 0, creditPerTx: 1 } }, "acct:alice");
+    const r2 = executeTransfer(world, { from: "a@nova", to: "b@nova", amount: 40 }, { tick: 1, notary: NOTARY });
+    expect(r2.ok).toBe(true);
+    if (r2.ok) expect(r2.fee).toBe(4); // floor(40 * 0.1)
+
+    // a non-owner cannot change the economy policy
+    expect(() =>
+      amendInstitution(world, "nova", { policy: "economy", value: { baseCostRate: 0, minCostRate: 0, repDiscount: 0, creditPerTx: 1 } }, "acct:mallory"),
+    ).toThrow();
+  });
+
+  test("a degenerate fee policy is rejected (no fee>amount, negative rate, min>base, or bad credit)", () => {
+    // rejected at construction (rates must be in [0,1], min<=base, creditPerTx a non-negative int)
+    expect(() => makeInstitutions({ economyPolicy: { baseCostRate: 1.5, minCostRate: 0.5, repDiscount: 0, creditPerTx: 1 } })).toThrow();
+    expect(() => makeInstitutions({ economyPolicy: { baseCostRate: -0.5, minCostRate: -0.5, repDiscount: 0, creditPerTx: 1 } })).toThrow();
+    expect(() => makeInstitutions({ economyPolicy: { baseCostRate: 0.2, minCostRate: 0.5, repDiscount: 0, creditPerTx: 1 } })).toThrow(); // min > base
+    expect(() => makeInstitutions({ economyPolicy: { baseCostRate: 0.2, minCostRate: 0.05, repDiscount: 0, creditPerTx: -1 } })).toThrow();
+
+    // and rejected at AMEND time — an owner can't drive the recipient negative via a fee > amount
+    const world = createAlmaWorld("badfee");
+    seedGenesis(world, [defineRegion("umi", "Umi", lenient())]);
+    proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova", makeInstitutions()), undefined, "acct:alice"));
+    expect(() =>
+      amendInstitution(world, "nova", { policy: "economy", value: { baseCostRate: 1.5, minCostRate: 1.5, repDiscount: 0, creditPerTx: 1 } }, "acct:alice"),
+    ).toThrow();
+  });
+});
+
+describe("Track A — vouch -> trust (the brand verb)", () => {
+  test("vouching raises the subject's trust (distinct from reputation); bad inputs + forge rejected", () => {
+    const world = umiWorld(); // alice, bob in umi; trust starts 0
+    expect(getAgent(world.getState(), "bob@umi")?.trust).toBe(0);
+
+    expect(vouchFor(world, "alice@umi", "bob@umi", 3).ok).toBe(true);
+    expect(getAgent(world.getState(), "bob@umi")?.trust).toBe(3);
+    vouchFor(world, "alice@umi", "bob@umi", 2); // accumulates
+    expect(getAgent(world.getState(), "bob@umi")?.trust).toBe(5);
+    // trust is DISTINCT from economy reputation — a vouch doesn't touch reputation/fees
+    expect(getAgent(world.getState(), "bob@umi")?.reputation).toBe(0);
+
+    // user-level failures return a reason, change nothing
+    expect(vouchFor(world, "alice@umi", "alice@umi", 1).ok).toBe(false); // self-vouch
+    expect(vouchFor(world, "alice@umi", "bob@umi", 9).ok).toBe(false); // weight out of range
+    expect(vouchFor(world, "ghost@umi", "bob@umi", 1).ok).toBe(false); // unknown agent
+
+    // a forged (non-system) vouch is ignored by the reducer's actor-gate
+    world.emit(EVENT_AGENT_VOUCHED, "acct:mallory", { from: "acct:mallory", to: "bob@umi", weight: 5 });
+    expect(getAgent(world.getState(), "bob@umi")?.trust).toBe(5);
+
+    expect(replayState(world.log.all(), INITIAL_WORLD_STATE, rootReducer).state).toEqual(world.getState());
   });
 });
 

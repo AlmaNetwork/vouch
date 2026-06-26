@@ -8,6 +8,7 @@ import { SYSTEM_ACTOR, type Reducer } from "../foundation";
 import {
   EVENT_AGENT_ADMITTED,
   EVENT_AGENT_MIGRATED,
+  EVENT_AGENT_VOUCHED,
   EVENT_ECONOMY_MINTED,
   EVENT_ECONOMY_SETTLED,
   type AgentAdmittedPayload,
@@ -16,6 +17,7 @@ import {
   type AgentState,
   type MintPayload,
   type SettlementPayload,
+  type VouchedPayload,
 } from "./types";
 
 export const agentReducer: Reducer<AgentSlice> = (state, event) => {
@@ -61,6 +63,14 @@ export const agentReducer: Reducer<AgentSlice> = (state, event) => {
       const a = state.agents[agentId];
       if (!a) return state;
       return { agents: { ...state.agents, [agentId]: { ...a, balances: { ...a.balances, currency: a.balances.currency + amount } } } };
+    }
+    case EVENT_AGENT_VOUCHED: {
+      // The brand verb: a vouch raises the SUBJECT's trust (social capital), distinct from
+      // economy reputation. Sybil-resistance of the vouch graph is P3.
+      const { to, weight } = event.payload as VouchedPayload;
+      const a = state.agents[to];
+      if (!a) return state;
+      return { agents: { ...state.agents, [to]: { ...a, trust: a.trust + weight } } };
     }
     // agent.decided is a journaled record only — it changes no protected state.
     default:

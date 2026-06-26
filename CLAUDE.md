@@ -219,7 +219,7 @@ Reproduce these verbatim; tests assert on them and reducers match on them.
 **Event types**
 - Region: `region.founded`, `region.institution.changed`, `region.recognized`.
 - Agent/economy: `agent.admitted`, `agent.migrated`, `agent.decided`,
-  `economy.settled`, `economy.minted`.
+  `agent.vouched`, `economy.settled`, `economy.minted`.
 
 **Certificate / protocol**
 - `CERT_VERSION = "alma-cert/v1"`, `DEFAULT_SUITE = "ed25519"`.

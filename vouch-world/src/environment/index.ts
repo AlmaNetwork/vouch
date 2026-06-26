@@ -22,7 +22,10 @@ export {
   mintCurrency,
   isCurrencyConserving,
   isTransferable,
+  currencyOriginTotal,
+  assertCurrencyConserved,
 } from "./economy";
 export { type AdmitSpec, admitAgent, admitTreasury, immigrate } from "./population";
+export { type VouchResult, vouchFor } from "./social";
 export { type EconomyConfig, economyStep, runEconomy, detectEmergence, regionStance } from "./driver";
 export { type CertAssessment, stanceToward, assessCertificate, canTransactAcross, recognizeRegion } from "./diplomacy";

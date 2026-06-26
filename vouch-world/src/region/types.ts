@@ -49,12 +49,25 @@ export type Governance =
   | { readonly kind: "dictatorship" }
   | { readonly kind: "council"; readonly members: readonly string[]; readonly threshold: number };
 
+/**
+ * A village's own economic policy — the trust-cost (fee/tax) schedule + credit accrual.
+ * Data, so the region's owner sets it (sovereignty over its economy, §2-4). Read by
+ * executeTransfer for the SENDER's region.
+ */
+export interface EconomyPolicy {
+  readonly baseCostRate: number; // fee rate at reputation 0 (the ceiling)
+  readonly minCostRate: number; // fee-rate floor (high reputation)
+  readonly repDiscount: number; // fee-rate reduction per reputation point
+  readonly creditPerTx: number; // credit accrued per settlement leg
+}
+
 /** The minimal institution set a village holds (§2-A). */
 export interface Institutions {
   readonly schemaLedger: readonly SchemaLedgerEntry[];
   readonly verificationPolicy: VerificationPolicy;
   readonly diplomacyPolicy: DiplomacyPolicy;
   readonly governance: Governance;
+  readonly economyPolicy: EconomyPolicy;
 }
 
 /** A village definition — pure data. Adding a village = adding one of these. */
@@ -97,7 +110,8 @@ export type InstitutionChange =
   | { readonly policy: "verification"; readonly value: VerificationPolicy }
   | { readonly policy: "diplomacy"; readonly value: DiplomacyPolicy }
   | { readonly policy: "schemaLedger"; readonly value: readonly SchemaLedgerEntry[] }
-  | { readonly policy: "governance"; readonly value: Governance }; // constitutional change (P2)
+  | { readonly policy: "governance"; readonly value: Governance } // constitutional change (P2)
+  | { readonly policy: "economy"; readonly value: EconomyPolicy }; // fee/tax policy (P2)
 
 // --- runtime state (derived from events) ---------------------------------
 
@@ -158,14 +172,39 @@ export function validateGovernance(g: Governance): void {
   }
 }
 
+/**
+ * Reject a degenerate economy policy. Fee rates MUST be in [0, 1] — so a fee can never
+ * exceed the amount transferred (which would drive the recipient's balance negative) nor
+ * be negative (which would over-credit the recipient and underflow the treasury). The floor
+ * must not exceed the ceiling; repDiscount is non-negative; creditPerTx is a non-negative int.
+ */
+export function validateEconomyPolicy(p: EconomyPolicy): void {
+  const inUnit = (x: number) => Number.isFinite(x) && x >= 0 && x <= 1;
+  if (!inUnit(p.baseCostRate) || !inUnit(p.minCostRate)) {
+    throw new Error("economyPolicy: baseCostRate and minCostRate must be in [0, 1]");
+  }
+  if (p.minCostRate > p.baseCostRate) {
+    throw new Error("economyPolicy: minCostRate must be <= baseCostRate");
+  }
+  if (!Number.isFinite(p.repDiscount) || p.repDiscount < 0) {
+    throw new Error("economyPolicy: repDiscount must be a finite number >= 0");
+  }
+  if (!Number.isInteger(p.creditPerTx) || p.creditPerTx < 0) {
+    throw new Error("economyPolicy: creditPerTx must be an integer >= 0");
+  }
+}
+
 export function makeInstitutions(partial: Partial<Institutions> = {}): Institutions {
   const governance: Governance = partial.governance ?? { kind: "dictatorship" };
+  const economyPolicy: EconomyPolicy = partial.economyPolicy ?? { baseCostRate: 0.2, minCostRate: 0.05, repDiscount: 0.02, creditPerTx: 1 };
   validateGovernance(governance);
+  validateEconomyPolicy(economyPolicy);
   return {
     schemaLedger: partial.schemaLedger ?? [],
     verificationPolicy: partial.verificationPolicy ?? { acceptedSchemaIds: [], rejectUnknownSchemas: true },
     diplomacyPolicy: partial.diplomacyPolicy ?? { defaultStance: "reexamine", overrides: {} },
     governance,
+    economyPolicy,
   };
 }
 

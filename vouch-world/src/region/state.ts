@@ -30,6 +30,8 @@ function applyInstitutionChange(institutions: Institutions, payload: Institution
       return { ...institutions, schemaLedger: payload.change.value };
     case "governance":
       return { ...institutions, governance: payload.change.value };
+    case "economy":
+      return { ...institutions, economyPolicy: payload.change.value };
   }
 }
 

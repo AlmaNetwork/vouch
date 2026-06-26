@@ -72,6 +72,12 @@ through `environment`**. `region` exports only types/reducer/slice/selectors and
   brick). The reducer's top actor-gate makes this unforgeable (a non-system institution change
   is ignored). Authorization of WHICH principal lives at write-time (`canGovern`); the reducer
   gate only enforces env-authorship.
+- **`economyPolicy`** on `Institutions` = the region's own fee/tax schedule
+  (`baseCostRate`/`minCostRate`/`repDiscount`/`creditPerTx`); `executeTransfer` reads the
+  SENDER region's policy. Owner-amendable (`InstitutionChange` "economy"), **validated** by
+  `validateEconomyPolicy` (rates in [0,1], `min<=base`, `creditPerTx` a non-negative int) so no
+  owner can set fee > amount (which would drive the recipient negative); `executeTransfer` also
+  guards `0 <= fee <= amount` as defence in depth.
 - `makeInstitutions` defaults are asymmetric: `rejectUnknownSchemas: true`,
   `diplomacyPolicy.defaultStance: "reexamine"`. Build a "lenient" village by
   overriding.
@@ -80,8 +86,12 @@ through `environment`**. `region` exports only types/reducer/slice/selectors and
 ## agent (L3) — residents & brains
 
 - `AgentState`: `{ id (name@region), region, role, publicKey, balances:{credit,
-  currency}, reputation, valueProfile }`. `id` is stable across migration; `region`
-  changes on migration.
+  currency}, reputation, trust, valueProfile }`. `id` is stable across migration; `region`
+  changes on migration. `reputation` is economy-derived; **`trust` is social capital from
+  being vouched for** — kept distinct (a vouch doesn't buy a cheaper fee).
+- **`vouchFor(env, from, to, weight)`** (the brand verb, `environment/social.ts`) → an
+  env-authored `agent.vouched` event → the reducer adds `weight` (1..5) to the subject's
+  `trust`. Sybil-resistance of the vouch graph is P3.
 - **A `Brain` is pure: `(ReadOnlyView) => Intent`.** No `emit`, no rng, no clock.
   Stochasticity arrives only as `view.roll` (a single deterministic draw the driver
   supplies). `Intent` is `idle | transfer | emigrate`; `transfer` moves currency

@@ -22,6 +22,7 @@ import {
   type RegionState,
   canGovern,
   getRegion,
+  validateEconomyPolicy,
   validateGovernance,
 } from "../region";
 import type { WorldState } from "./state";
@@ -106,8 +107,10 @@ export function amendInstitution(env: Commit, regionId: string, change: Institut
   if (!canGovern(region, by)) {
     throw new Error(`amendInstitution: "${by}" may not amend region "${regionId}" under its ${region.institutions.governance.kind} governance`);
   }
-  // A constitutional change must leave the region governable (no empty-council brick).
+  // A constitutional change must leave the region governable (no empty-council brick);
+  // an economy change must stay within sane bounds (no fee > amount / negative fee).
   if (change.policy === "governance") validateGovernance(change.value);
+  if (change.policy === "economy") validateEconomyPolicy(change.value);
 
   env.commitSystem(EVENT_REGION_INSTITUTION_CHANGED, { regionId, change, by });
 
