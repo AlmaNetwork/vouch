@@ -13,13 +13,14 @@
 
 import { type AgentSlice, agentReducer } from "../agent";
 import { type Reducer, World } from "../foundation";
+import { type ItemSlice, itemReducer } from "../item";
 import { type RegionSlice, regionReducer } from "../region";
 
-export interface WorldState extends RegionSlice, AgentSlice {
-  // M3 added the agent slice; balances/economy live inside agent state.
+export interface WorldState extends RegionSlice, AgentSlice, ItemSlice {
+  // M3 added the agent slice; balances/economy live inside agent state. P3 added the item slice.
 }
 
-export const INITIAL_WORLD_STATE: WorldState = { regions: {}, agents: {} };
+export const INITIAL_WORLD_STATE: WorldState = { regions: {}, agents: {}, items: {} };
 
 /**
  * Composes the per-layer slice reducers. Adding a slice is a downward edit in this
@@ -29,8 +30,9 @@ export const INITIAL_WORLD_STATE: WorldState = { regions: {}, agents: {} };
 export const rootReducer: Reducer<WorldState> = (state, event) => {
   const regions = regionReducer({ regions: state.regions }, event).regions;
   const agents = agentReducer({ agents: state.agents }, event).agents;
-  if (regions === state.regions && agents === state.agents) return state;
-  return { regions, agents };
+  const items = itemReducer({ items: state.items }, event).items;
+  if (regions === state.regions && agents === state.agents && items === state.items) return state;
+  return { regions, agents, items };
 };
 
 /** Construct an ALMA world: deterministic engine (M1) + the composed root reducer. */

@@ -13,6 +13,7 @@ src/
   foundation/   A/B  event log · seeded RNG · World/tick · replay
   region/       L2   institutions-as-data · slice reducer · selectors
   agent/        L3   AgentState · brains (view -> intent) · agent-slice fold
+  item/         L3   digital-item ownership ledger (mint/transfer) · slice fold
   environment/  L4   composition root · founding · economy · diplomacy · driver
   credential/        typed, validated credential kinds on the core envelope
   observation/  L5   read-only HTTP (hono) · metrics
@@ -122,6 +123,14 @@ through `environment`**. `region` exports only types/reducer/slice/selectors and
 - `agentsInRegion` excludes the `treasury` role and sorts by `id` ascending
   (determinism `DET-1`). `treasuryId(region)` = `treasury@${region}`.
 - Imports foundation, region (types), `vouch-core`. **Never environment.**
+
+## item (L3) — digital items
+
+- A unique, tradeable asset distinct from currency, tracked by an event-sourced ledger
+  (`itemId → owner`, an agent). `mintItem` / `transferItem` (`environment/items.ts`) are
+  env-authored; **transfer is holder-gated** (`by === item.owner`). Reducer gates at the top
+  on `SYSTEM_ACTOR` (forged item events ignored). Items are unique (deed-like), not a fungible
+  quota; an item-for-currency atomic swap is a later refinement. Imports only foundation.
 
 ## environment (L4) — composition root + the only write path
 

@@ -222,6 +222,7 @@ Reproduce these verbatim; tests assert on them and reducers match on them.
   `gov.proposal.opened`, `gov.vote.cast`.
 - Agent/economy: `agent.admitted`, `agent.migrated`, `agent.decided`,
   `agent.vouched`, `economy.settled`, `economy.minted`.
+- Items: `item.minted`, `item.transferred`.
 
 **Certificate / protocol**
 - `CERT_VERSION = "alma-cert/v1"`, `DEFAULT_SUITE = "ed25519"`.
