@@ -6,7 +6,36 @@ than fill the gaps silently, every assumption is listed here. Each is **pending 
 Track A ratification**; when the real contract lands, reconcile against this list and raise
 any conflict instead of assuming.
 
-## Track B — to freeze
+## ⚠️ Discovered against PR #3 / #4 (2026-06-26) — reconciliation needed
+
+Track B's node landed as **PR #3** (`feat/impl-app`) with Docker in **PR #4**. It diverges
+from the assumptions below on almost every axis — and, more fundamentally, it is a
+**from-scratch implementation that does not reuse the simulator** (`vouch-world`). This is a
+**team decision to resolve, not a file edit**: is the production node Track B's app, or a
+simulator-reusing node, and do the two domain models converge?
+
+| Assumption (below) | Track B reality (PR #3) | Status |
+|---|---|---|
+| `main(config)` → `{readPort, writePort, stop()}` | `bootFromEnv()` → `{app, shutdown}`; **single** hono app, one `PORT` (default 3000) | ✗ contradicted |
+| Per-action `/v1/{found,amend,admit,transact,migrate}` | **command-bus**: `POST /v1/execute` + `/v1/simulate`; reads `/v1/state` `/v1/residents` `/v1/ledger` | ✗ contradicted |
+| Logical bodies = `name@region` / institutions / role / valueProfile | UUID/email domain: `found {regionId, ownerEmail}`, `admit {accountId, email, residentId, name}`, `transact {fromResidentId, toResidentId, amount, memo}` | ✗ different domain model |
+| Bun runtime, reuse observation server | Node + `@hono/node-server`, npm + vitest, its **own** read endpoints | ✗ contradicted |
+| In-memory log (durability reserved) | **SQLite journal + replay-on-boot** (durability implemented) | ✗ (B is further along) |
+| Client never sends a private key | owner model is **email/UUID + session + Idempotency-Key** (no publicKey/signature in command bodies seen) | ⚠ different model — re-confirm the key-custody stance |
+| Read-server ownership (co-located vs sidecar) | Track B's node has its own `/v1/state` etc., **separate** from the simulator's observation server → two read surfaces | ⚠ open |
+
+**Repo-layout collision:** PR #1 (`add-vouch-simulator`) and PR #3 (`feat/impl-app`) both
+target `main` with overlapping root files (`README.md`, `.gitignore`) and incompatible
+layouts (2-package monorepo vs single root `src/`). Merging both as-is conflicts.
+
+**Track C impact:** the simulator-based read artifacts (read OpenAPI, observation client,
+docs, determinism gate) remain valid for the simulator. The **write-side** artifacts
+(`openapi/write.draft.yaml`, SKILL.md parts 2–3, `capabilities.yaml`) describe the
+simulator's logical ops and do **not** match Track B's real `/v1/execute` contract — they
+stay marked speculative until the team decides the direction. Do not silently rewrite them
+to Track B's shape; that presupposes the architecture decision.
+
+## Track B — to freeze (original assumptions, kept as the record)
 
 1. **Node entrypoint.** Assumed: `main(config)` loads nothing itself (config injected),
    runs the boot ritual, starts the write app **and** the read observation app, and returns

@@ -17,6 +17,6 @@ apis:
     root: openapi/read.yaml
     # openapi-typescript reads this: `bunx openapi-typescript` generates the web client types.
     x-openapi-ts:
-      output: web/src/api/schema.d.ts
+      output: apps/web/src/api/schema.d.ts
   write:                        # task C10 — speculative, pending Track B ratification
     root: openapi/write.draft.yaml

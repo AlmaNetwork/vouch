@@ -26,6 +26,7 @@ function check(label: string, ok: boolean): void {
   if (!ok) failures++;
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: the gate inspects arbitrary JSON response shapes
 async function postJson(url: string, body: unknown): Promise<{ status: number; json: any }> {
   const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   return { status: res.status, json: await res.json() };
