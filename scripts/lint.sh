@@ -1,14 +1,14 @@
 #!/usr/bin/env sh
-# Biome lint for the whole repo. Track C deliverable (task C7).
+# Biome lint for TRACK-C-OWNED code only (node/, scripts/, apps/web/ — scoped in biome.json).
+# Track A/B own their own source + linting (vouch-core / vouch-world use their own tooling),
+# so Track C does NOT lint their code here. Task C7.
 # Run locally (`sh scripts/lint.sh`) or in CI (.github/workflows/ci.yml, job `lint`).
 #
-# ADVISORY phase: `biome lint` reports warnings but exits 0 on them, and the CI step is
-# marked continue-on-error, so this never blocks Track A / Track B. To move to ENFORCING
-# later: add `--error-on-warnings` below AND remove `continue-on-error` from the CI job.
+# Track-C code is kept biome-clean, so this passes. The CI job is still continue-on-error
+# (advisory); to make it a hard gate, remove `continue-on-error` from the `lint` job.
 #
-# Config: ../biome.json (formatter matched to the house style; recommended lint rules).
-# Note: only Track-C-owned packages (e.g. web/) get a package.json `lint` script — the
-# existing vouch-core / vouch-world manifests are left untouched to avoid A/B conflicts.
+# Config: ../biome.json (formatter matched to the house style; recommended lint rules; files
+# scoped to the Track-C dirs above).
 set -eu
 
 BIOME_VERSION="2.5.1"
