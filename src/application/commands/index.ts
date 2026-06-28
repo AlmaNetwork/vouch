@@ -13,8 +13,22 @@ import {
   admitHandler,
   amendHandler,
   transactHandler,
-  createAssetTypeHandler,
-  createAssetHandler,
+  defineAssetTypeHandler,
+  issueAssetHandler,
+  transferAssetHandler,
+  disposeAssetHandler,
+  revokeAssetHandler,
+  makeLawHandler,
+  reviseLawHandler,
+  abolishLawHandler,
+  inviteHandler,
+  acceptInviteHandler,
+  suspendHandler,
+  reinstateHandler,
+  makeGroupHandler,
+  reviseGroupHandler,
+  dissolveGroupHandler,
+  assignMemberHandler,
 } from "./handlers/index.js";
 
 /**
@@ -26,6 +40,24 @@ export function initializeCommandRegistry(): void {
   commandRegistry.register(admitHandler);
   commandRegistry.register(amendHandler);
   commandRegistry.register(transactHandler);
-  commandRegistry.register(createAssetTypeHandler);
-  commandRegistry.register(createAssetHandler);
+  // Asset commands
+  commandRegistry.register(defineAssetTypeHandler);
+  commandRegistry.register(issueAssetHandler);
+  commandRegistry.register(transferAssetHandler);
+  commandRegistry.register(disposeAssetHandler);
+  commandRegistry.register(revokeAssetHandler);
+  // Law commands
+  commandRegistry.register(makeLawHandler);
+  commandRegistry.register(reviseLawHandler);
+  commandRegistry.register(abolishLawHandler);
+  // Membership commands
+  commandRegistry.register(inviteHandler);
+  commandRegistry.register(acceptInviteHandler);
+  commandRegistry.register(suspendHandler);
+  commandRegistry.register(reinstateHandler);
+  // Organization commands
+  commandRegistry.register(makeGroupHandler);
+  commandRegistry.register(reviseGroupHandler);
+  commandRegistry.register(dissolveGroupHandler);
+  commandRegistry.register(assignMemberHandler);
 }

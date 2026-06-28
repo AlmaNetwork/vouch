@@ -8,4 +8,27 @@ export { establishHandler } from "./establishHandler.js";
 export { admitHandler } from "./admitHandler.js";
 export { amendHandler } from "./amendHandler.js";
 export { transactHandler } from "./transactHandler.js";
-export { createAssetTypeHandler, createAssetHandler } from "./assetHandlers.js";
+export {
+  defineAssetTypeHandler,
+  issueAssetHandler,
+  transferAssetHandler,
+  disposeAssetHandler,
+  revokeAssetHandler,
+} from "./assetHandlers.js";
+export {
+  makeLawHandler,
+  reviseLawHandler,
+  abolishLawHandler,
+} from "./lawHandlers.js";
+export {
+  inviteHandler,
+  acceptInviteHandler,
+  suspendHandler,
+  reinstateHandler,
+} from "./membershipHandlers.js";
+export {
+  makeGroupHandler,
+  reviseGroupHandler,
+  dissolveGroupHandler,
+  assignMemberHandler,
+} from "./groupHandlers.js";

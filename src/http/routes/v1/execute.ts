@@ -44,17 +44,118 @@ const commandSchemas = {
     assetId: z.string().min(1),
     memo: z.string().optional(),
   }),
-  createAssetType: z.object({
+  // Asset commands
+  defineAssetType: z.object({
     assetTypeId: z.string().min(1),
-    typeName: z.string().min(1),
+    name: z.string().min(1),
     description: z.string().optional(),
+    kind: z.enum(["fungible", "credential", "nft"]),
     precision: z.number().int().min(0).max(18).optional(),
     allowNegative: z.boolean().optional(),
+    schema: z.record(z.unknown()).optional(),
+    transferable: z.boolean().optional(),
+    expirable: z.boolean().optional(),
   }),
-  createAsset: z.object({
+  issueAsset: z.object({
     assetId: z.string().min(1),
-    initialBalance: z.string().optional(),
+    recipientId: z.string().min(1),
+    amount: z.string().optional(),
+    claims: z.record(z.unknown()).optional(),
+    expiresAt: z.string().optional(),
     metadata: z.record(z.unknown()).optional(),
+  }),
+  transferAsset: z.object({
+    assetId: z.string().min(1),
+    toAccountId: z.string().min(1),
+    amount: z.string().optional(),
+    memo: z.string().optional(),
+  }),
+  disposeAsset: z.object({
+    assetId: z.string().min(1),
+    reason: z.string().optional(),
+  }),
+  revokeAsset: z.object({
+    assetId: z.string().min(1),
+    reason: z.string().min(1),
+  }),
+  // Law commands
+  makeLaw: z.object({
+    lawId: z.string().min(1),
+    name: z.string().min(1),
+    description: z.string().optional(),
+    lawType: z.enum(["constraint", "requirement", "trigger"]),
+    rule: z.object({
+      target: z.union([z.string().min(1), z.array(z.string().min(1))]),
+      condition: z.record(z.unknown()).optional(),
+      action: z.record(z.unknown()).optional(),
+      message: z.string().optional(),
+    }),
+    effectiveAt: z.string().optional(),
+  }),
+  reviseLaw: z.object({
+    lawId: z.string().min(1),
+    changes: z.object({
+      name: z.string().min(1).optional(),
+      description: z.string().optional(),
+      rule: z.object({
+        target: z.union([z.string().min(1), z.array(z.string().min(1))]).optional(),
+        condition: z.record(z.unknown()).optional(),
+        action: z.record(z.unknown()).optional(),
+        message: z.string().optional(),
+      }).optional(),
+      effectiveAt: z.string().optional(),
+    }),
+  }),
+  abolishLaw: z.object({
+    lawId: z.string().min(1),
+    reason: z.string().min(1),
+  }),
+  // Membership commands
+  invite: z.object({
+    inviteId: z.string().uuid().optional(),
+    email: z.string().email(),
+    roles: z.array(z.string()).optional(),
+    expiresInDays: z.number().int().min(1).max(90).optional(),
+  }),
+  acceptInvite: z.object({
+    inviteId: z.string().uuid(),
+    accountId: z.string().min(1),
+    residentId: z.string().uuid(),
+    residentName: z.string().min(1),
+  }),
+  suspend: z.object({
+    accountId: z.string().min(1),
+    reason: z.string().min(1),
+  }),
+  reinstate: z.object({
+    accountId: z.string().min(1),
+    reason: z.string().optional(),
+  }),
+  // Organization commands
+  makeGroup: z.object({
+    groupId: z.string().min(1),
+    name: z.string().min(1),
+    description: z.string().optional(),
+    groupType: z.enum(["team", "department", "committee", "community"]),
+    permissions: z.array(z.string()).optional(),
+  }),
+  reviseGroup: z.object({
+    groupId: z.string().min(1),
+    changes: z.object({
+      name: z.string().min(1).optional(),
+      description: z.string().optional(),
+      permissions: z.array(z.string()).optional(),
+    }),
+  }),
+  dissolveGroup: z.object({
+    groupId: z.string().min(1),
+    reason: z.string().min(1),
+  }),
+  assignMember: z.object({
+    groupId: z.string().min(1),
+    accountId: z.string().min(1),
+    role: z.enum(["leader", "member"]),
+    action: z.enum(["add", "remove", "update"]),
   }),
 };
 
@@ -84,7 +185,7 @@ function validateCommandPayload(rawCommand: { name: string; [key: string]: unkno
 
   return {
     name: commandName as CommandPacket["name"],
-    payload: payload as CommandPacket["payload"],
+    payload: payload as unknown as CommandPacket["payload"],
   };
 }
 
@@ -104,7 +205,7 @@ function mapApiPayloadToInternal(commandName: string, apiPayload: Record<string,
         residentId: apiPayload.residentId,
         name: apiPayload.residentName,
       };
-    case "amend":
+    case "amend": {
       const changes = apiPayload.changes as Record<string, unknown> | undefined;
       return {
         changes: {
@@ -112,14 +213,28 @@ function mapApiPayloadToInternal(commandName: string, apiPayload: Record<string,
           name: changes?.regionName,
         },
       };
-    case "createAssetType":
-      return {
-        assetTypeId: apiPayload.assetTypeId,
-        name: apiPayload.typeName,
-        description: apiPayload.description,
-        precision: apiPayload.precision,
-        allowNegative: apiPayload.allowNegative,
-      };
+    }
+    // Asset commands use same field names - pass through
+    case "defineAssetType":
+    case "issueAsset":
+    case "transferAsset":
+    case "disposeAsset":
+    case "revokeAsset":
+    case "transact":
+    // Law commands use same field names - pass through
+    case "makeLaw":
+    case "reviseLaw":
+    case "abolishLaw":
+    // Membership commands use same field names - pass through
+    case "invite":
+    case "acceptInvite":
+    case "suspend":
+    case "reinstate":
+    // Organization commands use same field names - pass through
+    case "makeGroup":
+    case "reviseGroup":
+    case "dissolveGroup":
+    case "assignMember":
     default:
       return apiPayload;
   }
