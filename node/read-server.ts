@@ -5,14 +5,7 @@
 // the "static vs live-advancing" question that is Track B's to settle.
 
 import { type KeyPair, keyPairFromSeed } from "../vouch-core/src/index";
-import {
-  type WorldState,
-  admitAgent,
-  admitTreasury,
-  createAlmaWorld,
-  runEconomy,
-  seedGenesis,
-} from "../vouch-world/src/environment";
+import { admitAgent, admitTreasury, createAlmaWorld, runEconomy, seedGenesis, type WorldState } from "../vouch-world/src/environment";
 import type { WorldView } from "../vouch-world/src/foundation";
 import { createObservationApp } from "../vouch-world/src/observation";
 import { defineRegion, makeInstitutions } from "../vouch-world/src/region";

@@ -8,7 +8,7 @@
 // {readPort, writePort, stop()} out). When Track B's real `main(config)` lands, the write
 // half (serveWriteStub) is swapped for its app and this wiring stays. See deploy/B-CONTRACT.md.
 
-import { type NodeConfig, describeConfig, loadConfig } from "./config";
+import { describeConfig, loadConfig, type NodeConfig } from "./config";
 import { composeReadWorld, serveRead } from "./read-server";
 import { serveWriteStub } from "./write-stub";
 

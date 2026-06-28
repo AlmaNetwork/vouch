@@ -11,20 +11,20 @@
 
 import type { KeyPair } from "vouch-core";
 import {
-  EVENT_AGENT_DECIDED,
   type AgentDecidedPayload,
   type AgentRole,
   type AgentState,
-  type Brain,
-  type Intent,
-  type ReadOnlyView,
   agentsInRegion,
+  type Brain,
   defaultBrains,
+  EVENT_AGENT_DECIDED,
   getAgent,
+  type Intent,
   listAgents,
+  type ReadOnlyView,
 } from "../agent";
-import { type Rng, type World } from "../foundation";
-import { type RegionState, defineRegion, getRegion, listRegions, makeInstitutions } from "../region";
+import type { Rng, World } from "../foundation";
+import { defineRegion, getRegion, listRegions, makeInstitutions, type RegionState } from "../region";
 import { executeTransfer } from "./economy";
 import { emergenceProposal, proposeFounding } from "./founding";
 import { admitTreasury, immigrate } from "./population";
@@ -147,7 +147,12 @@ export function detectEmergence(env: World<WorldState>, criticalMass: number): v
       const def = defineRegion(newId, `${profile} secession from ${sourceRegion}`, institutions);
       proposeFounding(
         env,
-        emergenceProposal(def, sourceRegion, `institutional mismatch: ${profile} cohort`, cohort.map((a) => a.id)),
+        emergenceProposal(
+          def,
+          sourceRegion,
+          `institutional mismatch: ${profile} cohort`,
+          cohort.map((a) => a.id),
+        ),
       );
       admitTreasury(env, newId);
     }

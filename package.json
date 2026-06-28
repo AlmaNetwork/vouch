@@ -1,0 +1,14 @@
+{
+  "name": "vouch",
+  "private": true,
+  "description": "Repo-wide tooling (Biome lint + format) for the vouch monorepo. Each package builds/tests on its own.",
+  "scripts": {
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check --write .",
+    "ci": "biome ci ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.1.0"
+  }
+}

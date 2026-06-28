@@ -9,6 +9,21 @@ permissions:
   contents: read
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.2"
+
+      # Root tooling package holds Biome (lint + format). `biome ci` is
+      # non-mutating: it fails if anything is unformatted or trips a lint rule.
+      - name: Install tooling
+        run: bun install --frozen-lockfile
+      - name: Biome — lint + format check
+        run: bun run ci
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -45,19 +60,9 @@ jobs:
       - name: redocly lint
         run: sh openapi/lint.sh
 
-  # Track C — biome lint (ADVISORY). Reports style/quality issues across the repo but
-  # `continue-on-error` keeps it from blocking Track A / Track B. Flip to enforcing later
-  # (remove continue-on-error here; add --error-on-warnings in scripts/lint.sh).
-  lint:
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v5
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "1.3.2"
-      - name: biome lint (advisory)
-        run: sh scripts/lint.sh
+  # NOTE: Biome lint/format is the `lint` job above, owned by the root tooling package (PR #6).
+  # Track C's code is kept formatted + clean against that shared config; the old Track-C-only
+  # biome job + scripts/lint.sh were removed as redundant when PR #6 landed Biome repo-wide.
 
   # Track C — build the Next.js frontend (apps/web). Next runs on NODE here (vanilla-extract's
   # build-time eval breaks under Bun); deps install via Bun, `next build` runs under Node and

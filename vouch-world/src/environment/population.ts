@@ -5,15 +5,15 @@
 
 import { isValidIdentifier } from "vouch-core";
 import {
-  EVENT_AGENT_ADMITTED,
-  EVENT_AGENT_MIGRATED,
   type AgentRole,
   type AgentState,
-  type ValueProfile,
+  EVENT_AGENT_ADMITTED,
+  EVENT_AGENT_MIGRATED,
   getAgent,
   treasuryId,
+  type ValueProfile,
 } from "../agent";
-import { type CommitSink } from "../foundation";
+import type { CommitSink } from "../foundation";
 import { getRegion } from "../region";
 import type { WorldState } from "./state";
 

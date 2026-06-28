@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { ED25519_SUITE, getSuite, listSuites } from "../src/suite";
 import { generateKeyPair } from "../src/keys";
+import { ED25519_SUITE, getSuite, listSuites } from "../src/suite";
 
 describe("signature-suite registry", () => {
   test("ed25519 is registered out of the box", () => {

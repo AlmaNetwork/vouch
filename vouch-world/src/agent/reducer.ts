@@ -4,18 +4,18 @@
 // (actor === SYSTEM_ACTOR). Because World.emit is public, this fold point is the
 // real §2-4 conservation chokepoint — a self-asserted balance event is ignored.
 
-import { SYSTEM_ACTOR, type Reducer } from "../foundation";
+import { type Reducer, SYSTEM_ACTOR } from "../foundation";
 import { EVENT_RESOURCE_DRAWN, type ResourceDrawnPayload } from "../region";
 import {
+  type AgentAdmittedPayload,
+  type AgentMigratedPayload,
+  type AgentSlice,
+  type AgentState,
   EVENT_AGENT_ADMITTED,
   EVENT_AGENT_MIGRATED,
   EVENT_AGENT_VOUCHED,
   EVENT_ECONOMY_MINTED,
   EVENT_ECONOMY_SETTLED,
-  type AgentAdmittedPayload,
-  type AgentMigratedPayload,
-  type AgentSlice,
-  type AgentState,
   type MintPayload,
   type SettlementPayload,
   type VouchedPayload,

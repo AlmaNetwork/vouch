@@ -1,8 +1,8 @@
 "use client";
 
-import { ObservationClient } from "@/src/api/observation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Cell, Column, Link, Row, Table, TableBody, TableHeader } from "react-aria-components";
+import { ObservationClient } from "@/src/api/observation";
 import * as s from "./page.css";
 
 const SKILL_URL = "https://github.com/AlmaNetwork/vouch/blob/main/skills/SKILL.md";
@@ -18,8 +18,8 @@ export default function Page() {
       <section>
         <h1 className={s.title}>vouch</h1>
         <p className={s.tagline}>
-          A testbed for <strong>ALMA</strong> — a protocol for portable identity and trust between
-          self-governing communities. Watch a node below, or work with one via the Skill.
+          A testbed for <strong>ALMA</strong> — a protocol for portable identity and trust between self-governing communities. Watch a node
+          below, or work with one via the Skill.
         </p>
         <Link className={s.cta} href={SKILL_URL} target="_blank">
           Work with a node → read the Skill
@@ -34,16 +34,11 @@ export default function Page() {
           </Button>
         </div>
 
-        {metrics.isError && (
-          <p className={s.error}>{String(metrics.error)} — is a node serving on :8787 (proxied via /api)?</p>
-        )}
+        {metrics.isError && <p className={s.error}>{String(metrics.error)} — is a node serving on :8787 (proxied via /api)?</p>}
         {metrics.data && (
           <div className={s.stats}>
             <Stat label="tick" value={String(metrics.data.tick)} />
-            <Stat
-              label="regions"
-              value={`${metrics.data.regions.recognized}/${metrics.data.regions.total} recognized`}
-            />
+            <Stat label="regions" value={`${metrics.data.regions.recognized}/${metrics.data.regions.total} recognized`} />
             <Stat label="residents" value={String(metrics.data.agents.residents)} />
             <Stat label="currency" value={String(metrics.data.agents.totalCurrency)} />
             <Stat label="gini" value={metrics.data.agents.currencyGini.toFixed(3)} />
@@ -87,11 +82,7 @@ export default function Page() {
         <a href={SKILL_URL} target="_blank" rel="noreferrer">
           skill
         </a>
-        <a
-          href="https://github.com/AlmaNetwork/vouch/blob/main/docs/quickstart.md"
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a href="https://github.com/AlmaNetwork/vouch/blob/main/docs/quickstart.md" target="_blank" rel="noreferrer">
           quickstart
         </a>
       </footer>

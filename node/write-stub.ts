@@ -47,10 +47,7 @@ export function serveWriteStub(config: NodeConfig): ServerHandle {
             received = null;
           }
         }
-        return Response.json(
-          { error: "not-implemented", detail: PENDING, path: url.pathname, received },
-          { status: 501 },
-        );
+        return Response.json({ error: "not-implemented", detail: PENDING, path: url.pathname, received }, { status: 501 });
       }
 
       return Response.json({ error: "not-found", path: url.pathname }, { status: 404 });

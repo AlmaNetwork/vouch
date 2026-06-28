@@ -20,16 +20,16 @@
 
 import { keyPairFromSeed } from "../vouch-core/src/index";
 import {
-  INITIAL_WORLD_STATE,
-  type WorldState,
   admitAgent,
   admitTreasury,
   createAlmaWorld,
+  INITIAL_WORLD_STATE,
   rootReducer,
   runEconomy,
   seedGenesis,
+  type WorldState,
 } from "../vouch-world/src/environment";
-import { type World, replayState, stableStringify } from "../vouch-world/src/foundation";
+import { replayState, stableStringify, type World } from "../vouch-world/src/foundation";
 import { defineRegion, makeInstitutions } from "../vouch-world/src/region";
 
 const TICKS = 12;
@@ -40,11 +40,7 @@ const NOTARY = keyPairFromSeed(new Uint8Array(32).fill(7));
 function buildAndRun(seed: string): World<WorldState> {
   const world = createAlmaWorld(seed);
   seedGenesis(world, [
-    defineRegion(
-      "umi",
-      "Umi",
-      makeInstitutions({ verificationPolicy: { acceptedSchemaIds: [], rejectUnknownSchemas: false } }),
-    ),
+    defineRegion("umi", "Umi", makeInstitutions({ verificationPolicy: { acceptedSchemaIds: [], rejectUnknownSchemas: false } })),
   ]);
   admitTreasury(world, "umi");
   for (const name of ["alice", "bob", "carol", "dan"]) {

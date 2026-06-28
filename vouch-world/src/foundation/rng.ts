@@ -27,7 +27,7 @@ function cyrb128(seed: string): [number, number, number, number] {
 }
 
 function sfc32(a: number, b: number, c: number, d: number): Generator32 {
-  return function () {
+  return () => {
     a >>>= 0;
     b >>>= 0;
     c >>>= 0;
@@ -87,8 +87,9 @@ export class Rng {
 
   /** Uniformly pick one element. */
   pick<T>(items: readonly T[]): T {
-    if (items.length === 0) throw new Error("rng.pick: cannot pick from an empty array");
-    return items[this.int(items.length)]!;
+    const item = items[this.int(items.length)];
+    if (item === undefined) throw new Error("rng.pick: cannot pick from an empty array");
+    return item;
   }
 
   /** `n` deterministic bytes — e.g. a 32-byte seed for keyPairFromSeed (§2-7). */

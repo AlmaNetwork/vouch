@@ -5,8 +5,7 @@ import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: "vouch — observe the ALMA world",
-  description:
-    "A testbed for ALMA — a protocol for portable identity and trust between self-governing communities.",
+  description: "A testbed for ALMA — a protocol for portable identity and trust between self-governing communities.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

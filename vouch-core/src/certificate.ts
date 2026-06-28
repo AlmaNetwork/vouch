@@ -13,10 +13,10 @@
 // key directory — supplying the key is the caller's (the village's) job.
 
 import { z } from "zod";
+import { decodeBase64, encodeBase64 } from "./encoding";
+import { isValidIdentifier } from "./identifier";
 import { canonicalBytes } from "./jcs";
 import { getSuite } from "./suite";
-import { isValidIdentifier } from "./identifier";
-import { decodeBase64, encodeBase64 } from "./encoding";
 
 export const CERT_VERSION = "alma-cert/v1";
 export const DEFAULT_SUITE = "ed25519";
@@ -118,7 +118,9 @@ export function certificateSigningBytes(cert: Omit<Certificate, "signature">): U
 export function issueCertificate(input: IssueCertificateInput, issuerPrivateKey: Uint8Array): Certificate {
   const parsed = issueInputSchema.safeParse(input);
   if (!parsed.success) {
-    throw new Error(`alma-core: invalid certificate input — ${parsed.error.issues.map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`).join("; ")}`);
+    throw new Error(
+      `alma-core: invalid certificate input — ${parsed.error.issues.map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`).join("; ")}`,
+    );
   }
   const suiteId = parsed.data.suite ?? DEFAULT_SUITE;
   const suite = getSuite(suiteId);
