@@ -3,5 +3,5 @@
 // External clients connect here to WATCH the world; this layer only READS (§2-6).
 // It imports downward (environment/region/agent/foundation) and never the write path.
 
-export { type Metrics, metrics, gini } from "./metrics";
-export { type ObservationServer, createObservationApp, serveObservation } from "./server";
+export { gini, type Metrics, metrics } from "./metrics";
+export { createObservationApp, type ObservationServer, serveObservation } from "./server";

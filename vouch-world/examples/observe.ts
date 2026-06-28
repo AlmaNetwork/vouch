@@ -8,7 +8,9 @@ import { serveObservation } from "../src/observation";
 import { defineRegion, makeInstitutions } from "../src/region";
 
 const world = createAlmaWorld("observe");
-seedGenesis(world, [defineRegion("umi", "Umi", makeInstitutions({ verificationPolicy: { acceptedSchemaIds: [], rejectUnknownSchemas: false } }))]);
+seedGenesis(world, [
+  defineRegion("umi", "Umi", makeInstitutions({ verificationPolicy: { acceptedSchemaIds: [], rejectUnknownSchemas: false } })),
+]);
 admitTreasury(world, "umi");
 for (const name of ["alice", "bob", "carol"]) {
   admitAgent(world, { id: `${name}@umi`, region: "umi", role: "merchant", valueProfile: "lenient", publicKey: "", currency: 100 });

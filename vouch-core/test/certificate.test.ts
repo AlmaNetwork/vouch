@@ -1,12 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { CERT_VERSION, type Certificate, type IssueCertificateInput, issueCertificate, verifyCertificate } from "../src/certificate";
 import { generateKeyPair, keyPairFromSeed } from "../src/keys";
-import {
-  type Certificate,
-  type IssueCertificateInput,
-  CERT_VERSION,
-  issueCertificate,
-  verifyCertificate,
-} from "../src/certificate";
 
 const ISSUED_AT = "2026-01-01T00:00:00.000Z";
 
@@ -86,7 +80,13 @@ describe("certificate issue + verify", () => {
       ["not an object", 42],
       ["null", null],
       ["wrong version", { ...good, version: "alma-cert/v0" }],
-      ["missing signature field", (() => { const { signature, ...rest } = good; return rest; })()],
+      [
+        "missing signature field",
+        (() => {
+          const { signature, ...rest } = good;
+          return rest;
+        })(),
+      ],
       ["claims is an array", { ...good, claims: [1, 2, 3] }],
       ["claims is null", { ...good, claims: null }],
       ["empty schemaId", { ...good, schemaId: "" }],

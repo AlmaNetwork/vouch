@@ -1,20 +1,21 @@
 import { describe, expect, test } from "bun:test";
-import {
-  INITIAL_WORLD_STATE,
-  admitAgent,
-  createAlmaWorld,
-  mintItem,
-  rootReducer,
-  seedGenesis,
-  transferItem,
-} from "../../src/environment";
+import { admitAgent, createAlmaWorld, INITIAL_WORLD_STATE, mintItem, rootReducer, seedGenesis, transferItem } from "../../src/environment";
 import { replayState } from "../../src/foundation";
 import { EVENT_ITEM_MINTED, getItem, itemsOwnedBy } from "../../src/item";
 import { defineRegion, makeInstitutions } from "../../src/region";
 
 function world() {
   const w = createAlmaWorld("items");
-  seedGenesis(w, [defineRegion("umi", "Umi", makeInstitutions({ verificationPolicy: { acceptedSchemaIds: [], rejectUnknownSchemas: false }, diplomacyPolicy: { defaultStance: "absorb", overrides: {} } }))]);
+  seedGenesis(w, [
+    defineRegion(
+      "umi",
+      "Umi",
+      makeInstitutions({
+        verificationPolicy: { acceptedSchemaIds: [], rejectUnknownSchemas: false },
+        diplomacyPolicy: { defaultStance: "absorb", overrides: {} },
+      }),
+    ),
+  ]);
   admitAgent(w, { id: "alice@umi", region: "umi", role: "merchant", valueProfile: "lenient", publicKey: "", currency: 0 });
   admitAgent(w, { id: "bob@umi", region: "umi", role: "artisan", valueProfile: "lenient", publicKey: "", currency: 0 });
   return w;

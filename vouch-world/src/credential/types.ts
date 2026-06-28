@@ -18,7 +18,11 @@ export interface CredentialType<T extends Record<string, unknown> = Record<strin
   readonly label?: string;
 }
 
-export function defineCredentialType<T extends Record<string, unknown>>(schemaId: string, schema: z.ZodType<T>, label?: string): CredentialType<T> {
+export function defineCredentialType<T extends Record<string, unknown>>(
+  schemaId: string,
+  schema: z.ZodType<T>,
+  label?: string,
+): CredentialType<T> {
   return { schemaId, schema, label };
 }
 

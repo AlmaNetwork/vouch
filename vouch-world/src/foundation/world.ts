@@ -5,7 +5,7 @@
 // and folds the event through the reducer. Therefore state is always
 // reconstructable from the log alone — see `replayState`.
 
-import { EVENT_TICK, SYSTEM_ACTOR, type AlmaEvent } from "./event";
+import { type AlmaEvent, EVENT_TICK, SYSTEM_ACTOR } from "./event";
 import { EventLog, type WorldLog } from "./event-log";
 import { Rng } from "./rng";
 import { deepFreeze } from "./util";
