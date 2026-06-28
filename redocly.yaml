@@ -1,0 +1,25 @@
+# Redocly lint configuration for the vouch OpenAPI specs.
+# Track C deliverable (task C2 read spec; task C10 will add the write draft). The CI
+# lint job (.github/workflows/ci.yml) runs `redocly lint` against these.
+extends:
+  - recommended
+rules:
+  # The observation API is a public, READ-ONLY, no-auth surface: the server is handed
+  # only a WorldView (no emit/run/advanceTick). Auth belongs to Track B's write node, not
+  # here — so "every operation must declare security" does not apply to this spec.
+  security-defined: off
+  # Read GETs legitimately return only 200; a 404 is documented wherever a path id can miss.
+  operation-4xx-response: off
+  # The default server is a localhost dev address, not a forgotten example.com placeholder.
+  no-server-example.com: off
+  # openapi/write.draft.yaml is a verbatim MIRROR of Track B's spec (license "ISC", no SPDX
+  # id) — not Track C's to "fix". It is still linted (via openapi/lint.sh, by path).
+  info-license-strict: off
+# Only the read spec is registered here (openapi-typescript generates its types). The write
+# mirror is linted by path in openapi/lint.sh, so it stays out of `apis` to keep type-gen clean.
+apis:
+  read:
+    root: openapi/read.yaml
+    # openapi-typescript reads this: `bunx openapi-typescript` generates the web client types.
+    x-openapi-ts:
+      output: apps/web/src/api/schema.d.ts

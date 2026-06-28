@@ -47,3 +47,101 @@ jobs:
       - name: vouch-world — typecheck + test
         run: bun run typecheck && bun test
         working-directory: vouch-world
+
+  # Track C — lint the read-only observation OpenAPI spec (openapi/read.yaml) against
+  # the Redocly ruleset in redocly.yaml. Additive job; does not touch `test`.
+  openapi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.2"
+      - name: redocly lint
+        run: sh openapi/lint.sh
+
+  # NOTE: Biome lint/format is the `lint` job above, owned by the root tooling package (PR #6).
+  # Track C's code is kept formatted + clean against that shared config; the old Track-C-only
+  # biome job + scripts/lint.sh were removed as redundant when PR #6 landed Biome repo-wide.
+
+  # Track C — build the Next.js frontend (apps/web). Next runs on NODE here (vanilla-extract's
+  # build-time eval breaks under Bun); deps install via Bun, `next build` runs under Node and
+  # also type-checks. See apps/web/README.md.
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.2"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install deps (bun)
+        run: bun install --frozen-lockfile
+        working-directory: apps/web
+      - name: next build (node)
+        run: node ./node_modules/next/dist/bin/next build
+        working-directory: apps/web
+
+  # Track C — determinism + replay-equivalence gate on the REAL world composition
+  # (separate from `test`). This BLOCKS: a determinism/replay regression is a hard fail.
+  # Asserts on the closed in-process sim only (a live write node needs Track B's contract).
+  determinism:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.2"
+      # vouch-core first: vouch-world resolves vouch-core through its node_modules.
+      - name: Install vouch-core
+        run: bun install --frozen-lockfile
+        working-directory: vouch-core
+      - name: Install vouch-world
+        run: bun install --frozen-lockfile
+        working-directory: vouch-world
+      - name: determinism + replay gate
+        run: bun scripts/determinism-gate.ts
+
+  # Track C — write-API integration test against the deploy skeleton's STUB write node
+  # (task C11). Asserts contract SHAPE only; real-semantics asserts are gated behind
+  # REAL_WRITE=1 and enabled when Track B's node replaces the stub.
+  write-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.2"
+      - name: Install vouch-core
+        run: bun install --frozen-lockfile
+        working-directory: vouch-core
+      - name: Install vouch-world
+        run: bun install --frozen-lockfile
+        working-directory: vouch-world
+      - name: write-API integration gate (stub)
+        run: bun scripts/write-integration-gate.ts
+
+  # Track C — container deploy smoke (task C12): docker build → run → poll read/write →
+  # SIGTERM → assert graceful exit 0. Exercises the Dockerfile + main.ts stop() wiring.
+  deploy-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: container deploy smoke
+        run: sh deploy/smoke.sh
+
+  # Track C — REAL-HOST deploy smoke (task C12). DISABLED by default: it needs a target host
+  # + credentials in CI secrets, which don't exist until the AWS contract lands. Enable by
+  # setting the repo variable ENABLE_REMOTE_DEPLOY_SMOKE=true and providing the secrets.
+  remote-deploy-smoke:
+    if: ${{ vars.ENABLE_REMOTE_DEPLOY_SMOKE == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: remote smoke (placeholder)
+        run: |
+          echo "Remote deploy smoke against ${DEPLOY_TARGET:-<unset>} — wire up once AWS exists."
+        env:
+          DEPLOY_TARGET: ${{ secrets.DEPLOY_TARGET }}

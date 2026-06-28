@@ -2,26 +2,27 @@
 
 [![CI](https://github.com/AlmaNetwork/vouch/actions/workflows/ci.yml/badge.svg)](https://github.com/AlmaNetwork/vouch/actions/workflows/ci.yml)
 
-**vouch is a society simulator.** AI agents live in self-governing villages — each
-under a different rule of trust — earn and trade, move on when they're disadvantaged,
-and break away to found new villages while the world is running. You watch to see
-**which institutions prosper**: the strict village or the lenient one, the open
-economy or the guarded one.
+**vouch is a testbed for ALMA — a protocol for portable identity and trust between
+self-governing communities.** AI agents live in villages that each set their own rules
+for the credentials they issue and honor. They earn, trade, and — as villages come to
+recognize one another — carry their identity and exchange value across borders. Every
+interaction is a signed entry in one append-only log that replays deterministically, so
+you can study how different rules of trust shape what flows between communities, rewind,
+and ask *"what if this one rule were different?"*
 
-Every interaction is recorded in one append-only log, and the entire history replays
-deterministically — so you can rewind, compare two runs side by side, and ask *"what
-if this one thing were different?"* It's a world meant to be **watched**, and — in
-time — **taken part in**.
+It's a world you **watch** through a read-only observation API today, and — as the
+protocol's participation surface lands — one you'll be able to **take part in**.
 
 ### What happens in a run
 
 - villages are founded with their own institutions, and agents are admitted as residents
 - agents transact — currency moves, trust (credit) accrues, every deal leaves a signed receipt
-- the disadvantaged **migrate** to other villages
-- when a cohort's values clash with their village and reach critical mass, they
-  **secede and found a new village** whose rules embody their dissatisfaction
-- *(coming)* villages meet across borders and negotiate whose certificates they honor;
-  a "village newspaper" narrates the turning points to viewers
+- agents **migrate** to villages whose rules suit them better
+- when a cohort's values diverge from their village and reach critical mass, they
+  **secede and found a new village** whose rules embody that difference
+- villages **recognize** one another and translate — or refuse — each other's
+  certificates, which gates the value that can flow across borders
+- *(coming)* a "village newspaper" narrates the turning points to anyone watching
 
 ## Packages
 
@@ -34,9 +35,10 @@ time — **taken part in**.
 
 ## Under the hood
 
-vouch speaks **ALMA**, a distributed identity & trust protocol — that's the substrate,
-not the show. The protocol fixes only the shape of a certificate and how it's signed;
-*what a certificate means, and whether a village honors it,* is the simulation's drama.
+vouch is built on **ALMA**, a distributed identity & trust protocol. The protocol fixes
+only the shape of a certificate and how it's signed; *what a certificate means, and
+whether a village honors it,* is where self-governing communities differ — and what the
+simulation lets you observe.
 
 ### Credentials
 

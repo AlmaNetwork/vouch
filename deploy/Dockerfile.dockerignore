@@ -1,0 +1,13 @@
+# Build-context ignore for deploy/Dockerfile (BuildKit reads <dockerfile>.dockerignore).
+# Keep the image small and the install deterministic (deps are reinstalled in the image).
+**/node_modules
+**/dist
+**/dev-dist
+**/.vite
+.git
+.github
+web
+docs
+skills
+openapi
+scripts

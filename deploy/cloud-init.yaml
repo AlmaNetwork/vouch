@@ -1,0 +1,28 @@
+#cloud-config
+# Cloud-agnostic bootstrap for a vouch node. Parameterized by the write_files env below;
+# any cloud-specific step (instance metadata, IAM, secret fetch) is isolated behind the
+# optional host-hook and left as a no-op by default. Swap the placeholder values; do NOT
+# bake account ids / ARNs / keys into this file.
+
+write_files:
+  - path: /etc/vouch/node.env
+    permissions: "0644"
+    content: |
+      # --- vouch node config (see deploy/DEPLOY.md). Replace with your values. ---
+      VOUCH_SEED=vouch-node
+      READ_PORT=8787
+      WRITE_PORT=8788
+      SEED_REGIONS=umi
+      SIM_TICKS=8
+      # Notary key SOURCE only — never key material. file:// reserved for Track B custody.
+      NOTARY_KEY_SOURCE=seed://09
+      # Reserved (Track B): durable store path; empty = in-memory log on this build.
+      DURABLE_STORE_PATH=
+      # CORS origins for the read server (comma-separated, or * ). Empty = none.
+      CORS_ORIGINS=
+      WRITE_NODE_URL=
+
+runcmd:
+  # VOUCH_REF should point at the release/branch carrying node/ + deploy/.
+  - ["sh", "-c", "VOUCH_REF=main curl -fsSL https://raw.githubusercontent.com/AlmaNetwork/vouch/main/deploy/install.sh | sh"]
+  - ["sh", "-c", "cp /opt/vouch/deploy/vouch-node.service /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now vouch-node"]
