@@ -2,7 +2,7 @@
 // No villages, no economy, no agents yet (those are M2/M3/M4). Run: `bun examples/m0-m1-demo.ts`
 
 import { type Certificate, generateKeyPair, issueCertificate, keyPairFromSeed, verifyCertificate } from "vouch-core";
-import { type AlmaEvent, type Reducer, World, replayState } from "../src/foundation";
+import { type AlmaEvent, type Reducer, replayState, World } from "../src/foundation";
 
 // Map a tick to a deterministic timestamp (no wall clock -> stays reproducible, §2-7).
 const EPOCH = Date.UTC(2026, 0, 1);
@@ -48,7 +48,9 @@ function runWorld(seed: string) {
 }
 
 const { world, guild } = runWorld("alma-demo");
-const cert = world.log.all().find((e) => e.type === "credential.issued")!.payload.cert as Certificate;
+const issued = world.log.all().find((e) => e.type === "credential.issued");
+if (!issued) throw new Error("expected a credential.issued event in the log");
+const cert = issued.payload.cert as Certificate;
 
 console.log("1) world ran to tick:", world.tick);
 console.log("   ledger (derived from the log):", JSON.stringify(world.getState()));
@@ -64,5 +66,7 @@ console.log("3) M1 replay rebuilds the exact state from the log alone:");
 console.log("   replay == live     ->", JSON.stringify(rebuilt.state) === JSON.stringify(world.getState()));
 console.log();
 console.log("4) determinism — same seed => identical history, different seed => different:");
-console.log("   same seed digest    ->", runWorld("s").world.log.digest() === runWorld("s").world.log.digest());
+const seededRunA = runWorld("s").world.log.digest();
+const seededRunB = runWorld("s").world.log.digest();
+console.log("   same seed digest    ->", seededRunA === seededRunB);
 console.log("   diff seed differs   ->", runWorld("a").world.log.digest() !== runWorld("b").world.log.digest());

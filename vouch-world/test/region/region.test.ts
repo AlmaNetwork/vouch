@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
-  INITIAL_WORLD_STATE,
   amendInstitution,
   castVote,
   createAlmaWorld,
   emergenceProposal,
   experimenterProposal,
+  INITIAL_WORLD_STATE,
   openProposal,
   proposeFounding,
   rootReducer,
@@ -13,14 +13,14 @@ import {
 } from "../../src/environment";
 import { replayState } from "../../src/foundation";
 import {
-  EVENT_REGION_FOUNDED,
-  type RegionDefinition,
   defineRegion,
+  EVENT_REGION_FOUNDED,
   getRegion,
   listRegions,
   makeInstitutions,
   ownedRegionsOf,
   ownerOf,
+  type RegionDefinition,
   regionsByStatus,
 } from "../../src/region";
 
@@ -84,9 +84,14 @@ describe("M2 — founding (propose/execute split)", () => {
     // founded after 2 genesis events (seq 0,1) + 3 system.tick events (seq 2,3,4) => seq 5.
     expect(founded.foundedAtSeq).toBe(5); // ordered by log seq, not sim tick (audit G5)
 
-    const event = world.log.all().find((e) => e.type === EVENT_REGION_FOUNDED && (e.payload as { region: RegionDefinition }).region.id === "nova");
+    const event = world.log
+      .all()
+      .find((e) => e.type === EVENT_REGION_FOUNDED && (e.payload as { region: RegionDefinition }).region.id === "nova");
     expect(event).toBeDefined();
-    expect((event!.payload as { proposer: { kind: string; note?: string } }).proposer).toEqual({ kind: "experimenter", note: "spun up by hand" });
+    expect((event!.payload as { proposer: { kind: string; note?: string } }).proposer).toEqual({
+      kind: "experimenter",
+      note: "spun up by hand",
+    });
     expect(event!.tick).toBe(3);
   });
 
@@ -107,10 +112,7 @@ describe("M2 — founding (propose/execute split)", () => {
     // (a) experimenter
     const a = proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova")));
     // (b) emergence — same engine, same entry point; only the proposer differs.
-    const b = proposeFounding(
-      world,
-      emergenceProposal(defineRegion("rift", "Rift"), "yama", "too strict", ["alice@yama", "bob@yama"]),
-    );
+    const b = proposeFounding(world, emergenceProposal(defineRegion("rift", "Rift"), "yama", "too strict", ["alice@yama", "bob@yama"]));
 
     expect(a.proposer.kind).toBe("experimenter");
     expect(b.proposer.kind).toBe("emergence");
@@ -162,7 +164,11 @@ describe("Track A — region ownership (governed by an account/ID; 1 person = 1 
     proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova"), undefined, "acct:alice"));
     proposeFounding(world, experimenterProposal(defineRegion("harbor", "Harbor"), undefined, "acct:alice"));
     expect(ownerOf(world.getState(), "nova")).toBe("acct:alice");
-    expect(ownedRegionsOf(world.getState(), "acct:alice").map((r) => r.id).sort()).toEqual(["harbor", "nova"]);
+    expect(
+      ownedRegionsOf(world.getState(), "acct:alice")
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(["harbor", "nova"]);
     expect(ownedRegionsOf(world.getState(), "acct:nobody")).toEqual([]);
 
     // A seceded region is system/unowned at birth (the market/claim assigns an owner later).
@@ -241,7 +247,12 @@ describe("Track A — owner-scoped governance gate (§8 legislator, valve now OP
 
     // a non-owner may NOT amend — throws, and nothing is logged
     expect(() =>
-      amendInstitution(world, "nova", { policy: "verification", value: { acceptedSchemaIds: [], rejectUnknownSchemas: false } }, "acct:mallory"),
+      amendInstitution(
+        world,
+        "nova",
+        { policy: "verification", value: { acceptedSchemaIds: [], rejectUnknownSchemas: false } },
+        "acct:mallory",
+      ),
     ).toThrow();
     expect(world.log.all().filter((e) => e.type === "region.institution.changed").length).toBe(1);
 
@@ -259,7 +270,9 @@ describe("Track A — owner-scoped governance gate (§8 legislator, valve now OP
     proposeFounding(world, experimenterProposal(defineRegion("rep", "Rep", council), undefined, "acct:a"));
 
     // a single member may NOT amend directly — councils decide collectively
-    expect(() => amendInstitution(world, "rep", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, "acct:a")).toThrow();
+    expect(() =>
+      amendInstitution(world, "rep", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, "acct:a"),
+    ).toThrow();
     // a member proposes (counts as 1 vote); below threshold 2, nothing applies yet
     openProposal(world, "rep", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, "acct:a");
     expect(getRegion(world.getState(), "rep")?.institutions.diplomacyPolicy.defaultStance).toBe("absorb");
@@ -277,7 +290,10 @@ describe("Track A — owner-scoped governance gate (§8 legislator, valve now OP
   test("an owner-null council cannot vote itself into an ungovernable dictatorship (brick)", () => {
     const world = createAlmaWorld("nullbrick");
     // a system-owned (owner null) council region — e.g. genesis seeded with council governance
-    const council = makeInstitutions({ governance: { kind: "council", members: ["acct:a", "acct:b"], threshold: 1 }, diplomacyPolicy: { defaultStance: "absorb", overrides: {} } });
+    const council = makeInstitutions({
+      governance: { kind: "council", members: ["acct:a", "acct:b"], threshold: 1 },
+      diplomacyPolicy: { defaultStance: "absorb", overrides: {} },
+    });
     seedGenesis(world, [defineRegion("umi", "Umi", council)]);
     // it IS governable by its members while a council...
     openProposal(world, "umi", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, "acct:a");
@@ -292,15 +308,24 @@ describe("Track A — owner-scoped governance gate (§8 legislator, valve now OP
     proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova", makeInstitutions()), undefined, "acct:alice"));
 
     // the dictator (owner) opens a council (threshold 1) — a direct amend while still a dictatorship
-    amendInstitution(world, "nova", { policy: "governance", value: { kind: "council", members: ["acct:alice", "acct:bob"], threshold: 1 } }, "acct:alice");
+    amendInstitution(
+      world,
+      "nova",
+      { policy: "governance", value: { kind: "council", members: ["acct:alice", "acct:bob"], threshold: 1 } },
+      "acct:alice",
+    );
     expect(getRegion(world.getState(), "nova")?.institutions.governance.kind).toBe("council");
 
     // now a DIRECT amend is rejected; bob (a member) proposes — at threshold 1 it applies at once
-    expect(() => amendInstitution(world, "nova", { policy: "diplomacy", value: { defaultStance: "absorb", overrides: {} } }, "acct:bob")).toThrow();
+    expect(() =>
+      amendInstitution(world, "nova", { policy: "diplomacy", value: { defaultStance: "absorb", overrides: {} } }, "acct:bob"),
+    ).toThrow();
     openProposal(world, "nova", { policy: "diplomacy", value: { defaultStance: "absorb", overrides: {} } }, "acct:bob");
     expect(getRegion(world.getState(), "nova")?.institutions.diplomacyPolicy.defaultStance).toBe("absorb");
     // a stranger can neither propose nor vote
-    expect(() => openProposal(world, "nova", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, "acct:stranger")).toThrow();
+    expect(() =>
+      openProposal(world, "nova", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, "acct:stranger"),
+    ).toThrow();
   });
 
   test("a FORGED region.institution.changed (non-system actor) is ignored at the fold — can't seize governance (audit G8)", () => {

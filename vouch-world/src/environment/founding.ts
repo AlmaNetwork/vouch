@@ -12,18 +12,18 @@
 import { isValidRegion } from "vouch-core"; // the extracted Trust Core, consumed as a dependency
 import type { CommitSink } from "../foundation";
 import {
+  canGovern,
   EVENT_GOV_PROPOSAL_OPENED,
   EVENT_GOV_VOTE_CAST,
   EVENT_REGION_FOUNDED,
   EVENT_REGION_INSTITUTION_CHANGED,
   type FoundingProposal,
+  getRegion,
   type InstitutionChange,
   type Proposer,
   type RecognitionStatus,
   type RegionDefinition,
   type RegionState,
-  canGovern,
-  getRegion,
   validateEconomyPolicy,
   validateGovernance,
   validateResourcePolicy,
@@ -91,7 +91,12 @@ export function experimenterProposal(definition: RegionDefinition, note?: string
  * exists so the SAME engine can be driven by an emergence proposer the moment agents
  * exist. Calling it today simply proves the entry point is shared.
  */
-export function emergenceProposal(definition: RegionDefinition, sourceRegion: string, reason: string, cohort: readonly string[]): FoundingProposal {
+export function emergenceProposal(
+  definition: RegionDefinition,
+  sourceRegion: string,
+  reason: string,
+  cohort: readonly string[],
+): FoundingProposal {
   // A seceded region is system/unowned at birth; the market or a claim assigns an owner later.
   return { definition, proposer: { kind: "emergence", sourceRegion, reason, cohort }, owner: null };
 }
@@ -118,7 +123,9 @@ export function amendInstitution(env: Commit, regionId: string, change: Institut
     throw new Error(`amendInstitution: region "${regionId}" is council-governed — use openProposal/castVote`);
   }
   if (!canGovern(region, by)) {
-    throw new Error(`amendInstitution: "${by}" may not amend region "${regionId}" under its ${region.institutions.governance.kind} governance`);
+    throw new Error(
+      `amendInstitution: "${by}" may not amend region "${regionId}" under its ${region.institutions.governance.kind} governance`,
+    );
   }
   // A constitutional change must leave the region governable (no empty-council brick, and no
   // owner-null dictatorship); an economy change must stay within bounds (no fee > amount / negative).

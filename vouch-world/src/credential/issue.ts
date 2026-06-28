@@ -5,7 +5,7 @@
 // reverse: vouch-core checks the FORM (structure + signature), then this layer
 // checks the MEANING (the claims match the declared type).
 
-import { type Certificate, type VerificationFailureReason, issueCertificate, verifyCertificate } from "vouch-core";
+import { type Certificate, issueCertificate, type VerificationFailureReason, verifyCertificate } from "vouch-core";
 import type { CredentialRegistry, CredentialType } from "./types";
 
 export interface IssueCredentialInput<T extends Record<string, unknown>> {
@@ -17,7 +17,11 @@ export interface IssueCredentialInput<T extends Record<string, unknown>> {
 }
 
 /** Validate the typed claims, then issue + sign the certificate (throws on bad claims). */
-export function issueCredential<T extends Record<string, unknown>>(type: CredentialType<T>, input: IssueCredentialInput<T>, issuerPrivateKey: Uint8Array): Certificate {
+export function issueCredential<T extends Record<string, unknown>>(
+  type: CredentialType<T>,
+  input: IssueCredentialInput<T>,
+  issuerPrivateKey: Uint8Array,
+): Certificate {
   const claims = type.schema.parse(input.claims); // structured validation; throws if the elements are wrong
   return issueCertificate(
     { issuer: input.issuer, subject: input.subject, schemaId: type.schemaId, claims, issuedAt: input.issuedAt, suite: input.suite },
@@ -36,7 +40,11 @@ function describeClaimIssues(error: { issues: ReadonlyArray<{ path: ReadonlyArra
 }
 
 /** Verify FORM (core) then MEANING (claims match `type`). */
-export function verifyCredential<T extends Record<string, unknown>>(cert: unknown, issuerPublicKey: Uint8Array, type: CredentialType<T>): CredentialResult<T> {
+export function verifyCredential<T extends Record<string, unknown>>(
+  cert: unknown,
+  issuerPublicKey: Uint8Array,
+  type: CredentialType<T>,
+): CredentialResult<T> {
   const form = verifyCertificate(cert, issuerPublicKey);
   if (!form.ok) return { ok: false, reason: form.reason, detail: form.detail };
 
@@ -52,7 +60,11 @@ export function verifyCredential<T extends Record<string, unknown>>(cert: unknow
 }
 
 /** Verify against whichever type the registry holds for the cert's `schemaId`. */
-export function verifyCredentialWith(cert: unknown, issuerPublicKey: Uint8Array, registry: CredentialRegistry): CredentialResult<Record<string, unknown>> {
+export function verifyCredentialWith(
+  cert: unknown,
+  issuerPublicKey: Uint8Array,
+  registry: CredentialRegistry,
+): CredentialResult<Record<string, unknown>> {
   const form = verifyCertificate(cert, issuerPublicKey);
   if (!form.ok) return { ok: false, reason: form.reason, detail: form.detail };
 

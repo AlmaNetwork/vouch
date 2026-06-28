@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { EVENT_TICK, SYSTEM_ACTOR, type AlmaEvent } from "../../src/foundation/event";
-import { type Reducer, World, replayState } from "../../src/foundation/world";
+import { type AlmaEvent, EVENT_TICK, SYSTEM_ACTOR } from "../../src/foundation/event";
+import { type Reducer, replayState, World } from "../../src/foundation/world";
 
 // A tiny domain to exercise the event-sourcing machinery without pulling in any
 // M2+ concept: count "ping" events and remember the last actor.
@@ -20,7 +20,10 @@ const reducer: Reducer<DemoState> = (state, event) => {
 // Deterministic per-tick step: randomness flows only through ctx.rng, and the
 // only way to change state is ctx.emit.
 const ACTORS = ["alice@umi", "bob@umi", "carol@yama"];
-function step(ctx: { rng: import("../../src/foundation/rng").Rng; emit: (t: string, a: string, p?: Record<string, unknown>) => unknown }): void {
+function step(ctx: {
+  rng: import("../../src/foundation/rng").Rng;
+  emit: (t: string, a: string, p?: Record<string, unknown>) => unknown;
+}): void {
   if (ctx.rng.bool(0.6)) {
     ctx.emit("ping", ctx.rng.pick(ACTORS), { value: ctx.rng.nextUint32() });
   }

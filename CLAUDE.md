@@ -54,9 +54,21 @@ cd vouch-core  && bun install && bun run typecheck && bun test
 cd vouch-world && bun install && bun run typecheck && bun test
 ```
 
+Lint + format are repo-wide, run from the root tooling package:
+
+```bash
+bun install        # at the repo root, installs Biome
+bun run check      # lint + format + organize-imports, writes fixes in place
+bun run ci         # non-mutating: what CI runs (fails on any unformatted / lint issue)
+```
+
 - Runtime & test runner: **Bun, pinned to 1.3.2 in CI**. Tests use `bun:test`
   (`import { describe, expect, test } from "bun:test"`). Do not add jest/vitest or a
   separate test config.
+- Lint + format: **[Biome](https://biomejs.dev)** (one tool for both), configured in
+  the root `biome.json` — 2-space indent, double quotes, semicolons, trailing commas,
+  140-col. Run `bun run check` before pushing; CI runs `biome ci .` as a separate
+  `lint` job. Do not add ESLint/Prettier.
 - `bun run typecheck` = `tsc --noEmit`. The two `tsconfig.json` files are
   byte-identical and maximally strict (`strict`, `noUncheckedIndexedAccess`,
   `noFallthroughCasesInSwitch`, `noImplicitOverride`). If you change a strictness
@@ -291,11 +303,13 @@ The established cadence for every milestone / feature:
 
 ### Commits, PRs, CI
 
-- CI is a **single GitHub Actions job** (`oven-sh/setup-bun@v2`, bun `1.3.2`) that
-  installs **both** packages (`bun install --frozen-lockfile`, core then world) and
-  then runs `bun run typecheck && bun test` per package. The single check is named
-  `test`. It triggers on push to `main` and on all PRs.
-- It installs both because `vouch-world`'s typecheck reaches into `vouch-core`'s
+- CI (`oven-sh/setup-bun@v2`, bun `1.3.2`) runs two GitHub Actions jobs, both on push
+  to `main` and on all PRs:
+  - **`lint`** — installs the root tooling package and runs `biome ci .` (lint +
+    format check, non-mutating).
+  - **`test`** — installs **both** packages (`bun install --frozen-lockfile`, core
+    then world) and runs `bun run typecheck && bun test` per package.
+- `test` installs both because `vouch-world`'s typecheck reaches into `vouch-core`'s
   source — `vouch-core`'s deps must be present first.
 - `main` is protected; land changes via PR.
 

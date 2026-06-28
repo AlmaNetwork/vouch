@@ -1,20 +1,20 @@
 // Typed credentials — varied, validated certificate types on the universal
 // vouch-core envelope (the "meaning" layer above the meaning-free core).
 
-export { type CredentialType, CredentialRegistry, defineCredentialType } from "./types";
 export {
-  type IssueCredentialInput,
-  type CredentialResult,
   type CredentialFailureReason,
+  type CredentialResult,
+  type IssueCredentialInput,
   issueCredential,
   verifyCredential,
   verifyCredentialWith,
 } from "./issue";
 export {
-  SkillCredential,
-  MembershipCredential,
   AssetCredential,
   EndorsementCredential,
+  MembershipCredential,
+  SkillCredential,
   STANDARD_CREDENTIALS,
   standardRegistry,
 } from "./library";
+export { CredentialRegistry, type CredentialType, defineCredentialType } from "./types";

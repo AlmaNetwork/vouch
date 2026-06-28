@@ -3,8 +3,8 @@
 // The basement the rest of the world stands on: an append-only event log (the
 // single source of truth), a deterministic RNG, a tick loop, and replay.
 
-export { SYSTEM_ACTOR, EVENT_TICK, type AlmaEvent } from "./event";
+export { type AlmaEvent, EVENT_TICK, SYSTEM_ACTOR } from "./event";
 export { EventLog, type WorldLog } from "./event-log";
 export { Rng } from "./rng";
-export { World, replayState, type Reducer, type TickContext, type WorldOptions, type CommitSink, type WorldView } from "./world";
-export { deepFreeze, stableStringify, fnv1a } from "./util";
+export { deepFreeze, fnv1a, stableStringify } from "./util";
+export { type CommitSink, type Reducer, replayState, type TickContext, World, type WorldOptions, type WorldView } from "./world";
