@@ -7,16 +7,14 @@
 // their own ledger.
 
 import { getAgent } from "../agent";
-import type { CommitSink } from "../foundation";
+import type { Result } from "../foundation";
 import { EVENT_ITEM_MINTED, EVENT_ITEM_TRANSFERRED, getItem } from "../item";
-import type { WorldState } from "./state";
+import type { WorldCommit } from "./state";
 
-type Commit = CommitSink<WorldState>;
-
-export type ItemResult = { ok: true } | { ok: false; reason: string };
+export type ItemResult = Result;
 
 /** Mint a new unique item owned by an agent. itemId must be fresh; the owner must be a real agent. */
-export function mintItem(env: Commit, itemId: string, kind: string, owner: string): ItemResult {
+export function mintItem(env: WorldCommit, itemId: string, kind: string, owner: string): ItemResult {
   if (!itemId || !kind) return { ok: false, reason: "bad-item" };
   const state = env.getState();
   if (getItem(state, itemId)) return { ok: false, reason: "item-exists" };
@@ -26,7 +24,7 @@ export function mintItem(env: Commit, itemId: string, kind: string, owner: strin
 }
 
 /** Transfer an item to another agent. Authorized by the current HOLDER (`by` === the item's owner). */
-export function transferItem(env: Commit, itemId: string, to: string, by: string): ItemResult {
+export function transferItem(env: WorldCommit, itemId: string, to: string, by: string): ItemResult {
   const state = env.getState();
   const item = getItem(state, itemId);
   if (!item) return { ok: false, reason: "unknown-item" };

@@ -9,7 +9,7 @@
 // account<->agent value bridge (Track B). Here `price` is the recorded agreed amount; the
 // transfer of CONTROL is the modeled mechanic.
 
-import type { CommitSink } from "../foundation";
+import type { Result } from "../foundation";
 import {
   EVENT_REGION_LIFECYCLE_CHANGED,
   EVENT_REGION_LISTED,
@@ -19,20 +19,18 @@ import {
   type RegionLifecycle,
   type RegionState,
 } from "../region";
-import type { WorldState } from "./state";
+import type { WorldCommit } from "./state";
 
-type Commit = CommitSink<WorldState>;
+export type MarketResult = Result<{ region: RegionState }>;
 
-export type MarketResult = { ok: true; region: RegionState } | { ok: false; reason: string };
-
-function readBack(env: Commit, regionId: string): MarketResult {
+function readBack(env: WorldCommit, regionId: string): MarketResult {
   const region = getRegion(env.getState(), regionId);
   if (!region) throw new Error("market: invariant violated — region missing after event");
   return { ok: true, region };
 }
 
 /** The owner hibernates / reactivates their region (active <-> dormant). Owner-only. */
-export function setRegionLifecycle(env: Commit, regionId: string, lifecycle: RegionLifecycle, by: string): MarketResult {
+export function setRegionLifecycle(env: WorldCommit, regionId: string, lifecycle: RegionLifecycle, by: string): MarketResult {
   const region = getRegion(env.getState(), regionId);
   if (!region) return { ok: false, reason: "unknown-region" };
   if (!isOwner(region, by)) return { ok: false, reason: "not-owner" };
@@ -42,7 +40,7 @@ export function setRegionLifecycle(env: Commit, regionId: string, lifecycle: Reg
 }
 
 /** List a DORMANT region for sale at an asking price (or pass null to delist). Owner-only. */
-export function listRegion(env: Commit, regionId: string, salePrice: number | null, by: string): MarketResult {
+export function listRegion(env: WorldCommit, regionId: string, salePrice: number | null, by: string): MarketResult {
   const region = getRegion(env.getState(), regionId);
   if (!region) return { ok: false, reason: "unknown-region" };
   if (!isOwner(region, by)) return { ok: false, reason: "not-owner" };
@@ -59,7 +57,7 @@ export function listRegion(env: Commit, regionId: string, salePrice: number | nu
  * changes, the region reactivates, and the listing clears. Owner-only; the region must be
  * listed. Currency settlement of the price is deferred (see file header).
  */
-export function transferRegionOwnership(env: Commit, regionId: string, to: string, by: string): MarketResult {
+export function transferRegionOwnership(env: WorldCommit, regionId: string, to: string, by: string): MarketResult {
   const region = getRegion(env.getState(), regionId);
   if (!region) return { ok: false, reason: "unknown-region" };
   if (!isOwner(region, by)) return { ok: false, reason: "not-owner" };

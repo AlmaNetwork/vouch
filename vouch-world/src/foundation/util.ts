@@ -1,4 +1,16 @@
-// Foundation utilities — immutability + stable serialization.
+// Foundation utilities — immutability + stable serialization + deterministic time.
+
+/** Epoch for deterministic timestamps (must stay fixed — it feeds receipt issuedAt / the log digest). */
+const EPOCH_MS = Date.UTC(2026, 0, 1);
+
+/**
+ * A deterministic ISO-8601 timestamp derived from a tick — one sim day per tick.
+ * The domain has no wall clock (§2-7); anything that needs an "issuedAt" (e.g. a
+ * receipt certificate) derives it from the tick so replay is bit-stable.
+ */
+export function tickToIso(tick: number): string {
+  return new Date(EPOCH_MS + tick * 86_400_000).toISOString();
+}
 
 /** Recursively freeze an object so it cannot be mutated after the fact. */
 export function deepFreeze<T>(value: T): T {

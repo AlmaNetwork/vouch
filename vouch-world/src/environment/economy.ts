@@ -20,10 +20,10 @@ import {
   type SettlementPayload,
   treasuryId,
 } from "../agent";
-import { type AlmaEvent, type CommitSink, SYSTEM_ACTOR, type WorldView } from "../foundation";
+import { type AlmaEvent, type Result, SYSTEM_ACTOR, tickToIso, type WorldView } from "../foundation";
 import { type EconomyPolicy, getRegion } from "../region";
 import { canTransactAcross } from "./diplomacy";
-import type { WorldState } from "./state";
+import type { WorldCommit, WorldState } from "./state";
 
 /** M3: currency is transferable, credit is not (§3-B). A later milestone may let the village decide. */
 export function isTransferable(kind: "credit" | "currency"): boolean {
@@ -40,21 +40,15 @@ export function isCurrencyConserving(entries: readonly SettlementEntry[]): boole
   return entries.reduce((sum, e) => sum + e.currencyDelta, 0) === 0;
 }
 
-const EPOCH = Date.UTC(2026, 0, 1);
-/** Deterministic timestamp from the tick (no wall clock, §2-7). */
-function tickToIso(tick: number): string {
-  return new Date(EPOCH + tick * 86_400_000).toISOString();
-}
-
 export interface TransferMove {
   from: string;
   to: string;
   amount: number; // currency
 }
 
-export type TransferResult = { ok: true; fee: number; receipt: Certificate } | { ok: false; reason: string };
+export type TransferResult = Result<{ fee: number; receipt: Certificate }>;
 
-export function executeTransfer(env: CommitSink<WorldState>, move: TransferMove, opts: { tick: number; notary: KeyPair }): TransferResult {
+export function executeTransfer(env: WorldCommit, move: TransferMove, opts: { tick: number; notary: KeyPair }): TransferResult {
   const state = env.getState();
   const from = getAgent(state, move.from);
   const to = getAgent(state, move.to);
@@ -113,7 +107,7 @@ export function executeTransfer(env: CommitSink<WorldState>, move: TransferMove,
   return { ok: true, fee, receipt };
 }
 
-export type MintResult = { ok: true } | { ok: false; reason: string };
+export type MintResult = Result;
 
 /**
  * Mint NEW currency to an agent — the EXPLICIT, logged, env-authored origin of money,
@@ -122,7 +116,7 @@ export type MintResult = { ok: true } | { ok: false; reason: string };
  * this event, so total supply is auditable from t0. Env-only (commitSystem); a forged
  * mint is rejected at write time and again by the reducer's actor-gate.
  */
-export function mintCurrency(env: CommitSink<WorldState>, agentId: string, amount: number, reason: string): MintResult {
+export function mintCurrency(env: WorldCommit, agentId: string, amount: number, reason: string): MintResult {
   if (!Number.isInteger(amount) || amount <= 0) return { ok: false, reason: "bad-amount" };
   if (!getAgent(env.getState(), agentId)) return { ok: false, reason: "unknown-agent" };
   env.commitSystem(EVENT_ECONOMY_MINTED, { agentId, amount, reason } satisfies MintPayload);

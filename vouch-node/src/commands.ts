@@ -16,7 +16,7 @@ import {
   vouchFor,
   type WorldState,
 } from "vouch-world/environment";
-import type { World } from "vouch-world/foundation";
+import type { Result, World } from "vouch-world/foundation";
 import { defineRegion, ownerOf } from "vouch-world/region";
 import { z } from "zod";
 
@@ -52,9 +52,7 @@ const vouchSchema = z.object({
 export const commandSchema = z.discriminatedUnion("kind", [foundSchema, admitSchema, transferSchema, vouchSchema]);
 export type Command = z.infer<typeof commandSchema>;
 
-export type CommandOutcome =
-  | { readonly ok: true; readonly detail?: Record<string, unknown> }
-  | { readonly ok: false; readonly reason: string };
+export type CommandResult = Result<{ detail?: Record<string, unknown> }>;
 
 export interface DispatchContext {
   readonly notary: KeyPair;
@@ -64,9 +62,9 @@ export interface DispatchContext {
  * Apply an already-authenticated command to the world. The principal is trusted
  * (its signature was verified upstream); here we only enforce that the principal
  * is entitled to the specific action. Engine mutators either return a result or
- * throw on malformed input — both are normalized to a CommandOutcome.
+ * throw on malformed input — both are normalized to a CommandResult.
  */
-export function dispatch(world: World<WorldState>, principal: string, command: Command, ctx: DispatchContext): CommandOutcome {
+export function dispatch(world: World<WorldState>, principal: string, command: Command, ctx: DispatchContext): CommandResult {
   try {
     switch (command.kind) {
       case "found": {

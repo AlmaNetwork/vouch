@@ -8,9 +8,9 @@
 
 import { type Certificate, decodeBase64, parseIdentifier, verifyCertificate } from "vouch-core";
 import { getAgent } from "../agent";
-import type { CommitSink } from "../foundation";
+import type { Result } from "../foundation";
 import { EVENT_REGION_RECOGNIZED, type ForeignCertStance, getRegion, type RegionState } from "../region";
-import type { WorldState } from "./state";
+import type { WorldCommit, WorldState } from "./state";
 
 /** A village's stance toward another village's certificates: an override, else the default. */
 export function stanceToward(viewer: RegionState, issuerRegion: string): ForeignCertStance {
@@ -84,14 +84,14 @@ export function assessCertificate(state: WorldState, viewerRegionId: string, cer
 }
 
 /** Whether a cross-region value transfer is diplomatically allowed: both recognized, receiver not rejecting (§4-C). */
-export function canTransactAcross(state: WorldState, fromRegion: string, toRegion: string): { ok: boolean; reason: string } {
+export function canTransactAcross(state: WorldState, fromRegion: string, toRegion: string): Result {
   const a = getRegion(state, fromRegion);
   const b = getRegion(state, toRegion);
   if (!a || !b) return { ok: false, reason: "unknown-region" };
   if (a.status !== "recognized") return { ok: false, reason: "sender-region-unrecognized" };
   if (b.status !== "recognized") return { ok: false, reason: "receiver-region-unrecognized" };
   if (stanceToward(b, fromRegion) === "reject") return { ok: false, reason: "receiver-rejects-sender" };
-  return { ok: true, reason: "ok" };
+  return { ok: true };
 }
 
 /**
@@ -99,7 +99,7 @@ export function canTransactAcross(state: WorldState, fromRegion: string, toRegio
  * (unrecognized) one, admitting it to the international society. A region cannot be
  * recognized by an unrecognized one. (Staged due-diligence is a future refinement.)
  */
-export function recognizeRegion(env: CommitSink<WorldState>, by: string, target: string): RegionState {
+export function recognizeRegion(env: WorldCommit, by: string, target: string): RegionState {
   const state = env.getState();
   const recognizer = getRegion(state, by);
   const t = getRegion(state, target);
