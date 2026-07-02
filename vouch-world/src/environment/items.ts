@@ -9,7 +9,7 @@
 import { getAgent } from "../agent";
 import type { Result } from "../foundation";
 import { EVENT_ITEM_MINTED, EVENT_ITEM_TRANSFERRED, getItem } from "../item";
-import type { WorldCommit } from "./state";
+import { commit, type WorldCommit } from "./state";
 
 export type ItemResult = Result;
 
@@ -19,7 +19,7 @@ export function mintItem(env: WorldCommit, itemId: string, kind: string, owner: 
   const state = env.getState();
   if (getItem(state, itemId)) return { ok: false, reason: "item-exists" };
   if (!getAgent(state, owner)) return { ok: false, reason: "unknown-agent" };
-  env.commitSystem(EVENT_ITEM_MINTED, { itemId, kind, owner });
+  commit(env, EVENT_ITEM_MINTED, { itemId, kind, owner });
   return { ok: true };
 }
 
@@ -31,6 +31,6 @@ export function transferItem(env: WorldCommit, itemId: string, to: string, by: s
   if (item.owner !== by) return { ok: false, reason: "not-owner" };
   if (to === by) return { ok: false, reason: "already-owner" };
   if (!getAgent(state, to)) return { ok: false, reason: "unknown-agent" };
-  env.commitSystem(EVENT_ITEM_TRANSFERRED, { itemId, from: by, to });
+  commit(env, EVENT_ITEM_TRANSFERRED, { itemId, from: by, to });
   return { ok: true };
 }

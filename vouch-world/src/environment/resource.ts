@@ -9,7 +9,7 @@
 import { getAgent } from "../agent";
 import type { Result } from "../foundation";
 import { EVENT_RESOURCE_DRAWN, EVENT_RESOURCE_REGENERATED, getRegion } from "../region";
-import type { WorldCommit } from "./state";
+import { commit, type WorldCommit } from "./state";
 
 export type ResourceResult = Result;
 
@@ -20,7 +20,7 @@ export function regenerateResources(env: WorldCommit, regionId: string): Resourc
   const { capacity, regenPerTick } = region.institutions.resourcePolicy;
   const amount = Math.min(regenPerTick, capacity - region.resourceLevel);
   if (!Number.isFinite(amount) || amount <= 0) return { ok: true }; // nothing to add (or a poisoned/full pool)
-  env.commitSystem(EVENT_RESOURCE_REGENERATED, { regionId, amount });
+  commit(env, EVENT_RESOURCE_REGENERATED, { regionId, amount });
   return { ok: true };
 }
 
@@ -34,6 +34,6 @@ export function drawResource(env: WorldCommit, agentId: string, amount: number):
   if (!region) return { ok: false, reason: "unknown-region" };
   if (region.lifecycle !== "active") return { ok: false, reason: "region-dormant" };
   if (region.resourceLevel < amount) return { ok: false, reason: "insufficient-resource" }; // SCARCITY
-  env.commitSystem(EVENT_RESOURCE_DRAWN, { regionId: agent.region, agentId, amount });
+  commit(env, EVENT_RESOURCE_DRAWN, { regionId: agent.region, agentId, amount });
   return { ok: true };
 }

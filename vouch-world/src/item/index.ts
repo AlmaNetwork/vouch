@@ -6,6 +6,7 @@ export {
   EVENT_ITEM_MINTED,
   EVENT_ITEM_TRANSFERRED,
   getItem,
+  type ItemEventMap,
   type ItemMintedPayload,
   type ItemSlice,
   type ItemState,

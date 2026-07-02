@@ -22,7 +22,7 @@ import {
   validateGovernance,
   validateResourcePolicy,
 } from "../region";
-import { readBackOrThrow, type WorldCommit } from "./state";
+import { commit, readBackOrThrow, type WorldCommit } from "./state";
 
 /** Genesis villages are born recognized (they ARE the established society); all others unrecognized. */
 function birthStatus(proposer: Proposer): RecognitionStatus {
@@ -53,7 +53,7 @@ export function proposeFounding(env: WorldCommit, proposal: FoundingProposal): R
   validateEconomyPolicy(definition.institutions.economyPolicy);
   validateResourcePolicy(definition.institutions.resourcePolicy);
 
-  env.commitSystem(EVENT_REGION_FOUNDED, {
+  commit(env, EVENT_REGION_FOUNDED, {
     region: definition,
     proposer,
     status: birthStatus(proposer),

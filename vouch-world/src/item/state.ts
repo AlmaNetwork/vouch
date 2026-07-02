@@ -23,6 +23,12 @@ export const EVENT_ITEM_TRANSFERRED = "item.transferred"; // env-authored: owner
 export type ItemMintedPayload = { readonly itemId: string; readonly kind: string; readonly owner: string };
 export type ItemTransferredPayload = { readonly itemId: string; readonly from: string; readonly to: string };
 
+/** Maps each item-slice event type to its payload — the typed `commit` helper keys off this. */
+export interface ItemEventMap {
+  [EVENT_ITEM_MINTED]: ItemMintedPayload;
+  [EVENT_ITEM_TRANSFERRED]: ItemTransferredPayload;
+}
+
 export const itemReducer: Reducer<ItemSlice> = (state, event) => {
   // Defence in depth (audit G8): item events are env-authored; a forged non-system event is ignored.
   if (event.actor !== SYSTEM_ACTOR) return state;

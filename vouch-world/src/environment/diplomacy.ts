@@ -10,7 +10,7 @@ import { type Certificate, decodeBase64, parseIdentifier, verifyCertificate } fr
 import { getAgent } from "../agent";
 import type { Result } from "../foundation";
 import { EVENT_REGION_RECOGNIZED, type ForeignCertStance, getRegion, type RegionState } from "../region";
-import { readBackOrThrow, type WorldCommit, type WorldState } from "./state";
+import { commit, readBackOrThrow, type WorldCommit, type WorldState } from "./state";
 
 /** A village's stance toward another village's certificates: an override, else the default. */
 export function stanceToward(viewer: RegionState, issuerRegion: string): ForeignCertStance {
@@ -108,6 +108,6 @@ export function recognizeRegion(env: WorldCommit, by: string, target: string): R
   if (!t) throw new Error(`recognizeRegion: target "${target}" does not exist`);
   if (t.status === "recognized") return t; // idempotent
 
-  env.commitSystem(EVENT_REGION_RECOGNIZED, { regionId: target, by });
+  commit(env, EVENT_REGION_RECOGNIZED, { regionId: target, by });
   return readBackOrThrow("recognizeRegion", getRegion(env.getState(), target));
 }

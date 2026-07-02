@@ -8,7 +8,7 @@
 
 import { EVENT_AGENT_VOUCHED, getAgent } from "../agent";
 import type { Result } from "../foundation";
-import type { WorldCommit } from "./state";
+import { commit, type WorldCommit } from "./state";
 
 export type VouchResult = Result;
 
@@ -21,6 +21,6 @@ export function vouchFor(env: WorldCommit, from: string, to: string, weight: num
   if (!Number.isInteger(weight) || weight < MIN_WEIGHT || weight > MAX_WEIGHT) return { ok: false, reason: "bad-weight" };
   const state = env.getState();
   if (!getAgent(state, from) || !getAgent(state, to)) return { ok: false, reason: "unknown-agent" };
-  env.commitSystem(EVENT_AGENT_VOUCHED, { from, to, weight });
+  commit(env, EVENT_AGENT_VOUCHED, { from, to, weight });
   return { ok: true };
 }
