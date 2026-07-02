@@ -32,14 +32,17 @@ jobs:
         with:
           bun-version: "1.3.2"
 
-      # Install both packages first: vouch-world typechecks into vouch-core's
-      # source (its exports point at src/), so vouch-core's deps must be present.
+      # Install in dependency order: vouch-world typechecks into vouch-core's
+      # source, and vouch-node typechecks into both — so deps must be present first.
       - name: Install vouch-core
         run: bun install --frozen-lockfile
         working-directory: vouch-core
       - name: Install vouch-world
         run: bun install --frozen-lockfile
         working-directory: vouch-world
+      - name: Install vouch-node
+        run: bun install --frozen-lockfile
+        working-directory: vouch-node
 
       - name: vouch-core — typecheck + test
         run: bun run typecheck && bun test
@@ -47,3 +50,6 @@ jobs:
       - name: vouch-world — typecheck + test
         run: bun run typecheck && bun test
         working-directory: vouch-world
+      - name: vouch-node — typecheck + test
+        run: bun run typecheck && bun test
+        working-directory: vouch-node
