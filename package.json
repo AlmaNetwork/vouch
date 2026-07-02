@@ -1,14 +1,39 @@
 {
   "name": "vouch",
-  "private": true,
-  "description": "Repo-wide tooling (Biome lint + format) for the vouch monorepo. Each package builds/tests on its own.",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
   "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
     "format": "biome format --write .",
     "check": "biome check --write .",
     "ci": "biome ci ."
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Network node application with command-driven architecture",
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "@hono/zod-validator": "^0.4.1",
+    "better-sqlite3": "^11.6.0",
+    "canonicalize": "^2.0.0",
+    "hono": "^4.6.12",
+    "zod": "^3.24.1"
+  },
   "devDependencies": {
-    "@biomejs/biome": "^2.1.0"
+    "@biomejs/biome": "^2.1.0",
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   }
 }
