@@ -1,17 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { type Certificate, encodeBase64, keyPairFromSeed, verifyCertificate } from "vouch-core";
 import {
+  currencySupply,
   EVENT_AGENT_DECIDED,
   EVENT_AGENT_VOUCHED,
   EVENT_ECONOMY_MINTED,
   EVENT_ECONOMY_SETTLED,
-  currencySupply,
   getAgent,
   listAgents,
   treasuryId,
 } from "../../src/agent";
 import {
-  INITIAL_WORLD_STATE,
   admitAgent,
   admitTreasury,
   amendInstitution,
@@ -19,10 +18,11 @@ import {
   createAlmaWorld,
   currencyOriginTotal,
   detectEmergence,
+  drawResource,
   executeTransfer,
   experimenterProposal,
+  INITIAL_WORLD_STATE,
   immigrate,
-  drawResource,
   isCurrencyConserving,
   isTransferable,
   listRegion,
@@ -36,16 +36,22 @@ import {
   transferRegionOwnership,
   vouchFor,
 } from "../../src/environment";
-import { SYSTEM_ACTOR, replayState } from "../../src/foundation";
+import { replayState, SYSTEM_ACTOR } from "../../src/foundation";
 import { defineRegion, getRegion, makeInstitutions, ownedRegionsOf, regionsForSale } from "../../src/region";
 
 const NOTARY = keyPairFromSeed(new Uint8Array(32).fill(9));
 const pub = (n: number) => encodeBase64(keyPairFromSeed(new Uint8Array(32).fill(n)).publicKey);
 
 const lenient = () =>
-  makeInstitutions({ verificationPolicy: { acceptedSchemaIds: [], rejectUnknownSchemas: false }, diplomacyPolicy: { defaultStance: "absorb", overrides: {} } });
+  makeInstitutions({
+    verificationPolicy: { acceptedSchemaIds: [], rejectUnknownSchemas: false },
+    diplomacyPolicy: { defaultStance: "absorb", overrides: {} },
+  });
 const strict = () =>
-  makeInstitutions({ verificationPolicy: { acceptedSchemaIds: [], rejectUnknownSchemas: true }, diplomacyPolicy: { defaultStance: "reexamine", overrides: {} } });
+  makeInstitutions({
+    verificationPolicy: { acceptedSchemaIds: [], rejectUnknownSchemas: true },
+    diplomacyPolicy: { defaultStance: "reexamine", overrides: {} },
+  });
 
 function umiWorld(seed = "m3") {
   const world = createAlmaWorld(seed);
@@ -102,7 +108,12 @@ describe("M3 — transactions go through the environment (§2-4/§2-5)", () => {
   });
 
   test("isCurrencyConserving is a pure check on the entries", () => {
-    expect(isCurrencyConserving([{ agentId: "a", currencyDelta: -5, creditDelta: 0, reputationDelta: 0 }, { agentId: "b", currencyDelta: 5, creditDelta: 0, reputationDelta: 0 }])).toBe(true);
+    expect(
+      isCurrencyConserving([
+        { agentId: "a", currencyDelta: -5, creditDelta: 0, reputationDelta: 0 },
+        { agentId: "b", currencyDelta: 5, creditDelta: 0, reputationDelta: 0 },
+      ]),
+    ).toBe(true);
     expect(isCurrencyConserving([{ agentId: "a", currencyDelta: -5, creditDelta: 0, reputationDelta: 0 }])).toBe(false);
   });
 });
@@ -230,7 +241,8 @@ describe("Track A P3 — scarcity / resource competition (the 'compete' substrat
     });
     seedGenesis(world, [defineRegion("umi", "Umi", scarce)]);
     admitTreasury(world, "umi");
-    for (const n of ["a", "b", "c"]) admitAgent(world, { id: `${n}@umi`, region: "umi", role: "merchant", valueProfile: "lenient", publicKey: "", currency: 0 });
+    for (const n of ["a", "b", "c"])
+      admitAgent(world, { id: `${n}@umi`, region: "umi", role: "merchant", valueProfile: "lenient", publicKey: "", currency: 0 });
 
     // the pool produces up to capacity, then caps (no overfill)
     regenerateResources(world, "umi");
@@ -328,7 +340,9 @@ describe("Track A P3 — region market: ownership transfers, region never delete
     expect(getRegion(world.getState(), "nova")?.owner).toBe("acct:carol");
     // the buyer can amend; the seller (former council member) cannot
     amendInstitution(world, "nova", { policy: "diplomacy", value: { defaultStance: "reject", overrides: {} } }, "acct:carol");
-    expect(() => amendInstitution(world, "nova", { policy: "diplomacy", value: { defaultStance: "absorb", overrides: {} } }, "acct:alice")).toThrow();
+    expect(() =>
+      amendInstitution(world, "nova", { policy: "diplomacy", value: { defaultStance: "absorb", overrides: {} } }, "acct:alice"),
+    ).toThrow();
   });
 
   test("a DORMANT region's economy is frozen — residents cannot initiate transfers", () => {
@@ -394,14 +408,24 @@ describe("Track A — region-configurable fee policy (sovereignty over the econo
     if (r1.ok) expect(r1.fee).toBe(20); // floor(40 * 0.5)
 
     // the owner amends to a cheaper policy (owner-scoped)
-    amendInstitution(world, "nova", { policy: "economy", value: { baseCostRate: 0.1, minCostRate: 0.05, repDiscount: 0, creditPerTx: 1 } }, "acct:alice");
+    amendInstitution(
+      world,
+      "nova",
+      { policy: "economy", value: { baseCostRate: 0.1, minCostRate: 0.05, repDiscount: 0, creditPerTx: 1 } },
+      "acct:alice",
+    );
     const r2 = executeTransfer(world, { from: "a@nova", to: "b@nova", amount: 40 }, { tick: 1, notary: NOTARY });
     expect(r2.ok).toBe(true);
     if (r2.ok) expect(r2.fee).toBe(4); // floor(40 * 0.1)
 
     // a non-owner cannot change the economy policy
     expect(() =>
-      amendInstitution(world, "nova", { policy: "economy", value: { baseCostRate: 0, minCostRate: 0, repDiscount: 0, creditPerTx: 1 } }, "acct:mallory"),
+      amendInstitution(
+        world,
+        "nova",
+        { policy: "economy", value: { baseCostRate: 0, minCostRate: 0, repDiscount: 0, creditPerTx: 1 } },
+        "acct:mallory",
+      ),
     ).toThrow();
   });
 
@@ -417,7 +441,12 @@ describe("Track A — region-configurable fee policy (sovereignty over the econo
     seedGenesis(world, [defineRegion("umi", "Umi", lenient())]);
     proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova", makeInstitutions()), undefined, "acct:alice"));
     expect(() =>
-      amendInstitution(world, "nova", { policy: "economy", value: { baseCostRate: 1.5, minCostRate: 1.5, repDiscount: 0, creditPerTx: 1 } }, "acct:alice"),
+      amendInstitution(
+        world,
+        "nova",
+        { policy: "economy", value: { baseCostRate: 1.5, minCostRate: 1.5, repDiscount: 0, creditPerTx: 1 } },
+        "acct:alice",
+      ),
     ).toThrow();
   });
 });
@@ -479,7 +508,14 @@ describe("M3 — internal emergence founding (§3-D, reuses the M2 engine)", () 
     admitTreasury(world, "yama");
     // three agents whose value profile (lenient) clashes with the strict region
     for (let i = 1; i <= 3; i++) {
-      admitAgent(world, { id: `a${i}@yama`, region: "yama", role: "merchant", valueProfile: "lenient", publicKey: pub(10 + i), currency: 20 });
+      admitAgent(world, {
+        id: `a${i}@yama`,
+        region: "yama",
+        role: "merchant",
+        valueProfile: "lenient",
+        publicKey: pub(10 + i),
+        currency: 20,
+      });
     }
 
     detectEmergence(world, 3);
@@ -497,8 +533,14 @@ describe("M3 — internal emergence founding (§3-D, reuses the M2 engine)", () 
     }
 
     // it ran through the SAME founding engine, recorded with the emergence proposer + cohort
-    const founded = world.log.all().find((e) => e.type === "region.founded" && (e.payload as { region: { id: string } }).region.id === "lenientyama");
-    expect((founded?.payload as { proposer: { kind: string; cohort: string[] } }).proposer.cohort).toEqual(["a1@yama", "a2@yama", "a3@yama"]);
+    const founded = world.log
+      .all()
+      .find((e) => e.type === "region.founded" && (e.payload as { region: { id: string } }).region.id === "lenientyama");
+    expect((founded?.payload as { proposer: { kind: string; cohort: string[] } }).proposer.cohort).toEqual([
+      "a1@yama",
+      "a2@yama",
+      "a3@yama",
+    ]);
   });
 
   test("a seceded region INHERITS the parent's schemaLedger + maps the parent's certs (emergence inheritance)", () => {
@@ -511,7 +553,14 @@ describe("M3 — internal emergence founding (§3-D, reuses the M2 engine)", () 
     seedGenesis(world, [defineRegion("yama", "Yama (strict)", parent)]);
     admitTreasury(world, "yama");
     for (let i = 1; i <= 3; i++) {
-      admitAgent(world, { id: `a${i}@yama`, region: "yama", role: "merchant", valueProfile: "lenient", publicKey: pub(10 + i), currency: 20 });
+      admitAgent(world, {
+        id: `a${i}@yama`,
+        region: "yama",
+        role: "merchant",
+        valueProfile: "lenient",
+        publicKey: pub(10 + i),
+        currency: 20,
+      });
     }
     detectEmergence(world, 3);
 
@@ -541,16 +590,32 @@ describe("M3 — internal emergence founding (§3-D, reuses the M2 engine)", () 
     seedGenesis(world, [defineRegion("yama", "Yama (strict)", strict())]);
     admitTreasury(world, "yama");
     for (let i = 1; i <= 3; i++) {
-      admitAgent(world, { id: `a${i}@yama`, region: "yama", role: "merchant", valueProfile: "lenient", publicKey: pub(10 + i), currency: 20 });
+      admitAgent(world, {
+        id: `a${i}@yama`,
+        region: "yama",
+        role: "merchant",
+        valueProfile: "lenient",
+        publicKey: pub(10 + i),
+        currency: 20,
+      });
     }
-    const founded = () => world.log.all().filter((e) => e.type === "region.founded" && (e.payload as { region: { id: string } }).region.id === "lenientyama").length;
+    const founded = () =>
+      world.log.all().filter((e) => e.type === "region.founded" && (e.payload as { region: { id: string } }).region.id === "lenientyama")
+        .length;
 
     detectEmergence(world, 3); // first wave: founds + migrates
     expect(founded()).toBe(1);
 
     // a later cohort of lenient agents appears in the still-strict region
     for (let i = 4; i <= 6; i++) {
-      admitAgent(world, { id: `a${i}@yama`, region: "yama", role: "merchant", valueProfile: "lenient", publicKey: pub(10 + i), currency: 20 });
+      admitAgent(world, {
+        id: `a${i}@yama`,
+        region: "yama",
+        role: "merchant",
+        valueProfile: "lenient",
+        publicKey: pub(10 + i),
+        currency: 20,
+      });
     }
     detectEmergence(world, 3); // second wave: must NOT re-found, but MUST migrate
 
@@ -566,7 +631,12 @@ describe("M3 — determinism + replay survive the brain layer (§2-7, audit G6)"
     const world = createAlmaWorld(seed);
     seedGenesis(world, [defineRegion("umi", "Umi", lenient())]);
     admitTreasury(world, "umi");
-    for (const [name, n] of [["alice", 1], ["bob", 2], ["carol", 3], ["dave", 4]] as const) {
+    for (const [name, n] of [
+      ["alice", 1],
+      ["bob", 2],
+      ["carol", 3],
+      ["dave", 4],
+    ] as const) {
       admitAgent(world, { id: `${name}@umi`, region: "umi", role: "merchant", valueProfile: "lenient", publicKey: pub(n), currency: 100 });
     }
     runEconomy(world, 6, { notary: NOTARY, criticalMass: 99 });
@@ -600,7 +670,14 @@ describe("M3 — determinism + replay survive the brain layer (§2-7, audit G6)"
     seedGenesis(world, [defineRegion("yama", "Yama (strict)", strict())]);
     admitTreasury(world, "yama");
     for (let i = 1; i <= 4; i++) {
-      admitAgent(world, { id: `a${i}@yama`, region: "yama", role: "merchant", valueProfile: "lenient", publicKey: pub(30 + i), currency: 100 });
+      admitAgent(world, {
+        id: `a${i}@yama`,
+        region: "yama",
+        role: "merchant",
+        valueProfile: "lenient",
+        publicKey: pub(30 + i),
+        currency: 100,
+      });
     }
     runEconomy(world, 6, { notary: NOTARY, criticalMass: 3 }); // emergence FIRES during this run
     return world;

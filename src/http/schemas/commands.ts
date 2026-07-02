@@ -3,14 +3,7 @@
  */
 
 import { z } from "zod";
-import {
-  Amount,
-  UUID,
-  NonEmptyString,
-  Email,
-  RegionId,
-  ResidentStatus,
-} from "./common.js";
+import { Amount, Email, NonEmptyString, RegionId, ResidentStatus, UUID } from "./common.js";
 
 /** Found command request */
 export const foundSchema = z

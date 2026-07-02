@@ -4,32 +4,32 @@
  * Exports the command registry and all handlers.
  */
 
-export * from "./registry.js";
 export * from "./handlers/index.js";
+export * from "./registry.js";
 
-import { commandRegistry } from "./registry.js";
 import {
-  establishHandler,
+  abolishLawHandler,
+  acceptInviteHandler,
   admitHandler,
   amendHandler,
-  transactHandler,
-  defineAssetTypeHandler,
-  issueAssetHandler,
-  transferAssetHandler,
-  disposeAssetHandler,
-  revokeAssetHandler,
-  makeLawHandler,
-  reviseLawHandler,
-  abolishLawHandler,
-  inviteHandler,
-  acceptInviteHandler,
-  suspendHandler,
-  reinstateHandler,
-  makeGroupHandler,
-  reviseGroupHandler,
-  dissolveGroupHandler,
   assignMemberHandler,
+  defineAssetTypeHandler,
+  disposeAssetHandler,
+  dissolveGroupHandler,
+  establishHandler,
+  inviteHandler,
+  issueAssetHandler,
+  makeGroupHandler,
+  makeLawHandler,
+  reinstateHandler,
+  reviseGroupHandler,
+  reviseLawHandler,
+  revokeAssetHandler,
+  suspendHandler,
+  transactHandler,
+  transferAssetHandler,
 } from "./handlers/index.js";
+import { commandRegistry } from "./registry.js";
 
 /**
  * Initialize the command registry with all handlers.

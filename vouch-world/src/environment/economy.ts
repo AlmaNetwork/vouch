@@ -7,17 +7,17 @@
 // of the entries — no World/tick/rng — so it could later be lifted onto a
 // distributed executor (real ALMA) without touching this signature.
 
-import { type Certificate, type KeyPair, encodeBase64, issueCertificate } from "vouch-core";
+import { type Certificate, encodeBase64, issueCertificate, type KeyPair } from "vouch-core";
 import {
+  type AgentAdmittedPayload,
+  currencySupply,
   EVENT_AGENT_ADMITTED,
   EVENT_ECONOMY_MINTED,
   EVENT_ECONOMY_SETTLED,
-  type AgentAdmittedPayload,
+  getAgent,
   type MintPayload,
   type SettlementEntry,
   type SettlementPayload,
-  currencySupply,
-  getAgent,
   treasuryId,
 } from "../agent";
 import { type AlmaEvent, type CommitSink, SYSTEM_ACTOR, type WorldView } from "../foundation";

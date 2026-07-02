@@ -2,9 +2,9 @@
  * Tests for simulate endpoint
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { boot, type BootResult } from "../../../boot.js";
-import { unlinkSync, existsSync } from "node:fs";
+import { existsSync, unlinkSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { type BootResult, boot } from "../../../boot.js";
 
 describe("POST /v1/simulate", () => {
   let bootResult: BootResult;
@@ -29,10 +29,7 @@ describe("POST /v1/simulate", () => {
     }
   }
 
-  async function request(
-    path: string,
-    options: RequestInit = {}
-  ): Promise<Response> {
+  async function request(path: string, options: RequestInit = {}): Promise<Response> {
     const req = new Request(`http://localhost${path}`, options);
     return bootResult.app.fetch(req);
   }

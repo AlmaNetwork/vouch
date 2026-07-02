@@ -4,26 +4,26 @@
  * Handlers for asset type definition and asset lifecycle management.
  */
 
-import type {
-  CommandHandler,
-  DefineAssetTypePayload,
-  IssueAssetPayload,
-  TransferAssetPayload,
-  DisposeAssetPayload,
-  RevokeAssetPayload,
-  CommandContext,
-  CommandResult,
-} from "../registry.js";
-import { DomainError } from "../../../domain/models/errors.js";
 import {
-  parseAssetTypeId,
-  parseAssetId,
-  parseAccountId,
-  type AssetTypeId,
-  type AssetId,
   type AccountId,
+  type AssetId,
+  type AssetTypeId,
+  parseAccountId,
+  parseAssetId,
+  parseAssetTypeId,
 } from "../../../domain/models/almaId.js";
-import type { NetworkState, AssetType, Asset } from "../../../domain/models/types.js";
+import { DomainError } from "../../../domain/models/errors.js";
+import type { Asset, AssetType, NetworkState } from "../../../domain/models/types.js";
+import type {
+  CommandContext,
+  CommandHandler,
+  CommandResult,
+  DefineAssetTypePayload,
+  DisposeAssetPayload,
+  IssueAssetPayload,
+  RevokeAssetPayload,
+  TransferAssetPayload,
+} from "../registry.js";
 
 // ============================================================
 // Define Asset Type Handler
@@ -35,60 +35,40 @@ export const defineAssetTypeHandler: CommandHandler<"defineAssetType"> = {
   validate(payload: DefineAssetTypePayload, ctx: CommandContext): void {
     // Region must be established
     if (ctx.state.regionId === "") {
-      throw new DomainError(
-        "NETWORK_NOT_FOUNDED",
-        "Region has not been established",
-        {}
-      );
+      throw new DomainError("NETWORK_NOT_FOUNDED", "Region has not been established", {});
     }
 
     // Validate asset type ID format
     const parsed = parseAssetTypeId(payload.assetTypeId);
     if (!parsed) {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Invalid asset type ID format: ${payload.assetTypeId}`,
-        { field: "assetTypeId" }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Invalid asset type ID format: ${payload.assetTypeId}`, { field: "assetTypeId" });
     }
 
     // Asset type must belong to this region
     if (parsed.region.raw !== ctx.state.regionId) {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        "Asset type must belong to this region",
-        { field: "assetTypeId", expected: ctx.state.regionId, got: parsed.region.raw }
-      );
+      throw new DomainError("VALIDATION_ERROR", "Asset type must belong to this region", {
+        field: "assetTypeId",
+        expected: ctx.state.regionId,
+        got: parsed.region.raw,
+      });
     }
 
     // Check if asset type already exists
     const assetTypeId = payload.assetTypeId as AssetTypeId;
     if (ctx.state.assetTypes.has(assetTypeId)) {
-      throw new DomainError(
-        "ALREADY_EXISTS",
-        `Asset type already exists: ${payload.assetTypeId}`,
-        { assetTypeId: payload.assetTypeId }
-      );
+      throw new DomainError("ALREADY_EXISTS", `Asset type already exists: ${payload.assetTypeId}`, { assetTypeId: payload.assetTypeId });
     }
 
     // Validate name
     if (!payload.name || payload.name.trim() === "") {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        "Asset type name is required",
-        { field: "name" }
-      );
+      throw new DomainError("VALIDATION_ERROR", "Asset type name is required", { field: "name" });
     }
 
     // Only owner or admin can define asset types
     const isOwner = ctx.principal.accountId === ctx.state.ownerId;
     const isAdmin = ctx.principal.roles.includes("admin");
     if (!isOwner && !isAdmin) {
-      throw new DomainError(
-        "FORBIDDEN",
-        "Only owner or admin can define asset types",
-        { principal: ctx.principal.accountId }
-      );
+      throw new DomainError("FORBIDDEN", "Only owner or admin can define asset types", { principal: ctx.principal.accountId });
     }
   },
 
@@ -97,7 +77,7 @@ export const defineAssetTypeHandler: CommandHandler<"defineAssetType"> = {
     const now = ctx.now;
 
     // Determine defaults based on kind
-    const transferable = payload.transferable ?? (payload.kind === "fungible");
+    const transferable = payload.transferable ?? payload.kind === "fungible";
     const expirable = payload.expirable ?? false;
 
     // Create asset type
@@ -163,90 +143,57 @@ export const issueAssetHandler: CommandHandler<"issueAsset"> = {
   validate(payload: IssueAssetPayload, ctx: CommandContext): void {
     // Region must be established
     if (ctx.state.regionId === "") {
-      throw new DomainError(
-        "NETWORK_NOT_FOUNDED",
-        "Region has not been established",
-        {}
-      );
+      throw new DomainError("NETWORK_NOT_FOUNDED", "Region has not been established", {});
     }
 
     // Validate asset ID format
     const parsed = parseAssetId(payload.assetId);
     if (!parsed) {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Invalid asset ID format: ${payload.assetId}`,
-        { field: "assetId" }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Invalid asset ID format: ${payload.assetId}`, { field: "assetId" });
     }
 
     // Validate recipient ID format
     const recipientParsed = parseAccountId(payload.recipientId);
     if (!recipientParsed) {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Invalid recipient ID format: ${payload.recipientId}`,
-        { field: "recipientId" }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Invalid recipient ID format: ${payload.recipientId}`, { field: "recipientId" });
     }
 
     // Recipient must exist
     const recipientId = payload.recipientId as AccountId;
     if (!ctx.state.accounts.has(recipientId)) {
-      throw new DomainError(
-        "NOT_FOUND",
-        `Recipient account not found: ${payload.recipientId}`,
-        { field: "recipientId" }
-      );
+      throw new DomainError("NOT_FOUND", `Recipient account not found: ${payload.recipientId}`, { field: "recipientId" });
     }
 
     // Asset type must exist
     const assetTypeId = `${parsed.account.region.raw}/${parsed.assetTypeName}` as AssetTypeId;
     const assetType = ctx.state.assetTypes.get(assetTypeId);
     if (!assetType) {
-      throw new DomainError(
-        "NOT_FOUND",
-        `Asset type not found: ${assetTypeId}`,
-        { field: "assetId", assetTypeId }
-      );
+      throw new DomainError("NOT_FOUND", `Asset type not found: ${assetTypeId}`, { field: "assetId", assetTypeId });
     }
 
     // Check if asset already exists
     const assetId = payload.assetId as AssetId;
     if (ctx.state.assets.has(assetId)) {
-      throw new DomainError(
-        "ALREADY_EXISTS",
-        `Asset already exists: ${payload.assetId}`,
-        { assetId: payload.assetId }
-      );
+      throw new DomainError("ALREADY_EXISTS", `Asset already exists: ${payload.assetId}`, { assetId: payload.assetId });
     }
 
     // Authorization: principal must be the issuer of the asset type
     if (ctx.principal.accountId !== assetType.issuerId) {
-      throw new DomainError(
-        "FORBIDDEN",
-        "Only the asset type issuer can issue assets",
-        { principal: ctx.principal.accountId, issuerId: assetType.issuerId }
-      );
+      throw new DomainError("FORBIDDEN", "Only the asset type issuer can issue assets", {
+        principal: ctx.principal.accountId,
+        issuerId: assetType.issuerId,
+      });
     }
 
     // Validate amount for fungible assets
     if (assetType.kind === "fungible") {
       if (!payload.amount) {
-        throw new DomainError(
-          "VALIDATION_ERROR",
-          "Amount is required for fungible assets",
-          { field: "amount" }
-        );
+        throw new DomainError("VALIDATION_ERROR", "Amount is required for fungible assets", { field: "amount" });
       }
       // Validate amount is a valid number
       const amount = parseFloat(payload.amount);
       if (isNaN(amount) || amount < 0) {
-        throw new DomainError(
-          "VALIDATION_ERROR",
-          "Amount must be a non-negative number",
-          { field: "amount" }
-        );
+        throw new DomainError("VALIDATION_ERROR", "Amount must be a non-negative number", { field: "amount" });
       }
     }
   },
@@ -316,77 +263,48 @@ export const transferAssetHandler: CommandHandler<"transferAsset"> = {
   validate(payload: TransferAssetPayload, ctx: CommandContext): void {
     // Region must be established
     if (ctx.state.regionId === "") {
-      throw new DomainError(
-        "NETWORK_NOT_FOUNDED",
-        "Region has not been established",
-        {}
-      );
+      throw new DomainError("NETWORK_NOT_FOUNDED", "Region has not been established", {});
     }
 
     // Asset must exist
     const assetId = payload.assetId as AssetId;
     const asset = ctx.state.assets.get(assetId);
     if (!asset) {
-      throw new DomainError(
-        "NOT_FOUND",
-        `Asset not found: ${payload.assetId}`,
-        { assetId: payload.assetId }
-      );
+      throw new DomainError("NOT_FOUND", `Asset not found: ${payload.assetId}`, { assetId: payload.assetId });
     }
 
     // Asset must be active
     if (asset.status !== "active") {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Asset is not active: ${asset.status}`,
-        { assetId: payload.assetId, status: asset.status }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Asset is not active: ${asset.status}`, { assetId: payload.assetId, status: asset.status });
     }
 
     // Asset type must exist and be transferable
     const assetType = ctx.state.assetTypes.get(asset.assetTypeId);
     if (!assetType) {
-      throw new DomainError(
-        "NOT_FOUND",
-        `Asset type not found: ${asset.assetTypeId}`,
-        { assetTypeId: asset.assetTypeId }
-      );
+      throw new DomainError("NOT_FOUND", `Asset type not found: ${asset.assetTypeId}`, { assetTypeId: asset.assetTypeId });
     }
 
     if (!assetType.transferable) {
-      throw new DomainError(
-        "FORBIDDEN",
-        "This asset type is not transferable",
-        { assetTypeId: asset.assetTypeId }
-      );
+      throw new DomainError("FORBIDDEN", "This asset type is not transferable", { assetTypeId: asset.assetTypeId });
     }
 
     // Recipient must exist
     const toAccountId = payload.toAccountId as AccountId;
     if (!ctx.state.accounts.has(toAccountId)) {
-      throw new DomainError(
-        "NOT_FOUND",
-        `Recipient account not found: ${payload.toAccountId}`,
-        { field: "toAccountId" }
-      );
+      throw new DomainError("NOT_FOUND", `Recipient account not found: ${payload.toAccountId}`, { field: "toAccountId" });
     }
 
     // Cannot transfer to self
     if (asset.accountId === toAccountId) {
-      throw new DomainError(
-        "SELF_TRANSACTION",
-        "Cannot transfer asset to self",
-        { from: asset.accountId, to: toAccountId }
-      );
+      throw new DomainError("SELF_TRANSACTION", "Cannot transfer asset to self", { from: asset.accountId, to: toAccountId });
     }
 
     // Authorization: principal must be the asset owner
     if (ctx.principal.accountId !== asset.accountId) {
-      throw new DomainError(
-        "FORBIDDEN",
-        "Only the asset owner can transfer it",
-        { principal: ctx.principal.accountId, owner: asset.accountId }
-      );
+      throw new DomainError("FORBIDDEN", "Only the asset owner can transfer it", {
+        principal: ctx.principal.accountId,
+        owner: asset.accountId,
+      });
     }
 
     // Validate amount for fungible partial transfers
@@ -394,18 +312,13 @@ export const transferAssetHandler: CommandHandler<"transferAsset"> = {
       const transferAmount = parseFloat(payload.amount);
       const currentBalance = parseFloat(asset.balance);
       if (isNaN(transferAmount) || transferAmount <= 0) {
-        throw new DomainError(
-          "VALIDATION_ERROR",
-          "Transfer amount must be a positive number",
-          { field: "amount" }
-        );
+        throw new DomainError("VALIDATION_ERROR", "Transfer amount must be a positive number", { field: "amount" });
       }
       if (transferAmount > currentBalance && !assetType.allowNegative) {
-        throw new DomainError(
-          "INSUFFICIENT_BALANCE",
-          "Insufficient balance for transfer",
-          { balance: asset.balance, amount: payload.amount }
-        );
+        throw new DomainError("INSUFFICIENT_BALANCE", "Insufficient balance for transfer", {
+          balance: asset.balance,
+          amount: payload.amount,
+        });
       }
     }
   },
@@ -498,40 +411,27 @@ export const disposeAssetHandler: CommandHandler<"disposeAsset"> = {
   validate(payload: DisposeAssetPayload, ctx: CommandContext): void {
     // Region must be established
     if (ctx.state.regionId === "") {
-      throw new DomainError(
-        "NETWORK_NOT_FOUNDED",
-        "Region has not been established",
-        {}
-      );
+      throw new DomainError("NETWORK_NOT_FOUNDED", "Region has not been established", {});
     }
 
     // Asset must exist
     const assetId = payload.assetId as AssetId;
     const asset = ctx.state.assets.get(assetId);
     if (!asset) {
-      throw new DomainError(
-        "NOT_FOUND",
-        `Asset not found: ${payload.assetId}`,
-        { assetId: payload.assetId }
-      );
+      throw new DomainError("NOT_FOUND", `Asset not found: ${payload.assetId}`, { assetId: payload.assetId });
     }
 
     // Asset must be active
     if (asset.status !== "active") {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Asset is not active: ${asset.status}`,
-        { assetId: payload.assetId, status: asset.status }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Asset is not active: ${asset.status}`, { assetId: payload.assetId, status: asset.status });
     }
 
     // Authorization: principal must be the asset owner
     if (ctx.principal.accountId !== asset.accountId) {
-      throw new DomainError(
-        "FORBIDDEN",
-        "Only the asset owner can dispose it",
-        { principal: ctx.principal.accountId, owner: asset.accountId }
-      );
+      throw new DomainError("FORBIDDEN", "Only the asset owner can dispose it", {
+        principal: ctx.principal.accountId,
+        owner: asset.accountId,
+      });
     }
   },
 
@@ -584,49 +484,32 @@ export const revokeAssetHandler: CommandHandler<"revokeAsset"> = {
   validate(payload: RevokeAssetPayload, ctx: CommandContext): void {
     // Region must be established
     if (ctx.state.regionId === "") {
-      throw new DomainError(
-        "NETWORK_NOT_FOUNDED",
-        "Region has not been established",
-        {}
-      );
+      throw new DomainError("NETWORK_NOT_FOUNDED", "Region has not been established", {});
     }
 
     // Asset must exist
     const assetId = payload.assetId as AssetId;
     const asset = ctx.state.assets.get(assetId);
     if (!asset) {
-      throw new DomainError(
-        "NOT_FOUND",
-        `Asset not found: ${payload.assetId}`,
-        { assetId: payload.assetId }
-      );
+      throw new DomainError("NOT_FOUND", `Asset not found: ${payload.assetId}`, { assetId: payload.assetId });
     }
 
     // Asset must be active
     if (asset.status !== "active") {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Asset is not active: ${asset.status}`,
-        { assetId: payload.assetId, status: asset.status }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Asset is not active: ${asset.status}`, { assetId: payload.assetId, status: asset.status });
     }
 
     // Reason is required
     if (!payload.reason || payload.reason.trim() === "") {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        "Reason is required for revocation",
-        { field: "reason" }
-      );
+      throw new DomainError("VALIDATION_ERROR", "Reason is required for revocation", { field: "reason" });
     }
 
     // Authorization: principal must be the asset issuer
     if (ctx.principal.accountId !== asset.issuerId) {
-      throw new DomainError(
-        "FORBIDDEN",
-        "Only the asset issuer can revoke it",
-        { principal: ctx.principal.accountId, issuer: asset.issuerId }
-      );
+      throw new DomainError("FORBIDDEN", "Only the asset issuer can revoke it", {
+        principal: ctx.principal.accountId,
+        issuer: asset.issuerId,
+      });
     }
   },
 

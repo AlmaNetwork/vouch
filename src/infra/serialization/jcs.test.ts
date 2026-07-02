@@ -2,8 +2,8 @@
  * Tests for JCS serialization
  */
 
-import { describe, it, expect } from "vitest";
-import { toCanonical, hashCanonical, chainHash } from "./jcs.js";
+import { describe, expect, it } from "vitest";
+import { chainHash, hashCanonical, toCanonical } from "./jcs.js";
 
 describe("toCanonical", () => {
   it("should produce consistent output for same input", () => {

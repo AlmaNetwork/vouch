@@ -5,7 +5,7 @@
 // environment/ (audit G2). So region imports only foundation (event/reducer
 // types) — never the composite WorldState, never the write engine.
 
-import { SYSTEM_ACTOR, type Reducer } from "../foundation";
+import { type Reducer, SYSTEM_ACTOR } from "../foundation";
 import {
   EVENT_GOV_PROPOSAL_OPENED,
   EVENT_GOV_VOTE_CAST,
@@ -20,8 +20,6 @@ import {
   type GovProposalOpenedPayload,
   type GovVoteCastPayload,
   type InstitutionChange,
-  type ResourceDrawnPayload,
-  type ResourceRegeneratedPayload,
   type InstitutionChangedPayload,
   type Institutions,
   type RegionFoundedPayload,
@@ -30,6 +28,8 @@ import {
   type RegionOwnershipTransferredPayload,
   type RegionRecognizedPayload,
   type RegionState,
+  type ResourceDrawnPayload,
+  type ResourceRegeneratedPayload,
 } from "./types";
 
 /** The region read-model slice of world state. The environment composes this in. */
@@ -148,9 +148,12 @@ export const regionReducer: Reducer<RegionSlice> = (state, event) => {
     case EVENT_GOV_VOTE_CAST: {
       const p = event.payload as GovVoteCastPayload;
       const existing = state.regions[p.regionId];
-      if (!existing || !existing.openProposal) return state;
+      if (!existing?.openProposal) return state;
       if (existing.openProposal.votes.includes(p.voter)) return state; // no double vote
-      const voted: RegionState = { ...existing, openProposal: { ...existing.openProposal, votes: [...existing.openProposal.votes, p.voter] } };
+      const voted: RegionState = {
+        ...existing,
+        openProposal: { ...existing.openProposal, votes: [...existing.openProposal.votes, p.voter] },
+      };
       return { ...state, regions: { ...state.regions, [p.regionId]: resolveIfPassed(voted) } };
     }
     case EVENT_RESOURCE_REGENERATED: {
@@ -166,7 +169,10 @@ export const regionReducer: Reducer<RegionSlice> = (state, event) => {
       const existing = state.regions[p.regionId];
       if (!existing) return state;
       // pool -> agent is conserved; the env guarantees amount <= level, clamp at 0 in case.
-      return { ...state, regions: { ...state.regions, [p.regionId]: { ...existing, resourceLevel: Math.max(0, existing.resourceLevel - p.amount) } } };
+      return {
+        ...state,
+        regions: { ...state.regions, [p.regionId]: { ...existing, resourceLevel: Math.max(0, existing.resourceLevel - p.amount) } },
+      };
     }
     default:
       return state;

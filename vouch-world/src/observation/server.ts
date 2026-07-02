@@ -17,7 +17,23 @@ import { metrics } from "./metrics";
 export function createObservationApp(view: WorldView<WorldState>): Hono {
   const app = new Hono();
 
-  app.get("/", (c) => c.json({ service: "vouch observation", endpoints: ["/health", "/tick", "/metrics", "/state", "/regions", "/regions/:id", "/agents", "/agents/:id", "/log?since=N", "/log/digest"] }));
+  app.get("/", (c) =>
+    c.json({
+      service: "vouch observation",
+      endpoints: [
+        "/health",
+        "/tick",
+        "/metrics",
+        "/state",
+        "/regions",
+        "/regions/:id",
+        "/agents",
+        "/agents/:id",
+        "/log?since=N",
+        "/log/digest",
+      ],
+    }),
+  );
   app.get("/health", (c) => c.json({ ok: true, tick: view.tick }));
   app.get("/tick", (c) => c.json({ tick: view.tick }));
   app.get("/metrics", (c) => c.json(metrics(view)));

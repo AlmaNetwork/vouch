@@ -9,7 +9,7 @@ import {
   proposeFounding,
   seedGenesis,
 } from "../../src/environment";
-import { type ObservationServer, createObservationApp, gini, metrics } from "../../src/observation";
+import { createObservationApp, gini, metrics, type ObservationServer } from "../../src/observation";
 import { defineRegion } from "../../src/region";
 
 const NOTARY = keyPairFromSeed(new Uint8Array(32).fill(9));

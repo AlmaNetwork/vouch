@@ -7,14 +7,10 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
+import { type CommandContext, type CommandPacket, commandRegistry } from "../../../application/commands/registry.js";
+import { DomainError } from "../../../domain/models/errors.js";
 import type { Env } from "../../env.js";
 import { authenticate, idempotencyGuard } from "../../middleware/index.js";
-import {
-  commandRegistry,
-  type CommandPacket,
-  type CommandContext,
-} from "../../../application/commands/registry.js";
-import { DomainError } from "../../../domain/models/errors.js";
 
 const executeRoute = new Hono<Env>();
 
@@ -97,12 +93,14 @@ const commandSchemas = {
     changes: z.object({
       name: z.string().min(1).optional(),
       description: z.string().optional(),
-      rule: z.object({
-        target: z.union([z.string().min(1), z.array(z.string().min(1))]).optional(),
-        condition: z.record(z.unknown()).optional(),
-        action: z.record(z.unknown()).optional(),
-        message: z.string().optional(),
-      }).optional(),
+      rule: z
+        .object({
+          target: z.union([z.string().min(1), z.array(z.string().min(1))]).optional(),
+          condition: z.record(z.unknown()).optional(),
+          action: z.record(z.unknown()).optional(),
+          message: z.string().optional(),
+        })
+        .optional(),
       effectiveAt: z.string().optional(),
     }),
   }),
@@ -159,9 +157,11 @@ const commandSchemas = {
   }),
 };
 
-const commandSchema = z.object({
-  name: z.string().min(1),
-}).passthrough();
+const commandSchema = z
+  .object({
+    name: z.string().min(1),
+  })
+  .passthrough();
 
 const executeSchema = z.object({
   commands: z.array(commandSchema).min(1),
@@ -240,112 +240,107 @@ function mapApiPayloadToInternal(commandName: string, apiPayload: Record<string,
   }
 }
 
-executeRoute.post(
-  "/",
-  authenticate,
-  idempotencyGuard,
-  async (c) => {
-    const body = await c.req.json();
-    const parsed = executeSchema.safeParse(body);
+executeRoute.post("/", authenticate, idempotencyGuard, async (c) => {
+  const body = await c.req.json();
+  const parsed = executeSchema.safeParse(body);
 
-    if (!parsed.success) {
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid request body",
+          requestId: c.get("requestId"),
+          details: parsed.error.errors,
+        },
+      },
+      400,
+    );
+  }
+
+  const requestId = c.get("requestId");
+  const principal = c.get("principal");
+  const state = c.get("state");
+  const now = new Date().toISOString();
+
+  // Parse and validate all commands
+  const commands: CommandPacket[] = [];
+  for (let i = 0; i < parsed.data.commands.length; i++) {
+    const rawCommand = parsed.data.commands[i];
+    const command = validateCommandPayload(rawCommand);
+
+    if (!command) {
       return c.json(
         {
           error: {
             code: "VALIDATION_ERROR",
-            message: "Invalid request body",
-            requestId: c.get("requestId"),
-            details: parsed.error.errors,
+            message: `Invalid command at index ${i}`,
+            requestId,
+            details: [{ index: i, name: rawCommand.name }],
           },
         },
-        400
+        400,
       );
     }
 
-    const requestId = c.get("requestId");
-    const principal = c.get("principal");
-    const state = c.get("state");
-    const now = new Date().toISOString();
+    commands.push(command);
+  }
 
-    // Parse and validate all commands
-    const commands: CommandPacket[] = [];
-    for (let i = 0; i < parsed.data.commands.length; i++) {
-      const rawCommand = parsed.data.commands[i];
-      const command = validateCommandPayload(rawCommand);
+  // Create command context
+  const ctx: CommandContext = {
+    principal,
+    state,
+    now,
+    requestId,
+    seq: state.seq,
+  };
 
-      if (!command) {
-        return c.json(
-          {
-            error: {
-              code: "VALIDATION_ERROR",
-              message: `Invalid command at index ${i}`,
-              requestId,
-              details: [{ index: i, name: rawCommand.name }],
-            },
-          },
-          400
-        );
-      }
+  try {
+    // Execute all commands
+    const result = commandRegistry.executeCommands(commands, ctx);
 
-      commands.push(command);
-    }
+    // TODO: Persist events to journal
+    // For now, just return success
 
-    // Create command context
-    const ctx: CommandContext = {
-      principal,
-      state,
-      now,
-      requestId,
-      seq: state.seq,
-    };
-
-    try {
-      // Execute all commands
-      const result = commandRegistry.executeCommands(commands, ctx);
-
-      // TODO: Persist events to journal
-      // For now, just return success
+    return c.json(
+      {
+        ok: true,
+        seq: result.finalState.seq,
+        idempotent: false,
+        schemaVersion: 1,
+      },
+      200,
+    );
+  } catch (error) {
+    if (error instanceof DomainError) {
+      const statusMap: Record<string, number> = {
+        NETWORK_ALREADY_FOUNDED: 409,
+        NETWORK_NOT_FOUNDED: 400,
+        ACCOUNT_ALREADY_EXISTS: 409,
+        RESIDENT_ALREADY_EXISTS: 409,
+        ALREADY_EXISTS: 409,
+        NOT_FOUND: 404,
+        VALIDATION_ERROR: 400,
+        FORBIDDEN: 403,
+        SELF_TRANSACTION: 400,
+        UNKNOWN_COMMAND: 400,
+      };
+      const status = statusMap[error.code] || 400;
 
       return c.json(
         {
-          ok: true,
-          seq: result.finalState.seq,
-          idempotent: false,
-          schemaVersion: 1,
-        },
-        200
-      );
-    } catch (error) {
-      if (error instanceof DomainError) {
-        const statusMap: Record<string, number> = {
-          NETWORK_ALREADY_FOUNDED: 409,
-          NETWORK_NOT_FOUNDED: 400,
-          ACCOUNT_ALREADY_EXISTS: 409,
-          RESIDENT_ALREADY_EXISTS: 409,
-          ALREADY_EXISTS: 409,
-          NOT_FOUND: 404,
-          VALIDATION_ERROR: 400,
-          FORBIDDEN: 403,
-          SELF_TRANSACTION: 400,
-          UNKNOWN_COMMAND: 400,
-        };
-        const status = statusMap[error.code] || 400;
-
-        return c.json(
-          {
-            error: {
-              code: error.code,
-              message: error.message,
-              requestId,
-              details: error.details ? [error.details] : [],
-            },
+          error: {
+            code: error.code,
+            message: error.message,
+            requestId,
+            details: error.details ? [error.details] : [],
           },
-          status as 400 | 403 | 404 | 409
-        );
-      }
-      throw error;
+        },
+        status as 400 | 403 | 404 | 409,
+      );
     }
+    throw error;
   }
-);
+});
 
 export default executeRoute;

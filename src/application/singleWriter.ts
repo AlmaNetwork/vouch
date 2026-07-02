@@ -15,7 +15,7 @@ export class SingleWriter {
     // Keep chain going regardless of success/failure
     this.chain = next.then(
       () => {},
-      () => {}
+      () => {},
     );
     return next;
   }

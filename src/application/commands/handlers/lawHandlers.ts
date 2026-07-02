@@ -7,18 +7,11 @@
  * - abolishLaw: Abolish an existing law
  */
 
-import type {
-  CommandHandler,
-  MakeLawPayload,
-  ReviseLawPayload,
-  AbolishLawPayload,
-  CommandContext,
-  CommandResult,
-} from "../registry.js";
-import type { Law, LawId, LawRule, LawType } from "../../../domain/models/types.js";
-import { DomainError } from "../../../domain/models/errors.js";
-import { hasLaw, getLaw, isNetworkFounded } from "../../../domain/models/types.js";
 import { parseLawId } from "../../../domain/models/almaId.js";
+import { DomainError } from "../../../domain/models/errors.js";
+import type { Law, LawId, LawRule, LawType } from "../../../domain/models/types.js";
+import { getLaw, hasLaw, isNetworkFounded } from "../../../domain/models/types.js";
+import type { AbolishLawPayload, CommandContext, CommandHandler, CommandResult, MakeLawPayload, ReviseLawPayload } from "../registry.js";
 
 // ============================================================
 // makeLaw Handler
@@ -32,54 +25,33 @@ export const makeLawHandler: CommandHandler<"makeLaw"> = {
 
     // Network must be founded
     if (!isNetworkFounded(state)) {
-      throw new DomainError(
-        "NETWORK_NOT_FOUNDED",
-        "Cannot create law: network not founded"
-      );
+      throw new DomainError("NETWORK_NOT_FOUNDED", "Cannot create law: network not founded");
     }
 
     // Only owner or admin can create laws
     if (!principal.roles.includes("owner") && !principal.roles.includes("admin")) {
-      throw new DomainError(
-        "FORBIDDEN",
-        "Only owner or admin can create laws"
-      );
+      throw new DomainError("FORBIDDEN", "Only owner or admin can create laws");
     }
 
     // Validate law ID format
     const parsed = parseLawId(payload.lawId);
     if (!parsed) {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Invalid law ID format: ${payload.lawId}`,
-        { lawId: payload.lawId }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Invalid law ID format: ${payload.lawId}`, { lawId: payload.lawId });
     }
 
     // Law ID must belong to this region
     if (parsed.region.raw !== state.regionId) {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        "Law ID must belong to this region",
-        { lawId: payload.lawId, regionId: state.regionId }
-      );
+      throw new DomainError("VALIDATION_ERROR", "Law ID must belong to this region", { lawId: payload.lawId, regionId: state.regionId });
     }
 
     // Law must not already exist
     if (hasLaw(state, payload.lawId as LawId)) {
-      throw new DomainError(
-        "ALREADY_EXISTS",
-        `Law already exists: ${payload.lawId}`,
-        { lawId: payload.lawId }
-      );
+      throw new DomainError("ALREADY_EXISTS", `Law already exists: ${payload.lawId}`, { lawId: payload.lawId });
     }
 
     // Validate rule structure
     if (!payload.rule.target) {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        "Law rule must specify target command(s)"
-      );
+      throw new DomainError("VALIDATION_ERROR", "Law rule must specify target command(s)");
     }
   },
 
@@ -152,50 +124,37 @@ export const reviseLawHandler: CommandHandler<"reviseLaw"> = {
 
     // Network must be founded
     if (!isNetworkFounded(state)) {
-      throw new DomainError(
-        "NETWORK_NOT_FOUNDED",
-        "Cannot revise law: network not founded"
-      );
+      throw new DomainError("NETWORK_NOT_FOUNDED", "Cannot revise law: network not founded");
     }
 
     // Only owner or admin can revise laws
     if (!principal.roles.includes("owner") && !principal.roles.includes("admin")) {
-      throw new DomainError(
-        "FORBIDDEN",
-        "Only owner or admin can revise laws"
-      );
+      throw new DomainError("FORBIDDEN", "Only owner or admin can revise laws");
     }
 
     // Law must exist
     const law = getLaw(state, payload.lawId as LawId);
     if (!law) {
-      throw new DomainError(
-        "NOT_FOUND",
-        `Law not found: ${payload.lawId}`,
-        { lawId: payload.lawId }
-      );
+      throw new DomainError("NOT_FOUND", `Law not found: ${payload.lawId}`, { lawId: payload.lawId });
     }
 
     // Law must be active
     if (law.status !== "active") {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Cannot revise abolished law: ${payload.lawId}`,
-        { lawId: payload.lawId, status: law.status }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Cannot revise abolished law: ${payload.lawId}`, {
+        lawId: payload.lawId,
+        status: law.status,
+      });
     }
 
     // Must have at least one change
-    const hasChanges = payload.changes.name !== undefined ||
+    const hasChanges =
+      payload.changes.name !== undefined ||
       payload.changes.description !== undefined ||
       payload.changes.rule !== undefined ||
       payload.changes.effectiveAt !== undefined;
 
     if (!hasChanges) {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        "No changes specified for law revision"
-      );
+      throw new DomainError("VALIDATION_ERROR", "No changes specified for law revision");
     }
   },
 
@@ -218,9 +177,7 @@ export const reviseLawHandler: CommandHandler<"reviseLaw"> = {
       name: payload.changes.name ?? existingLaw.name,
       description: payload.changes.description ?? existingLaw.description,
       rule: updatedRule,
-      effectiveAt: payload.changes.effectiveAt !== undefined
-        ? payload.changes.effectiveAt
-        : existingLaw.effectiveAt,
+      effectiveAt: payload.changes.effectiveAt !== undefined ? payload.changes.effectiveAt : existingLaw.effectiveAt,
       updatedAt: now,
     };
 
@@ -263,45 +220,28 @@ export const abolishLawHandler: CommandHandler<"abolishLaw"> = {
 
     // Network must be founded
     if (!isNetworkFounded(state)) {
-      throw new DomainError(
-        "NETWORK_NOT_FOUNDED",
-        "Cannot abolish law: network not founded"
-      );
+      throw new DomainError("NETWORK_NOT_FOUNDED", "Cannot abolish law: network not founded");
     }
 
     // Only owner or admin can abolish laws
     if (!principal.roles.includes("owner") && !principal.roles.includes("admin")) {
-      throw new DomainError(
-        "FORBIDDEN",
-        "Only owner or admin can abolish laws"
-      );
+      throw new DomainError("FORBIDDEN", "Only owner or admin can abolish laws");
     }
 
     // Law must exist
     const law = getLaw(state, payload.lawId as LawId);
     if (!law) {
-      throw new DomainError(
-        "NOT_FOUND",
-        `Law not found: ${payload.lawId}`,
-        { lawId: payload.lawId }
-      );
+      throw new DomainError("NOT_FOUND", `Law not found: ${payload.lawId}`, { lawId: payload.lawId });
     }
 
     // Law must be active
     if (law.status !== "active") {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Law already abolished: ${payload.lawId}`,
-        { lawId: payload.lawId, status: law.status }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Law already abolished: ${payload.lawId}`, { lawId: payload.lawId, status: law.status });
     }
 
     // Reason is required
     if (!payload.reason || payload.reason.trim() === "") {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        "Reason is required for abolishing a law"
-      );
+      throw new DomainError("VALIDATION_ERROR", "Reason is required for abolishing a law");
     }
   },
 

@@ -22,10 +22,7 @@ export function isAdmin(principal: Principal): boolean {
 /**
  * Check if principal can perform owner-only operations
  */
-export function canPerformOwnerOperation(
-  state: NetworkState,
-  principal: Principal
-): boolean {
+export function canPerformOwnerOperation(state: NetworkState, principal: Principal): boolean {
   return isOwner(state, principal) || isAdmin(principal);
 }
 
@@ -33,11 +30,7 @@ export function canPerformOwnerOperation(
  * Check if principal can amend a specific resource
  * For now, only owners can amend
  */
-export function canAmend(
-  state: NetworkState,
-  principal: Principal,
-  _targetId?: string
-): boolean {
+export function canAmend(state: NetworkState, principal: Principal, _targetId?: string): boolean {
   return canPerformOwnerOperation(state, principal);
 }
 
@@ -45,38 +38,25 @@ export function canAmend(
  * Check if principal can admit new residents
  * Only owners can admit
  */
-export function canAdmit(
-  state: NetworkState,
-  principal: Principal
-): boolean {
+export function canAdmit(state: NetworkState, principal: Principal): boolean {
   return canPerformOwnerOperation(state, principal);
 }
 
 /**
  * Check if principal can transact on behalf of a resident
  */
-export function canTransact(
-  state: NetworkState,
-  principal: Principal,
-  fromResidentId: ResidentId
-): boolean {
+export function canTransact(state: NetworkState, principal: Principal, fromResidentId: ResidentId): boolean {
   const resident = state.residents.get(fromResidentId);
   if (!resident) return false;
 
   // Can transact if you own the resident account or are admin/owner
-  return (
-    resident.accountId === principal.accountId ||
-    canPerformOwnerOperation(state, principal)
-  );
+  return resident.accountId === principal.accountId || canPerformOwnerOperation(state, principal);
 }
 
 /**
  * Check if principal can migrate the network schema
  * Only owners/admins can migrate
  */
-export function canMigrate(
-  state: NetworkState,
-  principal: Principal
-): boolean {
+export function canMigrate(state: NetworkState, principal: Principal): boolean {
   return canPerformOwnerOperation(state, principal);
 }

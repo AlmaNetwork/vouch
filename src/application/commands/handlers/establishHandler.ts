@@ -4,14 +4,10 @@
  * Creates a new region with the requesting principal as owner.
  */
 
-import type { CommandHandler, EstablishPayload, CommandContext, CommandResult } from "../registry.js";
+import { createAccountId, createRegionId, type RegionId } from "../../../domain/models/almaId.js";
 import { DomainError } from "../../../domain/models/errors.js";
-import {
-  createRegionId,
-  createAccountId,
-  type RegionId,
-} from "../../../domain/models/almaId.js";
 import type { Account, NetworkState } from "../../../domain/models/types.js";
+import type { CommandContext, CommandHandler, CommandResult, EstablishPayload } from "../registry.js";
 
 export const establishHandler: CommandHandler<"establish"> = {
   name: "establish",
@@ -21,29 +17,17 @@ export const establishHandler: CommandHandler<"establish"> = {
     try {
       createRegionId(payload.regionId);
     } catch {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Invalid region ID format: ${payload.regionId}`,
-        { field: "regionId" }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Invalid region ID format: ${payload.regionId}`, { field: "regionId" });
     }
 
     // Check if region already exists
-    if (ctx.state.regionId !== "" as RegionId) {
-      throw new DomainError(
-        "NETWORK_ALREADY_FOUNDED",
-        "Region has already been established",
-        { existingRegionId: ctx.state.regionId }
-      );
+    if (ctx.state.regionId !== ("" as RegionId)) {
+      throw new DomainError("NETWORK_ALREADY_FOUNDED", "Region has already been established", { existingRegionId: ctx.state.regionId });
     }
 
     // Validate name
     if (!payload.name || payload.name.trim() === "") {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        "Region name is required",
-        { field: "name" }
-      );
+      throw new DomainError("VALIDATION_ERROR", "Region name is required", { field: "name" });
     }
   },
 

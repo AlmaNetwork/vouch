@@ -3,14 +3,7 @@
  * No validation, no I/O - used during replay
  */
 
-import type {
-  NetworkState,
-  Account,
-  Resident,
-  LedgerEntry,
-  AccountId,
-  RegionId,
-} from "./models/types.js";
+import type { Account, AccountId, LedgerEntry, NetworkState, RegionId, Resident } from "./models/types.js";
 
 /** Event types that can be applied to state */
 export type DomainEvent =
@@ -79,17 +72,11 @@ export function applyEvent(state: NetworkState, event: DomainEvent): NetworkStat
 /**
  * Apply multiple events to state
  */
-export function applyEvents(
-  state: NetworkState,
-  events: DomainEvent[]
-): NetworkState {
+export function applyEvents(state: NetworkState, events: DomainEvent[]): NetworkState {
   return events.reduce((s, e) => applyEvent(s, e), state);
 }
 
-function applyNetworkFounded(
-  state: NetworkState,
-  event: NetworkFoundedEvent
-): NetworkState {
+function applyNetworkFounded(state: NetworkState, event: NetworkFoundedEvent): NetworkState {
   const ownerId = event.ownerId as AccountId;
   const regionId = event.regionId as RegionId;
 
@@ -117,11 +104,8 @@ function applyNetworkFounded(
   };
 }
 
-function applyNetworkAmended(
-  state: NetworkState,
-  event: NetworkAmendedEvent
-): NetworkState {
-  const newOwnerId = event.changes.ownerId ? event.changes.ownerId as AccountId : undefined;
+function applyNetworkAmended(state: NetworkState, event: NetworkAmendedEvent): NetworkState {
+  const newOwnerId = event.changes.ownerId ? (event.changes.ownerId as AccountId) : undefined;
   return {
     ...state,
     ...(newOwnerId && { ownerId: newOwnerId }),
@@ -129,10 +113,7 @@ function applyNetworkAmended(
   };
 }
 
-function applyResidentAdmitted(
-  state: NetworkState,
-  event: ResidentAdmittedEvent
-): NetworkState {
+function applyResidentAdmitted(state: NetworkState, event: ResidentAdmittedEvent): NetworkState {
   const accounts = new Map(state.accounts);
   const residents = new Map(state.residents);
 
@@ -147,10 +128,7 @@ function applyResidentAdmitted(
   };
 }
 
-function applyTransactionExecuted(
-  state: NetworkState,
-  event: TransactionExecutedEvent
-): NetworkState {
+function applyTransactionExecuted(state: NetworkState, event: TransactionExecutedEvent): NetworkState {
   return {
     ...state,
     ledger: [...state.ledger, event.entry],
@@ -158,10 +136,7 @@ function applyTransactionExecuted(
   };
 }
 
-function applySchemaMigrated(
-  state: NetworkState,
-  event: SchemaMigratedEvent
-): NetworkState {
+function applySchemaMigrated(state: NetworkState, event: SchemaMigratedEvent): NetworkState {
   return {
     ...state,
     updatedAt: event.timestamp,

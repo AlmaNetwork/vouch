@@ -5,8 +5,8 @@
 
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
+import type { AccountId, Principal } from "../../domain/models/types.js";
 import type { Env } from "../env.js";
-import type { Principal, AccountId } from "../../domain/models/types.js";
 
 /**
  * Session middleware - extracts principal from token
@@ -41,9 +41,7 @@ export const session = createMiddleware<Env>(async (c, next) => {
 
   // For network founding, account may not exist yet
   // Use accountId from token as principal
-  const principal: Principal = account
-    ? { accountId: account.id, roles: account.roles }
-    : { accountId, roles: [] };
+  const principal: Principal = account ? { accountId: account.id, roles: account.roles } : { accountId, roles: [] };
 
   if (account?.disabled) {
     throw new HTTPException(401, { message: "Account is disabled" });

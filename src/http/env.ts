@@ -2,8 +2,8 @@
  * Hono environment type definitions
  */
 
-import type { Principal, NetworkState, Account } from "../domain/models/types.js";
 import type { CommandBus } from "../application/commandBus.js";
+import type { Account, NetworkState, Principal } from "../domain/models/types.js";
 
 export interface Variables {
   requestId: string;
@@ -13,9 +13,7 @@ export interface Variables {
   commandBus: CommandBus;
 }
 
-export interface Bindings {
-  // Future: environment bindings
-}
+export type Bindings = {};
 
 export interface Env {
   Variables: Variables;

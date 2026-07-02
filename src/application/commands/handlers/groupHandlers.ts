@@ -8,31 +8,19 @@
  * - assignMember: Add, remove, or update a member in a group
  */
 
+import { parseGroupId } from "../../../domain/models/almaId.js";
+import { DomainError } from "../../../domain/models/errors.js";
+import type { AccountId, Group, GroupId, GroupMember, GroupMemberRole, GroupType } from "../../../domain/models/types.js";
+import { getGroup, hasAccount, hasGroup, isNetworkFounded } from "../../../domain/models/types.js";
 import type {
-  CommandHandler,
-  MakeGroupPayload,
-  ReviseGroupPayload,
-  DissolveGroupPayload,
   AssignMemberPayload,
   CommandContext,
+  CommandHandler,
   CommandResult,
+  DissolveGroupPayload,
+  MakeGroupPayload,
+  ReviseGroupPayload,
 } from "../registry.js";
-import type {
-  Group,
-  GroupId,
-  GroupType,
-  GroupMember,
-  GroupMemberRole,
-  AccountId,
-} from "../../../domain/models/types.js";
-import { DomainError } from "../../../domain/models/errors.js";
-import {
-  hasGroup,
-  getGroup,
-  hasAccount,
-  isNetworkFounded,
-} from "../../../domain/models/types.js";
-import { parseGroupId } from "../../../domain/models/almaId.js";
 
 // ============================================================
 // makeGroup Handler
@@ -46,46 +34,31 @@ export const makeGroupHandler: CommandHandler<"makeGroup"> = {
 
     // Network must be founded
     if (!isNetworkFounded(state)) {
-      throw new DomainError(
-        "NETWORK_NOT_FOUNDED",
-        "Cannot create group: network not founded"
-      );
+      throw new DomainError("NETWORK_NOT_FOUNDED", "Cannot create group: network not founded");
     }
 
     // Only owner or admin can create groups
     if (!principal.roles.includes("owner") && !principal.roles.includes("admin")) {
-      throw new DomainError(
-        "FORBIDDEN",
-        "Only owner or admin can create groups"
-      );
+      throw new DomainError("FORBIDDEN", "Only owner or admin can create groups");
     }
 
     // Validate group ID format
     const parsed = parseGroupId(payload.groupId);
     if (!parsed) {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Invalid group ID format: ${payload.groupId}`,
-        { groupId: payload.groupId }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Invalid group ID format: ${payload.groupId}`, { groupId: payload.groupId });
     }
 
     // Group ID must belong to this region
     if (parsed.region.raw !== state.regionId) {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        "Group ID must belong to this region",
-        { groupId: payload.groupId, regionId: state.regionId }
-      );
+      throw new DomainError("VALIDATION_ERROR", "Group ID must belong to this region", {
+        groupId: payload.groupId,
+        regionId: state.regionId,
+      });
     }
 
     // Group must not already exist
     if (hasGroup(state, payload.groupId as GroupId)) {
-      throw new DomainError(
-        "ALREADY_EXISTS",
-        `Group already exists: ${payload.groupId}`,
-        { groupId: payload.groupId }
-      );
+      throw new DomainError("ALREADY_EXISTS", `Group already exists: ${payload.groupId}`, { groupId: payload.groupId });
     }
   },
 
@@ -157,54 +130,35 @@ export const reviseGroupHandler: CommandHandler<"reviseGroup"> = {
 
     // Network must be founded
     if (!isNetworkFounded(state)) {
-      throw new DomainError(
-        "NETWORK_NOT_FOUNDED",
-        "Cannot revise group: network not founded"
-      );
+      throw new DomainError("NETWORK_NOT_FOUNDED", "Cannot revise group: network not founded");
     }
 
     // Group must exist
     const group = getGroup(state, payload.groupId as GroupId);
     if (!group) {
-      throw new DomainError(
-        "NOT_FOUND",
-        `Group not found: ${payload.groupId}`,
-        { groupId: payload.groupId }
-      );
+      throw new DomainError("NOT_FOUND", `Group not found: ${payload.groupId}`, { groupId: payload.groupId });
     }
 
     // Group must be active
     if (group.status !== "active") {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Cannot revise dissolved group: ${payload.groupId}`,
-        { groupId: payload.groupId, status: group.status }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Cannot revise dissolved group: ${payload.groupId}`, {
+        groupId: payload.groupId,
+        status: group.status,
+      });
     }
 
     // Only owner, admin, or group leader can revise
-    const isLeader = group.members.some(
-      m => m.accountId === principal.accountId && m.role === "leader"
-    );
-    if (!principal.roles.includes("owner") &&
-        !principal.roles.includes("admin") &&
-        !isLeader) {
-      throw new DomainError(
-        "FORBIDDEN",
-        "Only owner, admin, or group leader can revise groups"
-      );
+    const isLeader = group.members.some((m) => m.accountId === principal.accountId && m.role === "leader");
+    if (!principal.roles.includes("owner") && !principal.roles.includes("admin") && !isLeader) {
+      throw new DomainError("FORBIDDEN", "Only owner, admin, or group leader can revise groups");
     }
 
     // Must have at least one change
-    const hasChanges = payload.changes.name !== undefined ||
-      payload.changes.description !== undefined ||
-      payload.changes.permissions !== undefined;
+    const hasChanges =
+      payload.changes.name !== undefined || payload.changes.description !== undefined || payload.changes.permissions !== undefined;
 
     if (!hasChanges) {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        "No changes specified for group revision"
-      );
+      throw new DomainError("VALIDATION_ERROR", "No changes specified for group revision");
     }
   },
 
@@ -260,45 +214,31 @@ export const dissolveGroupHandler: CommandHandler<"dissolveGroup"> = {
 
     // Network must be founded
     if (!isNetworkFounded(state)) {
-      throw new DomainError(
-        "NETWORK_NOT_FOUNDED",
-        "Cannot dissolve group: network not founded"
-      );
+      throw new DomainError("NETWORK_NOT_FOUNDED", "Cannot dissolve group: network not founded");
     }
 
     // Group must exist
     const group = getGroup(state, payload.groupId as GroupId);
     if (!group) {
-      throw new DomainError(
-        "NOT_FOUND",
-        `Group not found: ${payload.groupId}`,
-        { groupId: payload.groupId }
-      );
+      throw new DomainError("NOT_FOUND", `Group not found: ${payload.groupId}`, { groupId: payload.groupId });
     }
 
     // Group must be active
     if (group.status !== "active") {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Group already dissolved: ${payload.groupId}`,
-        { groupId: payload.groupId, status: group.status }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Group already dissolved: ${payload.groupId}`, {
+        groupId: payload.groupId,
+        status: group.status,
+      });
     }
 
     // Only owner or admin can dissolve groups
     if (!principal.roles.includes("owner") && !principal.roles.includes("admin")) {
-      throw new DomainError(
-        "FORBIDDEN",
-        "Only owner or admin can dissolve groups"
-      );
+      throw new DomainError("FORBIDDEN", "Only owner or admin can dissolve groups");
     }
 
     // Reason is required
     if (!payload.reason || payload.reason.trim() === "") {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        "Reason is required for dissolving a group"
-      );
+      throw new DomainError("VALIDATION_ERROR", "Reason is required for dissolving a group");
     }
   },
 
@@ -352,100 +292,72 @@ export const assignMemberHandler: CommandHandler<"assignMember"> = {
 
     // Network must be founded
     if (!isNetworkFounded(state)) {
-      throw new DomainError(
-        "NETWORK_NOT_FOUNDED",
-        "Cannot assign member: network not founded"
-      );
+      throw new DomainError("NETWORK_NOT_FOUNDED", "Cannot assign member: network not founded");
     }
 
     // Group must exist
     const group = getGroup(state, payload.groupId as GroupId);
     if (!group) {
-      throw new DomainError(
-        "NOT_FOUND",
-        `Group not found: ${payload.groupId}`,
-        { groupId: payload.groupId }
-      );
+      throw new DomainError("NOT_FOUND", `Group not found: ${payload.groupId}`, { groupId: payload.groupId });
     }
 
     // Group must be active
     if (group.status !== "active") {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Cannot modify dissolved group: ${payload.groupId}`,
-        { groupId: payload.groupId, status: group.status }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Cannot modify dissolved group: ${payload.groupId}`, {
+        groupId: payload.groupId,
+        status: group.status,
+      });
     }
 
     // Only owner, admin, or group leader can assign members
-    const isLeader = group.members.some(
-      m => m.accountId === principal.accountId && m.role === "leader"
-    );
-    if (!principal.roles.includes("owner") &&
-        !principal.roles.includes("admin") &&
-        !isLeader) {
-      throw new DomainError(
-        "FORBIDDEN",
-        "Only owner, admin, or group leader can assign members"
-      );
+    const isLeader = group.members.some((m) => m.accountId === principal.accountId && m.role === "leader");
+    if (!principal.roles.includes("owner") && !principal.roles.includes("admin") && !isLeader) {
+      throw new DomainError("FORBIDDEN", "Only owner, admin, or group leader can assign members");
     }
 
     // Account must exist
     if (!hasAccount(state, payload.accountId as AccountId)) {
-      throw new DomainError(
-        "NOT_FOUND",
-        `Account not found: ${payload.accountId}`,
-        { accountId: payload.accountId }
-      );
+      throw new DomainError("NOT_FOUND", `Account not found: ${payload.accountId}`, { accountId: payload.accountId });
     }
 
-    const existingMember = group.members.find(m => m.accountId === payload.accountId);
+    const existingMember = group.members.find((m) => m.accountId === payload.accountId);
 
     switch (payload.action) {
       case "add":
         if (existingMember) {
-          throw new DomainError(
-            "ALREADY_EXISTS",
-            `Account is already a member of this group`,
-            { accountId: payload.accountId, groupId: payload.groupId }
-          );
+          throw new DomainError("ALREADY_EXISTS", `Account is already a member of this group`, {
+            accountId: payload.accountId,
+            groupId: payload.groupId,
+          });
         }
         break;
       case "remove":
         if (!existingMember) {
-          throw new DomainError(
-            "NOT_FOUND",
-            `Account is not a member of this group`,
-            { accountId: payload.accountId, groupId: payload.groupId }
-          );
+          throw new DomainError("NOT_FOUND", `Account is not a member of this group`, {
+            accountId: payload.accountId,
+            groupId: payload.groupId,
+          });
         }
         // Cannot remove the last leader
         if (existingMember.role === "leader") {
-          const leaderCount = group.members.filter(m => m.role === "leader").length;
+          const leaderCount = group.members.filter((m) => m.role === "leader").length;
           if (leaderCount <= 1) {
-            throw new DomainError(
-              "VALIDATION_ERROR",
-              "Cannot remove the last leader from the group"
-            );
+            throw new DomainError("VALIDATION_ERROR", "Cannot remove the last leader from the group");
           }
         }
         break;
       case "update":
         if (!existingMember) {
-          throw new DomainError(
-            "NOT_FOUND",
-            `Account is not a member of this group`,
-            { accountId: payload.accountId, groupId: payload.groupId }
-          );
+          throw new DomainError("NOT_FOUND", `Account is not a member of this group`, {
+            accountId: payload.accountId,
+            groupId: payload.groupId,
+          });
         }
         // Cannot demote the last leader
         if (existingMember.role === "leader" && payload.role === "member") {
-          const leaderCount = group.members.filter(m => m.role === "leader").length;
+          const leaderCount = group.members.filter((m) => m.role === "leader").length;
           if (leaderCount <= 1) {
-            throw new DomainError(
-              "VALIDATION_ERROR",
-              "Cannot demote the last leader"
-            );
+            throw new DomainError("VALIDATION_ERROR", "Cannot demote the last leader");
           }
         }
         break;
@@ -472,15 +384,11 @@ export const assignMemberHandler: CommandHandler<"assignMember"> = {
         ];
         break;
       case "remove":
-        updatedMembers = existingGroup.members.filter(
-          m => m.accountId !== accountId
-        );
+        updatedMembers = existingGroup.members.filter((m) => m.accountId !== accountId);
         break;
       case "update":
-        updatedMembers = existingGroup.members.map(m =>
-          m.accountId === accountId
-            ? { ...m, role: payload.role as GroupMemberRole }
-            : m
+        updatedMembers = existingGroup.members.map((m) =>
+          m.accountId === accountId ? { ...m, role: payload.role as GroupMemberRole } : m,
         );
         break;
     }

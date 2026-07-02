@@ -1,20 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import { encodeBase64, issueCertificate, keyPairFromSeed } from "vouch-core";
-import { replayState } from "../../src/foundation";
 import {
-  INITIAL_WORLD_STATE,
   admitAgent,
   admitTreasury,
   assessCertificate,
   createAlmaWorld,
   executeTransfer,
   experimenterProposal,
+  INITIAL_WORLD_STATE,
   proposeFounding,
   recognizeRegion,
   rootReducer,
   seedGenesis,
 } from "../../src/environment";
-import { type ForeignCertStance, defineRegion, getRegion, makeInstitutions } from "../../src/region";
+import { replayState } from "../../src/foundation";
+import { defineRegion, type ForeignCertStance, getRegion, makeInstitutions } from "../../src/region";
 
 const ISSUED_AT = "2026-06-22T00:00:00.000Z";
 const GUILD = keyPairFromSeed(new Uint8Array(32).fill(11));
@@ -25,7 +25,11 @@ const NOTARY = keyPairFromSeed(new Uint8Array(32).fill(9));
 function world(yamaStance: ForeignCertStance, yamaAcceptsSchema = false) {
   const w = createAlmaWorld("dip");
   seedGenesis(w, [
-    defineRegion("umi", "Umi", makeInstitutions({ verificationPolicy: { acceptedSchemaIds: ["alma.skill/v1"], rejectUnknownSchemas: false } })),
+    defineRegion(
+      "umi",
+      "Umi",
+      makeInstitutions({ verificationPolicy: { acceptedSchemaIds: ["alma.skill/v1"], rejectUnknownSchemas: false } }),
+    ),
     defineRegion(
       "yama",
       "Yama",
@@ -69,10 +73,22 @@ describe("M4 — diplomacy: translating a foreign certificate (§4-A)", () => {
 
   test("a domestic cert is judged by the village's own verification policy", () => {
     const w = createAlmaWorld("dom");
-    seedGenesis(w, [defineRegion("umi", "Umi", makeInstitutions({ verificationPolicy: { acceptedSchemaIds: ["alma.skill/v1"], rejectUnknownSchemas: true } }))]);
+    seedGenesis(w, [
+      defineRegion(
+        "umi",
+        "Umi",
+        makeInstitutions({ verificationPolicy: { acceptedSchemaIds: ["alma.skill/v1"], rejectUnknownSchemas: true } }),
+      ),
+    ]);
     admitAgent(w, { id: "guild@umi", region: "umi", role: "broker", valueProfile: "lenient", publicKey: encodeBase64(GUILD.publicKey) });
-    const ok = issueCertificate({ issuer: "guild@umi", subject: "bob@umi", schemaId: "alma.skill/v1", claims: { skill: "x", level: 1 }, issuedAt: ISSUED_AT }, GUILD.privateKey);
-    const no = issueCertificate({ issuer: "guild@umi", subject: "bob@umi", schemaId: "alma.unknown/v1", claims: {}, issuedAt: ISSUED_AT }, GUILD.privateKey);
+    const ok = issueCertificate(
+      { issuer: "guild@umi", subject: "bob@umi", schemaId: "alma.skill/v1", claims: { skill: "x", level: 1 }, issuedAt: ISSUED_AT },
+      GUILD.privateKey,
+    );
+    const no = issueCertificate(
+      { issuer: "guild@umi", subject: "bob@umi", schemaId: "alma.unknown/v1", claims: {}, issuedAt: ISSUED_AT },
+      GUILD.privateKey,
+    );
     expect(assessCertificate(w.getState(), "umi", ok)).toMatchObject({ honored: true, stance: "domestic" });
     expect(assessCertificate(w.getState(), "umi", no)).toMatchObject({ honored: false, stance: "domestic" });
   });
@@ -86,7 +102,10 @@ describe("M4 — diplomacy: translating a foreign certificate (§4-A)", () => {
   test("an unknown issuer is rejected", () => {
     const { w } = world("absorb");
     const stranger = keyPairFromSeed(new Uint8Array(32).fill(77));
-    const cert = issueCertificate({ issuer: "ghost@umi", subject: "alice@yama", schemaId: "alma.skill/v1", claims: { skill: "x", level: 1 }, issuedAt: ISSUED_AT }, stranger.privateKey);
+    const cert = issueCertificate(
+      { issuer: "ghost@umi", subject: "alice@yama", schemaId: "alma.skill/v1", claims: { skill: "x", level: 1 }, issuedAt: ISSUED_AT },
+      stranger.privateKey,
+    );
     expect(assessCertificate(w.getState(), "yama", cert)).toMatchObject({ honored: false, stance: "unknown-issuer" });
   });
 

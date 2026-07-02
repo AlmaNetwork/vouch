@@ -5,16 +5,16 @@
 // selectors. The WRITE path (founding/amend) and world-state composition live in
 // environment/ (layer 4). Region imports only foundation (slice/event types).
 
-export * from "./types";
 export {
+  canGovern,
+  getRegion,
+  isOwner,
+  listRegions,
+  ownedRegionsOf,
+  ownerOf,
   type RegionSlice,
   regionReducer,
-  listRegions,
-  getRegion,
   regionsByStatus,
-  ownerOf,
-  ownedRegionsOf,
-  canGovern,
-  isOwner,
   regionsForSale,
 } from "./state";
+export * from "./types";

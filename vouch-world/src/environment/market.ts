@@ -14,10 +14,10 @@ import {
   EVENT_REGION_LIFECYCLE_CHANGED,
   EVENT_REGION_LISTED,
   EVENT_REGION_OWNERSHIP_TRANSFERRED,
-  type RegionLifecycle,
-  type RegionState,
   getRegion,
   isOwner,
+  type RegionLifecycle,
+  type RegionState,
 } from "../region";
 import type { WorldState } from "./state";
 

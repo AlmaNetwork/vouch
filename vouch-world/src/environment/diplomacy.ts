@@ -9,7 +9,7 @@
 import { type Certificate, decodeBase64, parseIdentifier, verifyCertificate } from "vouch-core";
 import { getAgent } from "../agent";
 import type { CommitSink } from "../foundation";
-import { EVENT_REGION_RECOGNIZED, type ForeignCertStance, type RegionState, getRegion } from "../region";
+import { EVENT_REGION_RECOGNIZED, type ForeignCertStance, getRegion, type RegionState } from "../region";
 import type { WorldState } from "./state";
 
 /** A village's stance toward another village's certificates: an override, else the default. */
@@ -40,7 +40,8 @@ function acceptsSchema(viewer: RegionState, schemaId: string): boolean {
  */
 export function assessCertificate(state: WorldState, viewerRegionId: string, cert: Certificate): CertAssessment {
   const viewer = getRegion(state, viewerRegionId);
-  if (!viewer) return { honored: false, stance: "unknown-issuer", reason: `viewer region "${viewerRegionId}" does not exist`, mapped: false };
+  if (!viewer)
+    return { honored: false, stance: "unknown-issuer", reason: `viewer region "${viewerRegionId}" does not exist`, mapped: false };
 
   // FORM: the issuer must be a known agent; verify the signature with its public key.
   const issuer = getAgent(state, cert.issuer);
@@ -54,7 +55,12 @@ export function assessCertificate(state: WorldState, viewerRegionId: string, cer
   // MEANING:
   if (issuerRegion === viewerRegionId) {
     const honored = acceptsSchema(viewer, cert.schemaId);
-    return { honored, stance: "domestic", reason: honored ? "domestic cert under local policy" : "schema not accepted locally", mapped: false };
+    return {
+      honored,
+      stance: "domestic",
+      reason: honored ? "domestic cert under local policy" : "schema not accepted locally",
+      mapped: false,
+    };
   }
 
   const stance = stanceToward(viewer, issuerRegion);
@@ -65,7 +71,12 @@ export function assessCertificate(state: WorldState, viewerRegionId: string, cer
       return { honored: true, stance, reason: "translated into the local vocabulary", mapped: true };
     case "reexamine": {
       const honored = acceptsSchema(viewer, cert.schemaId);
-      return { honored, stance, reason: honored ? "re-examined and accepted under local policy" : "re-examined and rejected (schema not accepted)", mapped: false };
+      return {
+        honored,
+        stance,
+        reason: honored ? "re-examined and accepted under local policy" : "re-examined and rejected (schema not accepted)",
+        mapped: false,
+      };
     }
     case "reject":
       return { honored: false, stance, reason: `${viewerRegionId} rejects ${issuerRegion}'s certificates`, mapped: false };

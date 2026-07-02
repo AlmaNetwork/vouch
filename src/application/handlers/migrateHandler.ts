@@ -3,21 +3,14 @@
  * Handles schema version migrations
  */
 
-import type { MigrateCommand } from "../commandPacket.js";
-import { CURRENT_SCHEMA_VERSION } from "../commandPacket.js";
+import { DomainError, forbidden, networkNotFounded } from "../../domain/models/errors.js";
 import type { NetworkState } from "../../domain/models/types.js";
-import {
-  networkNotFounded,
-  forbidden,
-  DomainError,
-} from "../../domain/models/errors.js";
 import { ownerPolicy } from "../../domain/policies/index.js";
 import type { SchemaMigratedEvent } from "../../domain/projector.js";
+import type { MigrateCommand } from "../commandPacket.js";
+import { CURRENT_SCHEMA_VERSION } from "../commandPacket.js";
 
-export function handleMigrate(
-  state: NetworkState,
-  command: MigrateCommand
-): SchemaMigratedEvent[] {
+export function handleMigrate(state: NetworkState, command: MigrateCommand): SchemaMigratedEvent[] {
   // Validate: network must exist
   if (state.regionId === "") {
     throw networkNotFounded();
@@ -34,7 +27,7 @@ export function handleMigrate(
   if (targetVersion < 1 || targetVersion > CURRENT_SCHEMA_VERSION) {
     throw new DomainError(
       "SCHEMA_VERSION_MISMATCH",
-      `Invalid target version: ${targetVersion}. Current version is ${CURRENT_SCHEMA_VERSION}`
+      `Invalid target version: ${targetVersion}. Current version is ${CURRENT_SCHEMA_VERSION}`,
     );
   }
 

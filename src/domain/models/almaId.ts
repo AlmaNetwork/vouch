@@ -77,10 +77,10 @@ export function createRegionId(raw: string): RegionId {
   return raw as RegionId;
 }
 
-export const regionIdSchema = z.string().refine(
-  (val) => parseRegionId(val) !== null,
-  { message: "Invalid region ID format" }
-).transform((val) => val as RegionId);
+export const regionIdSchema = z
+  .string()
+  .refine((val) => parseRegionId(val) !== null, { message: "Invalid region ID format" })
+  .transform((val) => val as RegionId);
 
 // ============================================================
 // Account ID
@@ -128,10 +128,10 @@ export function accountIdFromRaw(raw: string): AccountId {
   return raw as AccountId;
 }
 
-export const accountIdSchema = z.string().refine(
-  (val) => parseAccountId(val) !== null,
-  { message: "Invalid account ID format. Expected: name@region" }
-).transform((val) => val as AccountId);
+export const accountIdSchema = z
+  .string()
+  .refine((val) => parseAccountId(val) !== null, { message: "Invalid account ID format. Expected: name@region" })
+  .transform((val) => val as AccountId);
 
 // ============================================================
 // Asset Type ID
@@ -171,10 +171,10 @@ export function createAssetTypeId(region: RegionId | string, typeName: string): 
   return raw as AssetTypeId;
 }
 
-export const assetTypeIdSchema = z.string().refine(
-  (val) => parseAssetTypeId(val) !== null,
-  { message: "Invalid asset type ID format. Expected: region/type-name" }
-).transform((val) => val as AssetTypeId);
+export const assetTypeIdSchema = z
+  .string()
+  .refine((val) => parseAssetTypeId(val) !== null, { message: "Invalid asset type ID format. Expected: region/type-name" })
+  .transform((val) => val as AssetTypeId);
 
 // ============================================================
 // Asset ID
@@ -240,11 +240,7 @@ export function parseAssetId(raw: string): ParsedAssetId | null {
   };
 }
 
-export function createAssetId(
-  account: AccountId | string,
-  assetTypeName: string,
-  instanceName: string
-): AssetId {
+export function createAssetId(account: AccountId | string, assetTypeName: string, instanceName: string): AssetId {
   const raw = `${account}/${assetTypeName}#${instanceName}`;
   const parsed = parseAssetId(raw);
   if (!parsed) {
@@ -253,10 +249,10 @@ export function createAssetId(
   return raw as AssetId;
 }
 
-export const assetIdSchema = z.string().refine(
-  (val) => parseAssetId(val) !== null,
-  { message: "Invalid asset ID format. Expected: account@region/type#instance" }
-).transform((val) => val as AssetId);
+export const assetIdSchema = z
+  .string()
+  .refine((val) => parseAssetId(val) !== null, { message: "Invalid asset ID format. Expected: account@region/type#instance" })
+  .transform((val) => val as AssetId);
 
 // ============================================================
 // Resident ID (UUID format, kept for backward compatibility)
@@ -279,7 +275,10 @@ export function createResidentId(raw?: string): ResidentId {
   return id as ResidentId;
 }
 
-export const residentIdSchema = z.string().uuid().transform((val) => val as ResidentId);
+export const residentIdSchema = z
+  .string()
+  .uuid()
+  .transform((val) => val as ResidentId);
 
 // ============================================================
 // Law ID (format: region/law-name)
@@ -319,10 +318,10 @@ export function createLawId(region: RegionId | string, lawName: string): LawId {
   return raw as LawId;
 }
 
-export const lawIdSchema = z.string().refine(
-  (val) => parseLawId(val) !== null,
-  { message: "Invalid law ID format. Expected: region/law-name" }
-).transform((val) => val as LawId);
+export const lawIdSchema = z
+  .string()
+  .refine((val) => parseLawId(val) !== null, { message: "Invalid law ID format. Expected: region/law-name" })
+  .transform((val) => val as LawId);
 
 export function isLawId(value: string): value is LawId {
   return parseLawId(value) !== null;
@@ -345,7 +344,10 @@ export function createInviteId(raw?: string): InviteId {
   return id as InviteId;
 }
 
-export const inviteIdSchema = z.string().uuid().transform((val) => val as InviteId);
+export const inviteIdSchema = z
+  .string()
+  .uuid()
+  .transform((val) => val as InviteId);
 
 export function isInviteId(value: string): value is InviteId {
   return parseInviteId(value) !== null;
@@ -389,10 +391,10 @@ export function createGroupId(region: RegionId | string, groupName: string): Gro
   return raw as GroupId;
 }
 
-export const groupIdSchema = z.string().refine(
-  (val) => parseGroupId(val) !== null,
-  { message: "Invalid group ID format. Expected: region/group-name" }
-).transform((val) => val as GroupId);
+export const groupIdSchema = z
+  .string()
+  .refine((val) => parseGroupId(val) !== null, { message: "Invalid group ID format. Expected: region/group-name" })
+  .transform((val) => val as GroupId);
 
 export function isGroupId(value: string): value is GroupId {
   return parseGroupId(value) !== null;

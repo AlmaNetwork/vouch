@@ -4,12 +4,8 @@
  */
 
 import Database from "better-sqlite3";
-import type {
-  JournalStore,
-  JournalRecord,
-  JournalAppendData,
-} from "./journalStore.js";
-import { toCanonical, chainHash } from "../serialization/jcs.js";
+import { chainHash, toCanonical } from "../serialization/jcs.js";
+import type { JournalAppendData, JournalRecord, JournalStore } from "./journalStore.js";
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS journal (

@@ -4,15 +4,10 @@
  * Adds a new resident to the region.
  */
 
-import type { CommandHandler, AdmitPayload, CommandContext, CommandResult } from "../registry.js";
+import { type AccountId, accountBelongsToRegion, accountIdFromRaw, createResidentId } from "../../../domain/models/almaId.js";
 import { DomainError } from "../../../domain/models/errors.js";
-import {
-  accountIdFromRaw,
-  createResidentId,
-  accountBelongsToRegion,
-  type AccountId,
-} from "../../../domain/models/almaId.js";
-import type { Account, Resident, NetworkState } from "../../../domain/models/types.js";
+import type { Account, NetworkState, Resident } from "../../../domain/models/types.js";
+import type { AdmitPayload, CommandContext, CommandHandler, CommandResult } from "../registry.js";
 
 export const admitHandler: CommandHandler<"admit"> = {
   name: "admit",
@@ -20,11 +15,7 @@ export const admitHandler: CommandHandler<"admit"> = {
   validate(payload: AdmitPayload, ctx: CommandContext): void {
     // Region must be established
     if (ctx.state.regionId === "") {
-      throw new DomainError(
-        "NETWORK_NOT_FOUNDED",
-        "Region has not been established",
-        {}
-      );
+      throw new DomainError("NETWORK_NOT_FOUNDED", "Region has not been established", {});
     }
 
     // Validate account ID format
@@ -32,68 +23,46 @@ export const admitHandler: CommandHandler<"admit"> = {
     try {
       accountId = accountIdFromRaw(payload.accountId);
     } catch {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Invalid account ID format: ${payload.accountId}`,
-        { field: "accountId" }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Invalid account ID format: ${payload.accountId}`, { field: "accountId" });
     }
 
     // Check account belongs to this region
     if (!accountBelongsToRegion(accountId, ctx.state.regionId)) {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Account does not belong to this region`,
-        { field: "accountId", accountId: payload.accountId, regionId: ctx.state.regionId }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Account does not belong to this region`, {
+        field: "accountId",
+        accountId: payload.accountId,
+        regionId: ctx.state.regionId,
+      });
     }
 
     // Check if account already exists
     if (ctx.state.accounts.has(accountId)) {
-      throw new DomainError(
-        "ACCOUNT_ALREADY_EXISTS",
-        `Account already exists: ${payload.accountId}`,
-        { accountId: payload.accountId }
-      );
+      throw new DomainError("ACCOUNT_ALREADY_EXISTS", `Account already exists: ${payload.accountId}`, { accountId: payload.accountId });
     }
 
     // Validate resident ID format
     try {
       createResidentId(payload.residentId);
     } catch {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Invalid resident ID format: ${payload.residentId}`,
-        { field: "residentId" }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Invalid resident ID format: ${payload.residentId}`, { field: "residentId" });
     }
 
     // Check if resident already exists
     const residentId = createResidentId(payload.residentId);
     if (ctx.state.residents.has(residentId)) {
-      throw new DomainError(
-        "RESIDENT_ALREADY_EXISTS",
-        `Resident already exists: ${payload.residentId}`,
-        { residentId: payload.residentId }
-      );
+      throw new DomainError("RESIDENT_ALREADY_EXISTS", `Resident already exists: ${payload.residentId}`, {
+        residentId: payload.residentId,
+      });
     }
 
     // Validate name
     if (!payload.name || payload.name.trim() === "") {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        "Resident name is required",
-        { field: "name" }
-      );
+      throw new DomainError("VALIDATION_ERROR", "Resident name is required", { field: "name" });
     }
 
     // Only owner can admit
     if (ctx.principal.accountId !== ctx.state.ownerId) {
-      throw new DomainError(
-        "FORBIDDEN",
-        "Only the owner can admit residents",
-        { principal: ctx.principal.accountId }
-      );
+      throw new DomainError("FORBIDDEN", "Only the owner can admit residents", { principal: ctx.principal.accountId });
     }
   },
 

@@ -7,13 +7,9 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
+import { type CommandContext, type CommandPacket, commandRegistry } from "../../../application/commands/registry.js";
 import type { Env } from "../../env.js";
 import { authenticate } from "../../middleware/index.js";
-import {
-  commandRegistry,
-  type CommandPacket,
-  type CommandContext,
-} from "../../../application/commands/registry.js";
 
 const simulateRoute = new Hono<Env>();
 
@@ -96,12 +92,14 @@ const commandSchemas = {
     changes: z.object({
       name: z.string().min(1).optional(),
       description: z.string().optional(),
-      rule: z.object({
-        target: z.union([z.string().min(1), z.array(z.string().min(1))]).optional(),
-        condition: z.record(z.unknown()).optional(),
-        action: z.record(z.unknown()).optional(),
-        message: z.string().optional(),
-      }).optional(),
+      rule: z
+        .object({
+          target: z.union([z.string().min(1), z.array(z.string().min(1))]).optional(),
+          condition: z.record(z.unknown()).optional(),
+          action: z.record(z.unknown()).optional(),
+          message: z.string().optional(),
+        })
+        .optional(),
       effectiveAt: z.string().optional(),
     }),
   }),
@@ -158,9 +156,11 @@ const commandSchemas = {
   }),
 };
 
-const commandSchema = z.object({
-  name: z.string().min(1),
-}).passthrough();
+const commandSchema = z
+  .object({
+    name: z.string().min(1),
+  })
+  .passthrough();
 
 const simulateSchema = z.object({
   commands: z.array(commandSchema).min(1),
@@ -239,96 +239,92 @@ function mapApiPayloadToInternal(commandName: string, apiPayload: Record<string,
   }
 }
 
-simulateRoute.post(
-  "/",
-  authenticate,
-  async (c) => {
-    const body = await c.req.json();
-    const parsed = simulateSchema.safeParse(body);
+simulateRoute.post("/", authenticate, async (c) => {
+  const body = await c.req.json();
+  const parsed = simulateSchema.safeParse(body);
 
-    if (!parsed.success) {
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid request body",
+          requestId: c.get("requestId"),
+          details: parsed.error.errors,
+        },
+      },
+      400,
+    );
+  }
+
+  const requestId = c.get("requestId");
+  const principal = c.get("principal");
+  const state = c.get("state");
+  const now = new Date().toISOString();
+
+  // Parse and validate all commands
+  const commands: CommandPacket[] = [];
+  for (let i = 0; i < parsed.data.commands.length; i++) {
+    const rawCommand = parsed.data.commands[i];
+    const command = validateCommandPayload(rawCommand);
+
+    if (!command) {
       return c.json(
         {
           error: {
             code: "VALIDATION_ERROR",
-            message: "Invalid request body",
-            requestId: c.get("requestId"),
-            details: parsed.error.errors,
-          },
-        },
-        400
-      );
-    }
-
-    const requestId = c.get("requestId");
-    const principal = c.get("principal");
-    const state = c.get("state");
-    const now = new Date().toISOString();
-
-    // Parse and validate all commands
-    const commands: CommandPacket[] = [];
-    for (let i = 0; i < parsed.data.commands.length; i++) {
-      const rawCommand = parsed.data.commands[i];
-      const command = validateCommandPayload(rawCommand);
-
-      if (!command) {
-        return c.json(
-          {
-            error: {
-              code: "VALIDATION_ERROR",
-              message: `Invalid command at index ${i}`,
-              requestId,
-              details: [{ index: i, name: rawCommand.name }],
-            },
-          },
-          400
-        );
-      }
-
-      commands.push(command);
-    }
-
-    // Create command context
-    const ctx: CommandContext = {
-      principal,
-      state,
-      now,
-      requestId,
-      seq: state.seq,
-    };
-
-    // Simulate commands
-    const result = commandRegistry.simulateCommands(commands, ctx);
-
-    if (!result.valid) {
-      // Return 412 Precondition Failed for simulation failures
-      return c.json(
-        {
-          ok: false,
-          valid: false,
-          error: {
-            code: result.error?.code || "SIMULATION_FAILED",
-            message: result.error?.message || "Simulation failed",
+            message: `Invalid command at index ${i}`,
             requestId,
-            details: result.error?.details ? [result.error.details] : [],
+            details: [{ index: i, name: rawCommand.name }],
           },
         },
-        412
+        400,
       );
     }
 
-    // Simulation succeeded
+    commands.push(command);
+  }
+
+  // Create command context
+  const ctx: CommandContext = {
+    principal,
+    state,
+    now,
+    requestId,
+    seq: state.seq,
+  };
+
+  // Simulate commands
+  const result = commandRegistry.simulateCommands(commands, ctx);
+
+  if (!result.valid) {
+    // Return 412 Precondition Failed for simulation failures
     return c.json(
       {
-        ok: true,
-        valid: true,
-        seq: result.finalState.seq,
-        eventCount: result.events.length,
-        schemaVersion: 1,
+        ok: false,
+        valid: false,
+        error: {
+          code: result.error?.code || "SIMULATION_FAILED",
+          message: result.error?.message || "Simulation failed",
+          requestId,
+          details: result.error?.details ? [result.error.details] : [],
+        },
       },
-      200
+      412,
     );
   }
-);
+
+  // Simulation succeeded
+  return c.json(
+    {
+      ok: true,
+      valid: true,
+      seq: result.finalState.seq,
+      eventCount: result.events.length,
+      schemaVersion: 1,
+    },
+    200,
+  );
+});
 
 export default simulateRoute;

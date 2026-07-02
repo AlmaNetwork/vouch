@@ -52,7 +52,10 @@ describe("deterministic RNG", () => {
     const b = Rng.create("bytes").bytes(32);
     expect(a.length).toBe(32);
     expect(Array.from(a)).toEqual(Array.from(b));
-    for (const v of a) expect(v).toBeGreaterThanOrEqual(0), expect(v).toBeLessThanOrEqual(255);
+    for (const v of a) {
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(255);
+    }
   });
 
   test("fork derives reproducible but distinct sub-streams", () => {

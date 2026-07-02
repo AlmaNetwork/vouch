@@ -2,19 +2,10 @@
  * Core domain types for the Network node
  */
 
-import type {
-  RegionId,
-  AccountId,
-  ResidentId,
-  AssetTypeId,
-  AssetId,
-  LawId,
-  InviteId,
-  GroupId,
-} from "./almaId.js";
+import type { AccountId, AssetId, AssetTypeId, GroupId, InviteId, LawId, RegionId, ResidentId } from "./almaId.js";
 
 // Re-export ALMA ID types
-export type { RegionId, AccountId, ResidentId, AssetTypeId, AssetId, LawId, InviteId, GroupId };
+export type { AccountId, AssetId, AssetTypeId, GroupId, InviteId, LawId, RegionId, ResidentId };
 
 /** Principal represents the authenticated identity making a request */
 export interface Principal {
@@ -164,9 +155,9 @@ export interface Law {
 
 /** Types of laws */
 export type LawType =
-  | "constraint"     // Prevents commands that violate conditions
-  | "requirement"    // Requires certain conditions to be met
-  | "trigger";       // Automatically executes actions
+  | "constraint" // Prevents commands that violate conditions
+  | "requirement" // Requires certain conditions to be met
+  | "trigger"; // Automatically executes actions
 
 /** Law rule definition */
 export interface LawRule {
@@ -250,10 +241,10 @@ export interface Group {
 
 /** Types of groups */
 export type GroupType =
-  | "team"        // Work team
-  | "department"  // Organizational department
-  | "committee"   // Decision-making committee
-  | "community";  // Social/community group
+  | "team" // Work team
+  | "department" // Organizational department
+  | "committee" // Decision-making committee
+  | "community"; // Social/community group
 
 /** Group member */
 export interface GroupMember {

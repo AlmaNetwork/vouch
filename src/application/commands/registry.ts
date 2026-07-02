@@ -7,8 +7,8 @@
  * 2. apply: Execute the command and produce events
  */
 
-import type { NetworkState, Principal } from "../../domain/models/types.js";
 import { DomainError } from "../../domain/models/errors.js";
+import type { NetworkState, Principal } from "../../domain/models/types.js";
 
 // ============================================================
 // Command Payload Types
@@ -88,7 +88,7 @@ export interface IssueAssetPayload {
 export interface TransferAssetPayload {
   assetId: string;
   toAccountId: string;
-  amount?: string;  // For partial transfer of fungible
+  amount?: string; // For partial transfer of fungible
   memo?: string;
 }
 
@@ -507,19 +507,13 @@ export interface CommandHandler<N extends CommandName> {
    * Validate command preconditions.
    * Should throw DomainError if validation fails.
    */
-  validate(
-    payload: CommandPayloadMap[N],
-    ctx: CommandContext
-  ): void;
+  validate(payload: CommandPayloadMap[N], ctx: CommandContext): void;
 
   /**
    * Apply the command and produce events.
    * Called only after validation passes.
    */
-  apply(
-    payload: CommandPayloadMap[N],
-    ctx: CommandContext
-  ): CommandResult;
+  apply(payload: CommandPayloadMap[N], ctx: CommandContext): CommandResult;
 }
 
 // ============================================================
@@ -553,17 +547,10 @@ export class CommandRegistry {
    * Validate a single command.
    * Throws DomainError if validation fails.
    */
-  validateCommand(
-    command: CommandPacket,
-    ctx: CommandContext
-  ): void {
+  validateCommand(command: CommandPacket, ctx: CommandContext): void {
     const handler = this.getHandler(command.name);
     if (!handler) {
-      throw new DomainError(
-        "UNKNOWN_COMMAND",
-        `Unknown command: ${command.name}`,
-        { command: command.name }
-      );
+      throw new DomainError("UNKNOWN_COMMAND", `Unknown command: ${command.name}`, { command: command.name });
     }
     handler.validate(command.payload, ctx);
   }
@@ -572,17 +559,10 @@ export class CommandRegistry {
    * Apply a single command and produce events.
    * Assumes validation has already passed.
    */
-  applyCommand(
-    command: CommandPacket,
-    ctx: CommandContext
-  ): CommandResult {
+  applyCommand(command: CommandPacket, ctx: CommandContext): CommandResult {
     const handler = this.getHandler(command.name);
     if (!handler) {
-      throw new DomainError(
-        "UNKNOWN_COMMAND",
-        `Unknown command: ${command.name}`,
-        { command: command.name }
-      );
+      throw new DomainError("UNKNOWN_COMMAND", `Unknown command: ${command.name}`, { command: command.name });
     }
     return handler.apply(command.payload, ctx);
   }
@@ -592,10 +572,7 @@ export class CommandRegistry {
    * Validates all commands first, then applies them in order.
    * If any validation fails, no commands are applied.
    */
-  executeCommands(
-    commands: CommandPacket[],
-    initialCtx: CommandContext
-  ): { events: DomainEvent[]; finalState: NetworkState } {
+  executeCommands(commands: CommandPacket[], initialCtx: CommandContext): { events: DomainEvent[]; finalState: NetworkState } {
     // Phase 1: Validate all commands
     let currentCtx = { ...initialCtx };
     for (const command of commands) {
@@ -635,7 +612,7 @@ export class CommandRegistry {
    */
   simulateCommands(
     commands: CommandPacket[],
-    ctx: CommandContext
+    ctx: CommandContext,
   ): { events: DomainEvent[]; finalState: NetworkState; valid: boolean; error?: DomainError } {
     try {
       const result = this.executeCommands(commands, ctx);

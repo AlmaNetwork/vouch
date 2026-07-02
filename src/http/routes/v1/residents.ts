@@ -4,9 +4,9 @@
 
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
+import type { ResidentId } from "../../../domain/models/types.js";
 import type { Env } from "../../env.js";
 import { session } from "../../middleware/index.js";
-import type { ResidentId } from "../../../domain/models/types.js";
 
 const route = new Hono<Env>();
 

@@ -6,7 +6,7 @@
 // unique (a deed/NFT-like asset), NOT a fungible quota. The reducer gates at the top on
 // SYSTEM_ACTOR, so a forged item event is ignored (live + replay).
 
-import { SYSTEM_ACTOR, type Reducer } from "../foundation";
+import { type Reducer, SYSTEM_ACTOR } from "../foundation";
 
 export interface ItemState {
   readonly id: string;

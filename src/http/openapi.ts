@@ -111,9 +111,7 @@ Creates a new network. The account sending the request becomes the owner.
         `,
         operationId: "foundNetwork",
         security: [{ bearerAuth: [] }],
-        parameters: [
-          { $ref: "#/components/parameters/IdempotencyKey" },
-        ],
+        parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }],
         requestBody: {
           required: true,
           content: {
@@ -182,9 +180,7 @@ Executes a batch of commands atomically. All commands are validated first, then 
         `,
         operationId: "executeCommands",
         security: [{ bearerAuth: [] }],
-        parameters: [
-          { $ref: "#/components/parameters/IdempotencyKey" },
-        ],
+        parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }],
         requestBody: {
           required: true,
           content: {
@@ -290,9 +286,7 @@ Modifies network settings.
         `,
         operationId: "amendNetwork",
         security: [{ bearerAuth: [] }],
-        parameters: [
-          { $ref: "#/components/parameters/IdempotencyKey" },
-        ],
+        parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }],
         requestBody: {
           required: true,
           content: {
@@ -337,9 +331,7 @@ Adds a new resident to the network.
         `,
         operationId: "admitResident",
         security: [{ bearerAuth: [] }],
-        parameters: [
-          { $ref: "#/components/parameters/IdempotencyKey" },
-        ],
+        parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }],
         requestBody: {
           required: true,
           content: {
@@ -404,9 +396,7 @@ Executes a transaction between residents.
         `,
         operationId: "executeTransaction",
         security: [{ bearerAuth: [] }],
-        parameters: [
-          { $ref: "#/components/parameters/IdempotencyKey" },
-        ],
+        parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }],
         requestBody: {
           required: true,
           content: {
@@ -471,9 +461,7 @@ Migrates the network schema version.
         `,
         operationId: "migrateSchema",
         security: [{ bearerAuth: [] }],
-        parameters: [
-          { $ref: "#/components/parameters/IdempotencyKey" },
-        ],
+        parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }],
         requestBody: {
           required: true,
           content: {

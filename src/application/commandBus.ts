@@ -3,12 +3,12 @@
  * Handles idempotency, journaling, and state updates
  */
 
-import { SingleWriter } from "./singleWriter.js";
+import type { NetworkState } from "../domain/models/types.js";
+import { applyEvents } from "../domain/projector.js";
+import type { JournalStore } from "../infra/persistence/journalStore.js";
 import type { CommandPacket } from "./commandPacket.js";
 import { handle } from "./handlers/index.js";
-import { applyEvents } from "../domain/projector.js";
-import type { NetworkState } from "../domain/models/types.js";
-import type { JournalStore } from "../infra/persistence/journalStore.js";
+import { SingleWriter } from "./singleWriter.js";
 
 export interface DispatchResult {
   ok: true;
@@ -29,7 +29,7 @@ export class CommandBus {
   constructor(
     private journal: JournalStore,
     private stateRef: StateRef,
-    initialLastHash: string | null = null
+    initialLastHash: string | null = null,
   ) {
     this.lastHash = initialLastHash;
   }
@@ -42,9 +42,7 @@ export class CommandBus {
     return this.writer.enqueue(async () => {
       // Check idempotency
       if (command.idempotencyKey) {
-        const existing = this.journal.findByIdempotencyKey(
-          command.idempotencyKey
-        );
+        const existing = this.journal.findByIdempotencyKey(command.idempotencyKey);
         if (existing) {
           return { ok: true, seq: existing.seq, idempotent: true, schemaVersion: existing.schemaVersion };
         }

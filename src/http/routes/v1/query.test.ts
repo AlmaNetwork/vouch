@@ -2,9 +2,9 @@
  * Tests for query endpoints (state, residents, ledger)
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { boot, type BootResult } from "../../../boot.js";
-import { unlinkSync, existsSync } from "node:fs";
+import { existsSync, unlinkSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { type BootResult, boot } from "../../../boot.js";
 
 describe("Query Endpoints", () => {
   let bootResult: BootResult;
@@ -70,10 +70,7 @@ describe("Query Endpoints", () => {
     }
   }
 
-  async function request(
-    path: string,
-    options: RequestInit = {}
-  ): Promise<Response> {
+  async function request(path: string, options: RequestInit = {}): Promise<Response> {
     const req = new Request(`http://localhost${path}`, options);
     return bootResult.app.fetch(req);
   }
@@ -123,10 +120,9 @@ describe("Query Endpoints", () => {
 
   describe("GET /v1/residents/:residentId", () => {
     it("should return specific resident", async () => {
-      const res = await request(
-        "/v1/residents/00000000-0000-0000-0000-000000000011",
-        { headers: { Authorization: "Bearer account:owner-1" } }
-      );
+      const res = await request("/v1/residents/00000000-0000-0000-0000-000000000011", {
+        headers: { Authorization: "Bearer account:owner-1" },
+      });
 
       expect(res.status).toBe(200);
       const body = await json(res);
@@ -137,10 +133,9 @@ describe("Query Endpoints", () => {
     });
 
     it("should return 404 for non-existent resident", async () => {
-      const res = await request(
-        "/v1/residents/00000000-0000-0000-0000-000000000099",
-        { headers: { Authorization: "Bearer account:owner-1" } }
-      );
+      const res = await request("/v1/residents/00000000-0000-0000-0000-000000000099", {
+        headers: { Authorization: "Bearer account:owner-1" },
+      });
 
       expect(res.status).toBe(404);
     });
@@ -193,10 +188,9 @@ describe("Query Endpoints", () => {
     });
 
     it("should filter by residentId", async () => {
-      const res = await request(
-        "/v1/ledger?residentId=00000000-0000-0000-0000-000000000011",
-        { headers: { Authorization: "Bearer account:owner-1" } }
-      );
+      const res = await request("/v1/ledger?residentId=00000000-0000-0000-0000-000000000011", {
+        headers: { Authorization: "Bearer account:owner-1" },
+      });
 
       expect(res.status).toBe(200);
       const body = await json(res);

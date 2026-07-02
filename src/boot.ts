@@ -2,14 +2,14 @@
  * Boot - application initialization and replay
  */
 
-import { SqliteJournalStore } from "./infra/persistence/sqliteJournal.js";
-import { replay } from "./infra/persistence/replay.js";
+import type { Hono } from "hono";
 import { CommandBus, type StateRef } from "./application/commandBus.js";
-import { createApp, type CreateAppOptions } from "./http/app.js";
 import { initializeCommandRegistry } from "./application/commands/index.js";
 import type { NetworkState } from "./domain/models/types.js";
-import type { Hono } from "hono";
+import { type CreateAppOptions, createApp } from "./http/app.js";
 import type { Env } from "./http/env.js";
+import { replay } from "./infra/persistence/replay.js";
+import { SqliteJournalStore } from "./infra/persistence/sqliteJournal.js";
 
 export interface BootOptions {
   dbPath: string;
@@ -44,9 +44,7 @@ export function boot(options: BootOptions): BootResult {
 
   // Replay to restore state
   const replayResult = replay(journal);
-  console.log(
-    `[boot] Replay complete: ${replayResult.recordCount} records, seq=${replayResult.lastSeq}`
-  );
+  console.log(`[boot] Replay complete: ${replayResult.recordCount} records, seq=${replayResult.lastSeq}`);
 
   // Mutable state reference
   let state = replayResult.state;
