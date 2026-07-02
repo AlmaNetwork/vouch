@@ -96,6 +96,32 @@ cd vouch-world && bun install && bun test   # the simulator (depends on ../vouch
 cd vouch-core  && bun install && bun test   # the trust engine, on its own
 ```
 
+### Docker (network node)
+
+Run the network node (the app under `src/`, see [`docs/API.md`](./docs/API.md)) in a
+Docker container:
+
+```bash
+# Build and run with Docker Compose
+docker compose up -d
+
+# Or build manually
+docker build -t vouch .
+docker run -d -p 3000:3000 -v vouch-data:/app/data vouch
+
+# Check logs
+docker compose logs -f
+
+# Stop
+docker compose down
+```
+
+For development with hot reload:
+
+```bash
+docker compose --profile dev up vouch-dev
+```
+
 ## Layout
 
 ```
