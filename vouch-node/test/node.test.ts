@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { KeyPair } from "vouch-core";
 import { getAgent } from "vouch-world/agent";
 import { assertCurrencyConserved } from "vouch-world/environment";
-import { FileAccountLog, MemoryAccountLog } from "../src/accounts";
+import { FileAccountLog, MemoryAccountLog } from "../src/account-log";
 import { FileJournal, MemoryJournal } from "../src/journal";
 import { VouchNode } from "../src/node";
 import { keypair, signCommand, signRegister } from "./helpers";

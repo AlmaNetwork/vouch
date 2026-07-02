@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { encodeBase64 } from "vouch-core";
-import { AccountRegistry, MemoryAccountLog } from "../src/accounts";
+import { MemoryAccountLog } from "../src/account-log";
+import { AccountRegistry } from "../src/accounts";
 import { keypair, signCommand, signRegister } from "./helpers";
 
 const cmd = { kind: "vouch", from: "acct:alice", to: "acct:bob", weight: 3 };
