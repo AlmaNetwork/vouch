@@ -12,13 +12,18 @@
 // event (World.emit is public, so the REDUCER fold point is the real chokepoint).
 
 import { type AgentSlice, agentReducer } from "../agent";
-import { type AlmaEvent, type Reducer, World } from "../foundation";
+import { type AlmaEvent, type CommitSink, type Reducer, World, type WorldView } from "../foundation";
 import { type ItemSlice, itemReducer } from "../item";
 import { type RegionSlice, regionReducer } from "../region";
 
 export interface WorldState extends RegionSlice, AgentSlice, ItemSlice {
   // M3 added the agent slice; balances/economy live inside agent state. P3 added the item slice.
 }
+
+/** The env-only WRITE capability over a world (audit G3). Every environment mutator takes this. */
+export type WorldCommit = CommitSink<WorldState>;
+/** The read-only VIEW over a world (audit G11). The observation layer takes this. */
+export type WorldViewOf = WorldView<WorldState>;
 
 export const INITIAL_WORLD_STATE: WorldState = { regions: {}, agents: {}, items: {} };
 

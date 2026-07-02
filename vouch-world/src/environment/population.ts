@@ -13,9 +13,8 @@ import {
   treasuryId,
   type ValueProfile,
 } from "../agent";
-import type { CommitSink } from "../foundation";
 import { getRegion } from "../region";
-import type { WorldState } from "./state";
+import type { WorldCommit } from "./state";
 
 export interface AdmitSpec {
   id: string; // name@region
@@ -27,7 +26,7 @@ export interface AdmitSpec {
   credit?: number;
 }
 
-export function admitAgent(env: CommitSink<WorldState>, spec: AdmitSpec): AgentState {
+export function admitAgent(env: WorldCommit, spec: AdmitSpec): AgentState {
   if (!isValidIdentifier(spec.id)) throw new Error(`admitAgent: invalid agent id "${spec.id}"`);
   if (!spec.id.endsWith(`@${spec.region}`)) {
     throw new Error(`admitAgent: agent id "${spec.id}" must be born in region "${spec.region}"`);
@@ -54,7 +53,7 @@ export function admitAgent(env: CommitSink<WorldState>, spec: AdmitSpec): AgentS
 }
 
 /** Admit the per-region treasury account (collects trust-cost fees so currency is conserved). */
-export function admitTreasury(env: CommitSink<WorldState>, region: string, initialCurrency = 0): AgentState {
+export function admitTreasury(env: WorldCommit, region: string, initialCurrency = 0): AgentState {
   return admitAgent(env, {
     id: treasuryId(region),
     region,
@@ -66,7 +65,7 @@ export function admitTreasury(env: CommitSink<WorldState>, region: string, initi
 }
 
 /** Move an agent to another region (§3-C). Founded (unrecognized) regions are valid targets. */
-export function immigrate(env: CommitSink<WorldState>, agentId: string, toRegion: string): AgentState {
+export function immigrate(env: WorldCommit, agentId: string, toRegion: string): AgentState {
   if (!getAgent(env.getState(), agentId)) throw new Error(`immigrate: agent "${agentId}" does not exist`);
   if (!getRegion(env.getState(), toRegion)) throw new Error(`immigrate: region "${toRegion}" does not exist`);
   env.commitSystem(EVENT_AGENT_MIGRATED, { agentId, toRegion });

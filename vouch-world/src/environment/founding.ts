@@ -10,7 +10,6 @@
 // unchanged: one engine, one FoundingProposal interface, every proposer equal.
 
 import { isValidRegion } from "vouch-core"; // the extracted Trust Core, consumed as a dependency
-import type { CommitSink } from "../foundation";
 import {
   canGovern,
   EVENT_GOV_PROPOSAL_OPENED,
@@ -28,9 +27,7 @@ import {
   validateGovernance,
   validateResourcePolicy,
 } from "../region";
-import type { WorldState } from "./state";
-
-type Commit = CommitSink<WorldState>;
+import type { WorldCommit } from "./state";
 
 /** Genesis villages are born recognized (they ARE the established society); all others unrecognized. */
 function birthStatus(proposer: Proposer): RecognitionStatus {
@@ -45,7 +42,7 @@ function birthStatus(proposer: Proposer): RecognitionStatus {
  * The interaction goes through the world engine (§2-5): state changes only by the
  * emitted event being folded — nothing is mutated directly.
  */
-export function proposeFounding(env: Commit, proposal: FoundingProposal): RegionState {
+export function proposeFounding(env: WorldCommit, proposal: FoundingProposal): RegionState {
   const { definition, proposer, owner } = proposal;
 
   if (!isValidRegion(definition.id)) {
@@ -102,7 +99,7 @@ export function emergenceProposal(
 }
 
 /** Seed the genesis villages (born recognized) through the same execution engine. System-owned. */
-export function seedGenesis(env: Commit, definitions: readonly RegionDefinition[]): RegionState[] {
+export function seedGenesis(env: WorldCommit, definitions: readonly RegionDefinition[]): RegionState[] {
   return definitions.map((definition) => proposeFounding(env, { definition, proposer: { kind: "genesis" }, owner: null }));
 }
 
@@ -115,7 +112,7 @@ export function seedGenesis(env: Commit, definitions: readonly RegionDefinition[
 // govern, including its governance itself (a dictator may open a council). Quorum/vote for
 // council decisions is P3; in P2 a single authorized principal may amend.
 
-export function amendInstitution(env: Commit, regionId: string, change: InstitutionChange, by: string): RegionState {
+export function amendInstitution(env: WorldCommit, regionId: string, change: InstitutionChange, by: string): RegionState {
   const region = getRegion(env.getState(), regionId);
   if (!region) throw new Error(`amendInstitution: region "${regionId}" does not exist`);
   // Council-governed regions decide collectively — a single member may NOT amend directly.
@@ -152,7 +149,7 @@ export function amendInstitution(env: Commit, regionId: string, change: Institut
 // at once). Resolution happens in the region reducer when the vote count crosses threshold,
 // so it replays deterministically. The change is validated here, at propose time.
 
-export function openProposal(env: Commit, regionId: string, change: InstitutionChange, by: string): RegionState {
+export function openProposal(env: WorldCommit, regionId: string, change: InstitutionChange, by: string): RegionState {
   const region = getRegion(env.getState(), regionId);
   if (!region) throw new Error(`openProposal: region "${regionId}" does not exist`);
   if (region.institutions.governance.kind !== "council") throw new Error(`openProposal: region "${regionId}" is not council-governed`);
@@ -174,7 +171,7 @@ export function openProposal(env: Commit, regionId: string, change: InstitutionC
   return updated;
 }
 
-export function castVote(env: Commit, regionId: string, voter: string): RegionState {
+export function castVote(env: WorldCommit, regionId: string, voter: string): RegionState {
   const region = getRegion(env.getState(), regionId);
   if (!region) throw new Error(`castVote: region "${regionId}" does not exist`);
   if (!region.openProposal) throw new Error(`castVote: region "${regionId}" has no open proposal`);

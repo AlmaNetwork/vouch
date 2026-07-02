@@ -7,16 +7,14 @@
 // reducers). Env-authored + reducer-gated like every other state change.
 
 import { getAgent } from "../agent";
-import type { CommitSink } from "../foundation";
+import type { Result } from "../foundation";
 import { EVENT_RESOURCE_DRAWN, EVENT_RESOURCE_REGENERATED, getRegion } from "../region";
-import type { WorldState } from "./state";
+import type { WorldCommit } from "./state";
 
-type Commit = CommitSink<WorldState>;
-
-export type ResourceResult = { ok: true } | { ok: false; reason: string };
+export type ResourceResult = Result;
 
 /** Produce into a region's pool, up to capacity. A no-op for a region with no pool or a full one. */
-export function regenerateResources(env: Commit, regionId: string): ResourceResult {
+export function regenerateResources(env: WorldCommit, regionId: string): ResourceResult {
   const region = getRegion(env.getState(), regionId);
   if (!region) return { ok: false, reason: "unknown-region" };
   const { capacity, regenPerTick } = region.institutions.resourcePolicy;
@@ -27,7 +25,7 @@ export function regenerateResources(env: Commit, regionId: string): ResourceResu
 }
 
 /** An agent DRAWS from its region's active pool (pool -> agent). Fails if the pool is too low (scarcity). */
-export function drawResource(env: Commit, agentId: string, amount: number): ResourceResult {
+export function drawResource(env: WorldCommit, agentId: string, amount: number): ResourceResult {
   if (!Number.isInteger(amount) || amount <= 0) return { ok: false, reason: "bad-amount" };
   const state = env.getState();
   const agent = getAgent(state, agentId);

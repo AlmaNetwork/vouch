@@ -7,16 +7,16 @@
 // voucher's own standing, one-account-one-ID) is a later milestone (P3).
 
 import { EVENT_AGENT_VOUCHED, getAgent } from "../agent";
-import type { CommitSink } from "../foundation";
-import type { WorldState } from "./state";
+import type { Result } from "../foundation";
+import type { WorldCommit } from "./state";
 
-export type VouchResult = { ok: true } | { ok: false; reason: string };
+export type VouchResult = Result;
 
 const MIN_WEIGHT = 1;
 const MAX_WEIGHT = 5; // matches the EndorsementCredential weight range
 
 /** `from` vouches for `to` with `weight` (1..5), raising `to`'s trust. User-level failures return a reason. */
-export function vouchFor(env: CommitSink<WorldState>, from: string, to: string, weight: number): VouchResult {
+export function vouchFor(env: WorldCommit, from: string, to: string, weight: number): VouchResult {
   if (from === to) return { ok: false, reason: "self-vouch" };
   if (!Number.isInteger(weight) || weight < MIN_WEIGHT || weight > MAX_WEIGHT) return { ok: false, reason: "bad-weight" };
   const state = env.getState();
