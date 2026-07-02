@@ -106,7 +106,11 @@ export function dispatch(world: World<WorldState>, principal: string, command: C
         return res.ok ? { ok: true } : { ok: false, reason: res.reason };
       }
     }
-  } catch (e) {
-    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+  } catch {
+    // Engine mutators throw on malformed input (bad id, region missing, duplicate,
+    // internal-invariant guards). Don't reflect the raw message to the client — those
+    // strings can carry internal prefixes/invariant text. A generic reason is enough;
+    // the result-returning mutators (transfer/vouch) still surface their clean domain reasons above.
+    return { ok: false, reason: "command-rejected" };
   }
 }

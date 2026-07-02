@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { appendFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AlmaEvent } from "vouch-world/foundation";
@@ -41,6 +41,23 @@ describe("FileJournal", () => {
     expect(j.load()).toEqual([]);
     j.append([]);
     expect(j.load()).toEqual([]);
+  });
+});
+
+describe("FileJournal — crash tolerance", () => {
+  test("a torn final line (interrupted append) is dropped, earlier events survive", () => {
+    const path = tmpFile("events.jsonl");
+    const j = new FileJournal(path);
+    j.append(events);
+    appendFileSync(path, '{"seq":2,"tick":0,"type":"agent.adm'); // partial write, no newline
+    const loaded = j.load();
+    expect(loaded).toEqual(events); // the torn tail is gone; boot still works
+  });
+
+  test("a malformed INTERIOR line is real corruption and throws", () => {
+    const path = tmpFile("events.jsonl");
+    appendFileSync(path, `{"broken":\n${JSON.stringify(events[0])}\n`); // bad line is NOT last
+    expect(() => new FileJournal(path).load()).toThrow(/corrupt JSONL/);
   });
 });
 

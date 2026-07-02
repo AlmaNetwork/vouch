@@ -124,6 +124,14 @@ describe("VouchNode — authorization & integrity", () => {
     expect(res).toMatchObject({ ok: false, status: 422, reason: "not-sender" });
   });
 
+  test("an engine-thrown rejection returns a generic reason (no internal message leak)", () => {
+    const node = freshNode();
+    setUpNova(node);
+    // founding "nova" again makes proposeFounding throw; the raw message must not leak
+    const res = node.submit(signCommand("acct:alice", 4, { kind: "found", regionId: "nova", displayName: "Nova" }, ALICE));
+    expect(res).toMatchObject({ ok: false, status: 422, reason: "command-rejected" });
+  });
+
   test("a malformed command is rejected (400) and does not consume the nonce", () => {
     const node = freshNode();
     node.register(signRegister("acct:alice", 0, ALICE));

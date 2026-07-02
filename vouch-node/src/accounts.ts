@@ -11,10 +11,9 @@
 // event-sourced (append-only auth log, replayed on boot) so it survives restarts
 // alongside the engine journal.
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname } from "node:path";
 import { canonicalBytes, decodeBase64, ED25519_SUITE } from "vouch-core";
 import { SYSTEM_ACTOR } from "vouch-world/foundation";
+import { durableAppend, loadJsonl } from "./persist";
 
 /** Bytes a client signs for a registration — domain-separated from commands. */
 export function registerBytes(principal: string, nonce: number, publicKey: string): Uint8Array {
@@ -69,21 +68,14 @@ export class MemoryAccountLog implements AccountLog {
   }
 }
 
-/** File-backed JSON Lines auth log — durable across restarts. */
+/** File-backed JSON Lines auth log — durable across restarts (fsync). */
 export class FileAccountLog implements AccountLog {
   constructor(private readonly path: string) {}
   append(line: AuthLine): void {
-    mkdirSync(dirname(this.path), { recursive: true });
-    appendFileSync(this.path, `${JSON.stringify(line)}\n`);
+    durableAppend(this.path, `${JSON.stringify(line)}\n`);
   }
   load(): AuthLine[] {
-    if (!existsSync(this.path)) return [];
-    const out: AuthLine[] = [];
-    for (const raw of readFileSync(this.path, "utf8").split("\n")) {
-      if (raw.trim().length === 0) continue;
-      out.push(JSON.parse(raw) as AuthLine);
-    }
-    return out;
+    return loadJsonl<AuthLine>(this.path);
   }
 }
 

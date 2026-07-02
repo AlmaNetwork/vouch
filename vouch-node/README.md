@@ -72,8 +72,25 @@ with the principal's Ed25519 key (JCS canonicalization, base64 signature). See
 | `transfer` | `{ from, to, amount }` | principal must equal `from` |
 | `vouch` | `{ from, to, weight }` | principal must equal `from` |
 
+## Security model
+
+- **Network-facing auth is unforgeable** — acting as a principal requires its
+  Ed25519 private key; signatures are principal-bound and domain-separated, with
+  strictly-increasing nonces for replay protection. The system actor cannot be
+  registered or asserted.
+- **The persisted files are trusted local storage.** The event journal and auth
+  log are not yet cryptographically tamper-evident, so anyone who can write those
+  files controls the node (as with any database). On a single-operator box that is
+  the operator. Per-line signing / hash-chaining + a boot-time digest check is the
+  top hardening follow-up (see below).
+- **Crash recovery** — appends are `fsync`ed, and boot tolerates a torn final line
+  (an interrupted append is dropped; the client retries). A whole lost tail after a
+  crash recovers to the last intact event — a durability window, not corruption.
+
 ## Deferred (follow-ups, not in this package yet)
 
+- **Journal integrity** — per-line signature / hash-chain + a committed
+  length/digest checkpoint, so a tampered or truncated log is detected on boot.
 - More commands: `amend` (governance/economy), region market (`list` / `sell`),
   digital items, resource draw — each maps to an existing engine mutator.
 - Idempotency keys (safe retries), WebSocket/SSE streaming, an autonomous tick

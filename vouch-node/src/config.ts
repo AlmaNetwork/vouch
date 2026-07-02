@@ -21,8 +21,10 @@ export interface NodeConfig {
 
 function requireInt(raw: string | undefined, name: string, def: number, min: number, max: number): number {
   if (raw === undefined) return def;
+  // Plain decimal only — reject hex ("0x50"), exponent ("1e3"), whitespace, etc.,
+  // which Number() would otherwise silently accept.
+  if (!/^-?\d+$/.test(raw)) throw new Error(`config: ${name} must be a decimal integer, got "${raw}"`);
   const n = Number(raw);
-  if (!Number.isInteger(n)) throw new Error(`config: ${name} must be an integer, got "${raw}"`);
   if (n < min || n > max) throw new Error(`config: ${name} must be in [${min}, ${max}], got ${n}`);
   return n;
 }
@@ -55,6 +57,13 @@ export function resolveNotary(source: string, env: RawEnv): KeyPair {
 }
 
 export function loadConfig(env: RawEnv): NodeConfig {
+  // No silent fallback: an unset VOUCH_NOTARY throws rather than booting a live node
+  // with a well-known, publicly-derivable key. Dev sets `seed://<secret>`; production
+  // sets `env://VOUCH_NOTARY_SECRET` (see README).
+  const notarySource = env.VOUCH_NOTARY;
+  if (!notarySource || notarySource.length === 0) {
+    throw new Error("config: VOUCH_NOTARY is required (e.g. seed://<dev-secret> or env://VOUCH_NOTARY_SECRET)");
+  }
   return {
     // Loopback by default — an operator opts into public exposure explicitly.
     host: env.VOUCH_HOST ?? "127.0.0.1",
@@ -62,8 +71,6 @@ export function loadConfig(env: RawEnv): NodeConfig {
     seed: env.VOUCH_SEED ?? "vouch-node",
     journalPath: env.VOUCH_JOURNAL ?? null,
     accountsPath: env.VOUCH_ACCOUNTS ?? null,
-    // `seed://dev-notary` is an obvious development default; production sets
-    // VOUCH_NOTARY=env://VOUCH_NOTARY_SECRET (see README).
-    notary: resolveNotary(env.VOUCH_NOTARY ?? "seed://dev-notary", env),
+    notary: resolveNotary(notarySource, env),
   };
 }

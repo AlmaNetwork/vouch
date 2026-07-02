@@ -58,11 +58,16 @@ export class VouchNode {
 
     const before = this.world.log.length;
     const outcome = dispatch(this.world, auth.principal, parsed.data, { notary: this.notary });
-    if (!outcome.ok) return { ok: false, status: 422, reason: outcome.reason };
 
-    // Persist the events the command emitted (the engine appended them to the log).
+    // Persist whatever the command emitted, regardless of outcome, so the durable
+    // journal can never diverge from the live world on the next boot. (Today every
+    // command validates fully before emitting, so a rejection emits nothing and this
+    // is a no-op on the failure path; the guarantee holds for future commands too.)
+    const emitted = this.world.log.length - before;
     this.journal.append(this.world.log.since(before));
-    return { ok: true, status: 200, detail: outcome.detail, events: this.world.log.length - before };
+
+    if (!outcome.ok) return { ok: false, status: 422, reason: outcome.reason };
+    return { ok: true, status: 200, detail: outcome.detail, events: emitted };
   }
 }
 

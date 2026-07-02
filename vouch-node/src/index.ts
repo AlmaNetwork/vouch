@@ -14,7 +14,9 @@ const accountLog = config.accountsPath ? new FileAccountLog(config.accountsPath)
 const node = new VouchNode({ seed: config.seed, notary: config.notary, journal, accountLog });
 const app = createNodeApp(node);
 
-const server = Bun.serve({ hostname: config.host, port: config.port, fetch: app.fetch });
+// Cap the request body: a signed command is tiny, so don't let an unauthenticated
+// caller force large allocations before we ever check a signature.
+const server = Bun.serve({ hostname: config.host, port: config.port, maxRequestBodySize: 256 * 1024, fetch: app.fetch });
 
 console.log(`vouch-node listening on http://${server.hostname}:${server.port}`);
 console.log(`  persistence: journal=${config.journalPath ?? "(memory)"} accounts=${config.accountsPath ?? "(memory)"}`);

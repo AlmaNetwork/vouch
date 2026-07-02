@@ -5,9 +5,8 @@
 // so a restarted node can `rehydrateAlmaWorld` its full state (see node.ts).
 // It stores raw AlmaEvents only — nothing derived — so the log stays canonical.
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname } from "node:path";
 import type { AlmaEvent } from "vouch-world/foundation";
+import { durableAppend, loadJsonl } from "./persist";
 
 export interface Journal {
   /** Persist newly-emitted events, in order. */
@@ -27,25 +26,16 @@ export class MemoryJournal implements Journal {
   }
 }
 
-/** File-backed JSON Lines journal — one event per line, appended durably. */
+/** File-backed JSON Lines journal — one event per line, appended durably (fsync). */
 export class FileJournal implements Journal {
   constructor(private readonly path: string) {}
 
   append(events: readonly AlmaEvent[]): void {
     if (events.length === 0) return;
-    mkdirSync(dirname(this.path), { recursive: true });
-    const lines = `${events.map((e) => JSON.stringify(e)).join("\n")}\n`;
-    appendFileSync(this.path, lines);
+    durableAppend(this.path, `${events.map((e) => JSON.stringify(e)).join("\n")}\n`);
   }
 
   load(): AlmaEvent[] {
-    if (!existsSync(this.path)) return [];
-    const text = readFileSync(this.path, "utf8");
-    const out: AlmaEvent[] = [];
-    for (const line of text.split("\n")) {
-      if (line.trim().length === 0) continue;
-      out.push(JSON.parse(line) as AlmaEvent);
-    }
-    return out;
+    return loadJsonl<AlmaEvent>(this.path);
   }
 }

@@ -77,11 +77,14 @@ export class World<S> implements CommitSink<S>, WorldView<S> {
    * verbatim (its original tick / type / actor / payload) and folded through the
    * reducer, exactly as the original live authoring did, so the rebuilt
    * `{ tick, state, log.digest }` equals the original world's (see `replayState`).
-   * The reducer still gates system events by actor, so a tampered journal line
-   * cannot forge a conserved settlement (defence in depth).
    *
-   * The log must be complete and in original order; a `seq` gap throws (journal
-   * corruption) rather than silently rebuilding a divergent state.
+   * The `seq` guard catches accidental gaps / reordering (journal corruption) so a
+   * malformed log throws rather than silently rebuilding a divergent state. It is
+   * NOT a security control: the stored `actor` is trusted verbatim, so this replays
+   * whatever was persisted. The log is trusted local storage — a caller that can
+   * write it can author any event (incl. system-authored ones). Cryptographic
+   * tamper-evidence for the persisted log is a caller-side concern / a follow-up;
+   * the live write path (public `emit` rejects SYSTEM_ACTOR) is unaffected.
    */
   static fromLog<S>(opts: WorldOptions<S>, events: readonly AlmaEvent[]): World<S> {
     const world = new World<S>(opts);
