@@ -4,18 +4,20 @@
 // This journal writes every emitted event to append-only storage as JSON Lines,
 // so a restarted node can `rehydrateAlmaWorld` its full state (see node.ts).
 //
-// Tamper-evidence: each line carries a hash that CHAINS to the previous line —
-// `hash = sha256(canonicalBytes({ prev, event }))`. On boot the whole chain is
-// re-folded and verified, so editing, reordering, inserting, or truncating-in-the-
-// middle a persisted line is detected and refuses to boot. (Backward compatible:
-// legacy un-chained lines written before this was added are trusted and still
-// advance the chain, so later chained lines verify.)
+// Tamper-evidence: every line is `{ event, hash }` where
+// `hash = sha256(canonicalBytes({ prev, event }))` chains to the previous line
+// (`prev = ""` at genesis). On boot the whole chain is re-folded from genesis and
+// verified, so editing, reordering, inserting, or interior-truncating a line is
+// detected and refuses to boot. The format is STRICT: a line that isn't exactly a
+// well-formed `{ event, hash }` (event a real AlmaEvent, no extra keys) is rejected
+// as corrupt — there is no trusted "legacy / un-chained" line to downgrade into.
 //
-// Scope of the guarantee: the chain detects PARTIAL tampering. It does NOT stop an
-// attacker who can rewrite the whole file AND recompute every hash — that needs an
-// external anchor (e.g. the notary signing the chain tip / a checkpoint), which is a
-// tracked follow-up. The engine's write-time invariants (unforgeable SYSTEM_ACTOR,
-// conservation) are unaffected either way.
+// Scope: the chain anchors every line from genesis, but it does NOT stop an attacker
+// who rewrites the WHOLE file AND recomputes every hash from genesis — that needs an
+// external anchor (e.g. the notary signing the chain tip / a checkpoint), a tracked
+// follow-up. The engine's write-time invariants (unforgeable SYSTEM_ACTOR,
+// conservation) are unaffected either way. MemoryJournal keeps no chain (no on-disk
+// surface).
 
 import { createHash } from "node:crypto";
 import { canonicalBytes } from "vouch-core";
@@ -43,8 +45,21 @@ export class MemoryJournal implements Journal {
 /** A persisted line: the event plus its chain hash. */
 type ChainLine = { readonly event: AlmaEvent; readonly hash: string };
 
-function isChainLine(v: unknown): v is ChainLine {
-  return typeof v === "object" && v !== null && "hash" in v && "event" in v;
+/** Minimal structural check that a decoded value is an engine event (not injected garbage). */
+function isAlmaEvent(v: unknown): v is AlmaEvent {
+  if (typeof v !== "object" || v === null) return false;
+  const e = v as Record<string, unknown>;
+  return typeof e.type === "string" && typeof e.seq === "number" && typeof e.actor === "string";
+}
+
+/** Decode a line strictly as `{ event, hash }` — exactly those keys, event a real AlmaEvent. */
+function asChainLine(v: unknown): ChainLine | null {
+  if (typeof v !== "object" || v === null) return null;
+  const keys = Object.keys(v);
+  if (keys.length !== 2 || !keys.includes("event") || !keys.includes("hash")) return null;
+  const { event, hash } = v as { event: unknown; hash: unknown };
+  if (typeof hash !== "string" || !isAlmaEvent(event)) return null;
+  return { event, hash };
 }
 
 /** The chain link: sha256 (hex) over the canonical bytes of `{ prev, event }`. */
@@ -52,7 +67,7 @@ function linkHash(prev: string, event: AlmaEvent): string {
   return createHash("sha256").update(canonicalBytes({ prev, event })).digest("hex");
 }
 
-/** File-backed JSON Lines journal — hash-chained, appended durably (fsync). */
+/** File-backed JSON Lines journal — strictly hash-chained, appended durably (fsync). */
 export class FileJournal implements Journal {
   private tip: string | null = null; // chain hash of the last persisted event ("" = empty)
 
@@ -76,24 +91,19 @@ export class FileJournal implements Journal {
     return events;
   }
 
-  /** Re-fold + verify the on-disk chain; returns the events and the chain tip. */
+  /** Re-fold + verify the whole chain from genesis; returns the events and the chain tip. */
   private foldChain(): { events: AlmaEvent[]; tip: string } {
     const raw = loadJsonl<unknown>(this.path);
     let prev = "";
     const events: AlmaEvent[] = [];
     for (const [i, line] of raw.entries()) {
-      if (isChainLine(line)) {
-        const expected = linkHash(prev, line.event);
-        if (line.hash !== expected) {
-          throw new Error(`journal: hash-chain broken at line ${i + 1} — the log has been tampered with or reordered`);
-        }
-        prev = line.hash;
-        events.push(line.event);
-      } else {
-        const event = line as AlmaEvent; // legacy bare-event line (written before hash-chaining)
-        prev = linkHash(prev, event);
-        events.push(event);
+      const cl = asChainLine(line);
+      if (!cl) throw new Error(`journal: malformed or un-chained line at ${i + 1} — the log is corrupt or has been tampered with`);
+      if (cl.hash !== linkHash(prev, cl.event)) {
+        throw new Error(`journal: hash-chain broken at line ${i + 1} — the log has been tampered with or reordered`);
       }
+      prev = cl.hash;
+      events.push(cl.event);
     }
     return { events, tip: prev };
   }

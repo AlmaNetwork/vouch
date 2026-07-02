@@ -87,15 +87,34 @@ describe("FileJournal — hash-chain tamper-evidence", () => {
     expect(new FileJournal(path).load()).toEqual(events); // no throw, exact events back
   });
 
-  test("legacy un-chained lines are trusted, and later chained lines still verify", () => {
+  test("a chained line downgraded to a bare (un-chained) line is rejected", () => {
     const path = tmpFile("events.jsonl");
-    // simulate a pre-hash-chain file: bare AlmaEvent lines
-    appendFileSync(path, `${events.map((e) => JSON.stringify(e)).join("\n")}\n`);
-    const j = new FileJournal(path);
-    const extra: AlmaEvent = { seq: 2, tick: 1, type: "agent.vouched", actor: "world", payload: { from: "a@r", to: "b@r", weight: 3 } };
-    j.append([extra]); // appended as a chained line, linking onto the legacy tail
-    const loaded = j.load();
-    expect(loaded).toEqual([...events, extra]); // legacy read through + new event, no throw
+    new FileJournal(path).append(events); // two chained lines
+    const lines = readFileSync(path, "utf8").trim().split("\n");
+    // strip the {event,hash} wrapper off the 2nd line to make it look "legacy"
+    const wrapped = JSON.parse(lines[1] as string) as { event: AlmaEvent };
+    lines[1] = JSON.stringify(wrapped.event);
+    writeFileSync(path, `${lines.join("\n")}\n`);
+    expect(() => new FileJournal(path).load()).toThrow(/un-chained line/);
+  });
+
+  test("a bare (un-chained) line is rejected — no trusted legacy format to downgrade into", () => {
+    const path = tmpFile("events.jsonl");
+    appendFileSync(path, `${JSON.stringify(events[0])}\n`); // a bare AlmaEvent, not { event, hash }
+    expect(() => new FileJournal(path).load()).toThrow(/un-chained line/);
+  });
+
+  test("a line whose 'event' is not a real AlmaEvent is rejected (no garbage injection)", () => {
+    const path = tmpFile("events.jsonl");
+    appendFileSync(path, `${JSON.stringify({ event: "not-an-event", hash: "whatever" })}\n`);
+    expect(() => new FileJournal(path).load()).toThrow(/un-chained line/);
+  });
+
+  test("a record with extra keys around {event,hash} is rejected (no ChainLine spoofing)", () => {
+    const path = tmpFile("events.jsonl");
+    const craft = { seq: 0, tick: 0, type: "x", actor: "world", payload: {}, event: events[0], hash: "h" };
+    appendFileSync(path, `${JSON.stringify(craft)}\n`);
+    expect(() => new FileJournal(path).load()).toThrow(/un-chained line/);
   });
 });
 
