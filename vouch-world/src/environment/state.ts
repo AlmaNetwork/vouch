@@ -25,6 +25,17 @@ export type WorldCommit = CommitSink<WorldState>;
 /** The read-only VIEW over a world (audit G11). The observation layer takes this. */
 export type WorldViewOf = WorldView<WorldState>;
 
+/**
+ * Read an entity back after committing the event that creates/updates it. A missing
+ * value here means the reducer didn't fold the just-emitted event — an internal
+ * invariant break, not a user error — so we throw. Centralizes the read-back-or-throw
+ * ritual every env write op shares.
+ */
+export function readBackOrThrow<T>(op: string, value: T | undefined): T {
+  if (value === undefined) throw new Error(`${op}: invariant violated — entity missing after its event`);
+  return value;
+}
+
 export const INITIAL_WORLD_STATE: WorldState = { regions: {}, agents: {}, items: {} };
 
 /**

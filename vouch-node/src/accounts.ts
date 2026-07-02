@@ -13,7 +13,7 @@
 
 import { canonicalBytes, decodeBase64, ED25519_SUITE } from "vouch-core";
 import { SYSTEM_ACTOR } from "vouch-world/foundation";
-import { durableAppend, loadJsonl } from "./persist";
+import type { AccountLog } from "./account-log";
 
 /** Bytes a client signs for a registration — domain-separated from commands. */
 export function registerBytes(principal: string, nonce: number, publicKey: string): Uint8Array {
@@ -45,39 +45,6 @@ export type HttpStatus = 200 | 400 | 401 | 409 | 422 | 500;
 export type AuthResult =
   | { readonly ok: true; readonly principal: string }
   | { readonly ok: false; readonly status: HttpStatus; readonly reason: string };
-
-/** One line of the append-only auth log (persisted; replayed on boot). */
-export type AuthLine =
-  | { readonly kind: "register"; readonly principal: string; readonly publicKey: string; readonly nonce: number }
-  | { readonly kind: "nonce"; readonly principal: string; readonly nonce: number };
-
-/** Durable store for the auth log. `load` returns lines in append order. */
-export interface AccountLog {
-  append(line: AuthLine): void;
-  load(): AuthLine[];
-}
-
-/** In-memory auth log (tests, ephemeral nodes). */
-export class MemoryAccountLog implements AccountLog {
-  private readonly lines: AuthLine[] = [];
-  append(line: AuthLine): void {
-    this.lines.push(line);
-  }
-  load(): AuthLine[] {
-    return [...this.lines];
-  }
-}
-
-/** File-backed JSON Lines auth log — durable across restarts (fsync). */
-export class FileAccountLog implements AccountLog {
-  constructor(private readonly path: string) {}
-  append(line: AuthLine): void {
-    durableAppend(this.path, `${JSON.stringify(line)}\n`);
-  }
-  load(): AuthLine[] {
-    return loadJsonl<AuthLine>(this.path);
-  }
-}
 
 interface AccountRecord {
   publicKey: string; // base64

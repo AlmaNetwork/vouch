@@ -9,7 +9,8 @@
 import type { KeyPair } from "vouch-core";
 import { rehydrateAlmaWorld, type WorldState } from "vouch-world/environment";
 import type { World } from "vouch-world/foundation";
-import { type AccountLog, AccountRegistry, type AuthResult, type HttpStatus, type RegisterRequest, type SignedRequest } from "./accounts";
+import type { AccountLog } from "./account-log";
+import { AccountRegistry, type AuthResult, type HttpStatus, type RegisterRequest, type SignedRequest } from "./accounts";
 import { type Command, commandSchema, dispatch } from "./commands";
 import type { Journal } from "./journal";
 
