@@ -33,4 +33,4 @@ export { listRegion, type MarketResult, setRegionLifecycle, transferRegionOwners
 export { type AdmitSpec, admitAgent, admitTreasury, immigrate } from "./population";
 export { drawResource, type ResourceResult, regenerateResources } from "./resource";
 export { type VouchResult, vouchFor } from "./social";
-export { createAlmaWorld, INITIAL_WORLD_STATE, rootReducer, type WorldState } from "./state";
+export { createAlmaWorld, INITIAL_WORLD_STATE, rehydrateAlmaWorld, rootReducer, type WorldState } from "./state";

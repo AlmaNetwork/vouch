@@ -52,6 +52,9 @@ cd vouch-core  && bun install && bun run typecheck && bun test
 
 # vouch-world (the simulator; depends on ../vouch-core)
 cd vouch-world && bun install && bun run typecheck && bun test
+
+# vouch-node (the participate node; depends on ../vouch-core + ../vouch-world)
+cd vouch-node  && bun install && bun run typecheck && bun test
 ```
 
 Lint + format are repo-wide, run from the root tooling package:
@@ -69,12 +72,14 @@ bun run ci         # non-mutating: what CI runs (fails on any unformatted / lint
   the root `biome.json` — 2-space indent, double quotes, semicolons, trailing commas,
   140-col. Run `bun run check` before pushing; CI runs `biome ci .` as a separate
   `lint` job. Do not add ESLint/Prettier.
-- `bun run typecheck` = `tsc --noEmit`. The two `tsconfig.json` files are
+- `bun run typecheck` = `tsc --noEmit`. The `tsconfig.json` files are
   byte-identical and maximally strict (`strict`, `noUncheckedIndexedAccess`,
   `noFallthroughCasesInSwitch`, `noImplicitOverride`). If you change a strictness
-  flag, change **both**.
-- `vouch-world` depends on `vouch-core` via `file:../vouch-core`; `vouch-core` never
-  depends back.
+  flag, change **all** of them.
+- Dependency direction (strictly one-way): `vouch-node` → `vouch-world` →
+  `vouch-core`, via `file:` deps. `vouch-world` exposes its public surface through
+  subpath exports (`vouch-world/environment`, `/foundation`, `/region`, …) so the
+  node consumes the real engine rather than re-implementing it.
 
 ---
 

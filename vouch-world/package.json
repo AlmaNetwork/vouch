@@ -5,6 +5,15 @@
   "private": true,
   "type": "module",
   "description": "ALMA — distributed identity & trust protocol PoC",
+  "exports": {
+    "./foundation": "./src/foundation/index.ts",
+    "./region": "./src/region/index.ts",
+    "./agent": "./src/agent/index.ts",
+    "./item": "./src/item/index.ts",
+    "./credential": "./src/credential/index.ts",
+    "./environment": "./src/environment/index.ts",
+    "./observation": "./src/observation/index.ts"
+  },
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit"

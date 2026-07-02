@@ -12,7 +12,7 @@
 // event (World.emit is public, so the REDUCER fold point is the real chokepoint).
 
 import { type AgentSlice, agentReducer } from "../agent";
-import { type Reducer, World } from "../foundation";
+import { type AlmaEvent, type Reducer, World } from "../foundation";
 import { type ItemSlice, itemReducer } from "../item";
 import { type RegionSlice, regionReducer } from "../region";
 
@@ -38,4 +38,13 @@ export const rootReducer: Reducer<WorldState> = (state, event) => {
 /** Construct an ALMA world: deterministic engine (M1) + the composed root reducer. */
 export function createAlmaWorld(seed: string | number): World<WorldState> {
   return new World<WorldState>({ seed, initialState: INITIAL_WORLD_STATE, reducer: rootReducer });
+}
+
+/**
+ * Rebuild an ALMA world from a persisted event log — the replay-on-boot path a
+ * durable node (Track B) uses to recover its full state after a restart. Same
+ * composition root as `createAlmaWorld`; see `World.fromLog` for the guarantees.
+ */
+export function rehydrateAlmaWorld(seed: string | number, events: readonly AlmaEvent[]): World<WorldState> {
+  return World.fromLog<WorldState>({ seed, initialState: INITIAL_WORLD_STATE, reducer: rootReducer }, events);
 }
