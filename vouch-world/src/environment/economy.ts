@@ -23,7 +23,7 @@ import {
 import { type AlmaEvent, type Result, SYSTEM_ACTOR, tickToIso, type WorldView } from "../foundation";
 import { type EconomyPolicy, getRegion } from "../region";
 import { canTransactAcross } from "./diplomacy";
-import type { WorldCommit, WorldState } from "./state";
+import { commit, type WorldCommit, type WorldState } from "./state";
 
 /** M3: currency is transferable, credit is not (§3-B). A later milestone may let the village decide. */
 export function isTransferable(kind: "credit" | "currency"): boolean {
@@ -103,7 +103,7 @@ export function executeTransfer(env: WorldCommit, move: TransferMove, opts: { ti
   );
 
   const payload: SettlementPayload = { entries, receipt, memo: { from: from.id, to: to.id, amount: move.amount, fee } };
-  env.commitSystem(EVENT_ECONOMY_SETTLED, payload);
+  commit(env, EVENT_ECONOMY_SETTLED, payload);
   return { ok: true, fee, receipt };
 }
 
@@ -119,7 +119,7 @@ export type MintResult = Result;
 export function mintCurrency(env: WorldCommit, agentId: string, amount: number, reason: string): MintResult {
   if (!Number.isInteger(amount) || amount <= 0) return { ok: false, reason: "bad-amount" };
   if (!getAgent(env.getState(), agentId)) return { ok: false, reason: "unknown-agent" };
-  env.commitSystem(EVENT_ECONOMY_MINTED, { agentId, amount, reason } satisfies MintPayload);
+  commit(env, EVENT_ECONOMY_MINTED, { agentId, amount, reason } satisfies MintPayload);
   return { ok: true };
 }
 

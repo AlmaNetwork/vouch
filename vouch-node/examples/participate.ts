@@ -6,7 +6,8 @@
 import { ED25519_SUITE, encodeBase64, type KeyPair, keyPairFromSeed } from "vouch-core";
 import { getAgent } from "vouch-world/agent";
 import { assertCurrencyConserved } from "vouch-world/environment";
-import { commandBytes, MemoryAccountLog, registerBytes } from "../src/accounts";
+import { MemoryAccountLog } from "../src/account-log";
+import { commandBytes, registerBytes } from "../src/accounts";
 import { MemoryJournal } from "../src/journal";
 import { VouchNode } from "../src/node";
 

@@ -14,7 +14,7 @@ import {
   type ValueProfile,
 } from "../agent";
 import { getRegion } from "../region";
-import { readBackOrThrow, type WorldCommit } from "./state";
+import { commit, readBackOrThrow, type WorldCommit } from "./state";
 
 export interface AdmitSpec {
   id: string; // name@region
@@ -45,7 +45,7 @@ export function admitAgent(env: WorldCommit, spec: AdmitSpec): AgentState {
     resources: 0,
     valueProfile: spec.valueProfile,
   };
-  env.commitSystem(EVENT_AGENT_ADMITTED, { agent });
+  commit(env, EVENT_AGENT_ADMITTED, { agent });
 
   return readBackOrThrow("admitAgent", getAgent(env.getState(), spec.id));
 }
@@ -66,6 +66,6 @@ export function admitTreasury(env: WorldCommit, region: string, initialCurrency 
 export function immigrate(env: WorldCommit, agentId: string, toRegion: string): AgentState {
   if (!getAgent(env.getState(), agentId)) throw new Error(`immigrate: agent "${agentId}" does not exist`);
   if (!getRegion(env.getState(), toRegion)) throw new Error(`immigrate: region "${toRegion}" does not exist`);
-  env.commitSystem(EVENT_AGENT_MIGRATED, { agentId, toRegion });
+  commit(env, EVENT_AGENT_MIGRATED, { agentId, toRegion });
   return readBackOrThrow("immigrate", getAgent(env.getState(), agentId));
 }

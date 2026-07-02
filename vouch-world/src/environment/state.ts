@@ -11,10 +11,10 @@
 // env-authored settlement events — never trusting a raw, self-asserted balance
 // event (World.emit is public, so the REDUCER fold point is the real chokepoint).
 
-import { type AgentSlice, agentReducer } from "../agent";
+import { type AgentEventMap, type AgentSlice, agentReducer } from "../agent";
 import { type AlmaEvent, type CommitSink, type Reducer, World, type WorldView } from "../foundation";
-import { type ItemSlice, itemReducer } from "../item";
-import { type RegionSlice, regionReducer } from "../region";
+import { type ItemEventMap, type ItemSlice, itemReducer } from "../item";
+import { type RegionEventMap, type RegionSlice, regionReducer } from "../region";
 
 export interface WorldState extends RegionSlice, AgentSlice, ItemSlice {
   // M3 added the agent slice; balances/economy live inside agent state. P3 added the item slice.
@@ -34,6 +34,18 @@ export type WorldViewOf = WorldView<WorldState>;
 export function readBackOrThrow<T>(op: string, value: T | undefined): T {
   if (value === undefined) throw new Error(`${op}: invariant violated — entity missing after its event`);
   return value;
+}
+
+/** Every system event the environment authors, mapped to its payload — keys the typed `commit`. */
+export type WorldEventMap = AgentEventMap & RegionEventMap & ItemEventMap;
+
+/**
+ * Author a system event, type-checked. The payload must match the event type's declared
+ * shape (WorldEventMap), so a wrong-shaped or misspelled payload is a compile error at the
+ * call site rather than an `as`-cast in the reducer. A thin wrapper over commitSystem.
+ */
+export function commit<K extends keyof WorldEventMap>(env: WorldCommit, type: K, payload: WorldEventMap[K]): AlmaEvent {
+  return env.commitSystem(type, payload as Record<string, unknown>);
 }
 
 export const INITIAL_WORLD_STATE: WorldState = { regions: {}, agents: {}, items: {} };

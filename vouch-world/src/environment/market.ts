@@ -19,7 +19,7 @@ import {
   type RegionLifecycle,
   type RegionState,
 } from "../region";
-import { readBackOrThrow, type WorldCommit } from "./state";
+import { commit, readBackOrThrow, type WorldCommit } from "./state";
 
 export type MarketResult = Result<{ region: RegionState }>;
 
@@ -33,7 +33,7 @@ export function setRegionLifecycle(env: WorldCommit, regionId: string, lifecycle
   if (!region) return { ok: false, reason: "unknown-region" };
   if (!isOwner(region, by)) return { ok: false, reason: "not-owner" };
   if (region.lifecycle === lifecycle) return { ok: true, region }; // idempotent
-  env.commitSystem(EVENT_REGION_LIFECYCLE_CHANGED, { regionId, lifecycle });
+  commit(env, EVENT_REGION_LIFECYCLE_CHANGED, { regionId, lifecycle });
   return readBack(env, regionId);
 }
 
@@ -45,7 +45,7 @@ export function listRegion(env: WorldCommit, regionId: string, salePrice: number
   if (salePrice === region.salePrice) return { ok: true, region }; // idempotent (incl. delist-when-unlisted)
   if (salePrice !== null && (!Number.isInteger(salePrice) || salePrice < 0)) return { ok: false, reason: "bad-price" };
   if (salePrice !== null && region.lifecycle !== "dormant") return { ok: false, reason: "not-dormant" };
-  env.commitSystem(EVENT_REGION_LISTED, { regionId, salePrice });
+  commit(env, EVENT_REGION_LISTED, { regionId, salePrice });
   return readBack(env, regionId);
 }
 
@@ -63,6 +63,6 @@ export function transferRegionOwnership(env: WorldCommit, regionId: string, to: 
   if (region.salePrice === null) return { ok: false, reason: "not-listed" };
   if (to === by) return { ok: false, reason: "already-owner" };
   // NOTE: `to` is not checked for existence — accounts are not first-class yet (Track B).
-  env.commitSystem(EVENT_REGION_OWNERSHIP_TRANSFERRED, { regionId, from: by, to, price: region.salePrice });
+  commit(env, EVENT_REGION_OWNERSHIP_TRANSFERRED, { regionId, from: by, to, price: region.salePrice });
   return readBack(env, regionId);
 }

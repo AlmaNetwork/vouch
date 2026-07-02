@@ -18,7 +18,7 @@ import {
   validateGovernance,
   validateResourcePolicy,
 } from "../region";
-import { readBackOrThrow, type WorldCommit } from "./state";
+import { commit, readBackOrThrow, type WorldCommit } from "./state";
 
 /**
  * Validate a proposed institution change against its region: a constitutional change
@@ -55,7 +55,7 @@ export function amendInstitution(env: WorldCommit, regionId: string, change: Ins
     );
   }
   validateInstitutionChange(change, region, "amendInstitution");
-  env.commitSystem(EVENT_REGION_INSTITUTION_CHANGED, { regionId, change, by });
+  commit(env, EVENT_REGION_INSTITUTION_CHANGED, { regionId, change, by });
   return readBackOrThrow("amendInstitution", getRegion(env.getState(), regionId));
 }
 
@@ -74,16 +74,16 @@ export function openProposal(env: WorldCommit, regionId: string, change: Institu
   if (!canGovern(region, by)) throw new Error(`openProposal: "${by}" is not a council member of region "${regionId}"`);
   if (region.openProposal) throw new Error(`openProposal: region "${regionId}" already has an open proposal`);
   validateInstitutionChange(change, region, "openProposal");
-  env.commitSystem(EVENT_GOV_PROPOSAL_OPENED, { regionId, change, by });
+  commit(env, EVENT_GOV_PROPOSAL_OPENED, { regionId, change, by });
   return readBackOrThrow("openProposal", getRegion(env.getState(), regionId));
 }
 
-export function castVote(env: WorldCommit, regionId: string, voter: string): RegionState {
+export function castVote(env: WorldCommit, regionId: string, by: string): RegionState {
   const region = getRegion(env.getState(), regionId);
   if (!region) throw new Error(`castVote: region "${regionId}" does not exist`);
   if (!region.openProposal) throw new Error(`castVote: region "${regionId}" has no open proposal`);
-  if (!canGovern(region, voter)) throw new Error(`castVote: "${voter}" is not a council member of region "${regionId}"`);
-  if (region.openProposal.votes.includes(voter)) throw new Error(`castVote: "${voter}" already voted`);
-  env.commitSystem(EVENT_GOV_VOTE_CAST, { regionId, voter });
+  if (!canGovern(region, by)) throw new Error(`castVote: "${by}" is not a council member of region "${regionId}"`);
+  if (region.openProposal.votes.includes(by)) throw new Error(`castVote: "${by}" already voted`);
+  commit(env, EVENT_GOV_VOTE_CAST, { regionId, by });
   return readBackOrThrow("castVote", getRegion(env.getState(), regionId));
 }
