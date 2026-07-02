@@ -149,10 +149,10 @@ export const regionReducer: Reducer<RegionSlice> = (state, event) => {
       const p = event.payload as GovVoteCastPayload;
       const existing = state.regions[p.regionId];
       if (!existing?.openProposal) return state;
-      if (existing.openProposal.votes.includes(p.voter)) return state; // no double vote
+      if (existing.openProposal.votes.includes(p.by)) return state; // no double vote
       const voted: RegionState = {
         ...existing,
-        openProposal: { ...existing.openProposal, votes: [...existing.openProposal.votes, p.voter] },
+        openProposal: { ...existing.openProposal, votes: [...existing.openProposal.votes, p.by] },
       };
       return { ...state, regions: { ...state.regions, [p.regionId]: resolveIfPassed(voted) } };
     }
@@ -202,6 +202,8 @@ export function ownerOf(state: RegionSlice, id: string): string | null | undefin
 export function ownedRegionsOf(state: RegionSlice, account: string): RegionState[] {
   return listRegions(state).filter((r) => r.owner === account);
 }
+
+// --- governance predicates (operate on a single RegionState, not the slice) ---
 
 /**
  * Does `principal` satisfy a region's governance rule — may it amend the institutions?

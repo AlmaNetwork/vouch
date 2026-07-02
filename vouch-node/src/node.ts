@@ -9,7 +9,8 @@
 import type { KeyPair } from "vouch-core";
 import { rehydrateAlmaWorld, type WorldState } from "vouch-world/environment";
 import type { World } from "vouch-world/foundation";
-import { type AccountLog, AccountRegistry, type HttpStatus, type RegisterRequest, type SignedRequest } from "./accounts";
+import type { AccountLog } from "./account-log";
+import { AccountRegistry, type AuthResult, type HttpStatus, type RegisterRequest, type SignedRequest } from "./accounts";
 import { type Command, commandSchema, dispatch } from "./commands";
 import type { Journal } from "./journal";
 
@@ -19,10 +20,6 @@ export interface NodeDeps {
   readonly journal: Journal;
   readonly accountLog: AccountLog;
 }
-
-export type RegisterResult =
-  | { readonly ok: true; readonly principal: string }
-  | { readonly ok: false; readonly status: HttpStatus; readonly reason: string };
 
 export type SubmitResult =
   | { readonly ok: true; readonly status: 200; readonly detail?: Record<string, unknown>; readonly events: number }
@@ -43,7 +40,7 @@ export class VouchNode {
   }
 
   /** Bind a principal to a public key (self-signed; first-writer-wins). */
-  register(req: RegisterRequest): RegisterResult {
+  register(req: RegisterRequest): AuthResult {
     return this.registry.register(req);
   }
 
