@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Hono } from "hono";
-import { MemoryAccountLog } from "../src/accounts";
+import { MemoryAccountLog } from "../src/account-log";
 import { createNodeApp } from "../src/http";
 import { MemoryJournal } from "../src/journal";
 import { VouchNode } from "../src/node";

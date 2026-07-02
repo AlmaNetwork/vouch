@@ -46,22 +46,32 @@ export const EVENT_AGENT_VOUCHED = "agent.vouched"; // one agent VOUCHES for ano
 
 /** One agent's signed balance delta within a settlement. */
 export type SettlementEntry = {
-  agentId: string;
-  currencyDelta: number;
-  creditDelta: number;
-  reputationDelta: number;
+  readonly agentId: string;
+  readonly currencyDelta: number;
+  readonly creditDelta: number;
+  readonly reputationDelta: number;
 };
 
 export type SettlementPayload = {
-  entries: SettlementEntry[];
-  receipt: Certificate; // byproduct cert (§2-8 seed) — accumulates in the log
-  memo: { from: string; to: string; amount: number; fee: number };
+  readonly entries: readonly SettlementEntry[];
+  readonly receipt: Certificate; // byproduct cert (§2-8 seed) — accumulates in the log
+  readonly memo: { readonly from: string; readonly to: string; readonly amount: number; readonly fee: number };
 };
 
-export type AgentAdmittedPayload = { agent: AgentState };
-export type AgentMigratedPayload = { agentId: string; toRegion: string };
-export type AgentDecidedPayload = { agentId: string; intent: Intent };
+export type AgentAdmittedPayload = { readonly agent: AgentState };
+export type AgentMigratedPayload = { readonly agentId: string; readonly toRegion: string };
+export type AgentDecidedPayload = { readonly agentId: string; readonly intent: Intent };
 /** An explicit currency mint — the ONLY sanctioned way new currency enters after genesis. */
-export type MintPayload = { agentId: string; amount: number; reason: string };
+export type MintPayload = { readonly agentId: string; readonly amount: number; readonly reason: string };
 /** One agent vouches for another (weight 1..5), raising the subject's trust. */
-export type VouchedPayload = { from: string; to: string; weight: number };
+export type VouchedPayload = { readonly from: string; readonly to: string; readonly weight: number };
+
+/** Maps each agent-slice event type to its payload — the typed `commit` helper keys off this. */
+export interface AgentEventMap {
+  [EVENT_AGENT_ADMITTED]: AgentAdmittedPayload;
+  [EVENT_AGENT_MIGRATED]: AgentMigratedPayload;
+  [EVENT_AGENT_DECIDED]: AgentDecidedPayload;
+  [EVENT_ECONOMY_SETTLED]: SettlementPayload;
+  [EVENT_ECONOMY_MINTED]: MintPayload;
+  [EVENT_AGENT_VOUCHED]: VouchedPayload;
+}
