@@ -14,7 +14,7 @@ import {
   type ValueProfile,
 } from "../agent";
 import { getRegion } from "../region";
-import type { WorldCommit } from "./state";
+import { readBackOrThrow, type WorldCommit } from "./state";
 
 export interface AdmitSpec {
   id: string; // name@region
@@ -47,9 +47,7 @@ export function admitAgent(env: WorldCommit, spec: AdmitSpec): AgentState {
   };
   env.commitSystem(EVENT_AGENT_ADMITTED, { agent });
 
-  const admitted = getAgent(env.getState(), spec.id);
-  if (!admitted) throw new Error("admitAgent: invariant violated");
-  return admitted;
+  return readBackOrThrow("admitAgent", getAgent(env.getState(), spec.id));
 }
 
 /** Admit the per-region treasury account (collects trust-cost fees so currency is conserved). */
@@ -69,7 +67,5 @@ export function immigrate(env: WorldCommit, agentId: string, toRegion: string): 
   if (!getAgent(env.getState(), agentId)) throw new Error(`immigrate: agent "${agentId}" does not exist`);
   if (!getRegion(env.getState(), toRegion)) throw new Error(`immigrate: region "${toRegion}" does not exist`);
   env.commitSystem(EVENT_AGENT_MIGRATED, { agentId, toRegion });
-  const moved = getAgent(env.getState(), agentId);
-  if (!moved) throw new Error("immigrate: invariant violated");
-  return moved;
+  return readBackOrThrow("immigrate", getAgent(env.getState(), agentId));
 }

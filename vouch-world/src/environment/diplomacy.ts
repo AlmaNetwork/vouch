@@ -10,7 +10,7 @@ import { type Certificate, decodeBase64, parseIdentifier, verifyCertificate } fr
 import { getAgent } from "../agent";
 import type { Result } from "../foundation";
 import { EVENT_REGION_RECOGNIZED, type ForeignCertStance, getRegion, type RegionState } from "../region";
-import type { WorldCommit, WorldState } from "./state";
+import { readBackOrThrow, type WorldCommit, type WorldState } from "./state";
 
 /** A village's stance toward another village's certificates: an override, else the default. */
 export function stanceToward(viewer: RegionState, issuerRegion: string): ForeignCertStance {
@@ -109,7 +109,5 @@ export function recognizeRegion(env: WorldCommit, by: string, target: string): R
   if (t.status === "recognized") return t; // idempotent
 
   env.commitSystem(EVENT_REGION_RECOGNIZED, { regionId: target, by });
-  const updated = getRegion(env.getState(), target);
-  if (!updated) throw new Error("recognizeRegion: invariant violated");
-  return updated;
+  return readBackOrThrow("recognizeRegion", getRegion(env.getState(), target));
 }

@@ -19,14 +19,12 @@ import {
   type RegionLifecycle,
   type RegionState,
 } from "../region";
-import type { WorldCommit } from "./state";
+import { readBackOrThrow, type WorldCommit } from "./state";
 
 export type MarketResult = Result<{ region: RegionState }>;
 
 function readBack(env: WorldCommit, regionId: string): MarketResult {
-  const region = getRegion(env.getState(), regionId);
-  if (!region) throw new Error("market: invariant violated — region missing after event");
-  return { ok: true, region };
+  return { ok: true, region: readBackOrThrow("market", getRegion(env.getState(), regionId)) };
 }
 
 /** The owner hibernates / reactivates their region (active <-> dormant). Owner-only. */

@@ -13,7 +13,6 @@ import type { KeyPair } from "vouch-core";
 import {
   type AgentDecidedPayload,
   type AgentRole,
-  type AgentState,
   agentsInRegion,
   type Brain,
   defaultBrains,
@@ -24,10 +23,10 @@ import {
   type ReadOnlyView,
 } from "../agent";
 import type { Rng, World } from "../foundation";
-import { defineRegion, getRegion, listRegions, makeInstitutions, type RegionState } from "../region";
+import { getRegion, listRegions } from "../region";
 import { executeTransfer } from "./economy";
-import { emergenceProposal, proposeFounding } from "./founding";
-import { admitTreasury, immigrate } from "./population";
+import { detectEmergence } from "./emergence";
+import { immigrate } from "./population";
 import { regenerateResources } from "./resource";
 import type { WorldState } from "./state";
 
@@ -37,11 +36,6 @@ export interface EconomyConfig {
   readonly brains?: Partial<Record<AgentRole, Brain>>;
   readonly notary: KeyPair;
   readonly criticalMass?: number;
-}
-
-/** A region's institutional leaning, derived from its verification policy. */
-export function regionStance(region: RegionState): "strict" | "lenient" {
-  return region.institutions.verificationPolicy.rejectUnknownSchemas ? "strict" : "lenient";
 }
 
 function dispatchIntent(env: World<WorldState>, agentId: string, intent: Intent, tick: number, notary: KeyPair): void {
@@ -94,68 +88,4 @@ export function economyStep(env: World<WorldState>, ctx: { tick: number; rng: Rn
 /** Drive `ticks` simulation ticks over a world (tick loop + brains + emergence). */
 export function runEconomy(world: World<WorldState>, ticks: number, config: EconomyConfig): void {
   world.run(ticks, (ctx) => economyStep(world, { tick: ctx.tick, rng: ctx.rng }, config));
-}
-
-/**
- * §3-D internal emergence. Groups dissatisfied agents (value profile != region
- * stance) by (region, profile); any group at/above critical mass SECEDES via the
- * SAME founding engine (audit-confirmed reuse), with institutions embodying the
- * dissatisfaction, then migrates there (which resolves the mismatch).
- *
- * The region is FOUNDED once per (region, profile); a later dissatisfied wave
- * immigrates into the existing region (§3-C) rather than being stranded (EMG-1).
- */
-export function detectEmergence(env: World<WorldState>, criticalMass: number): void {
-  const state = env.getState();
-  const groups = new Map<string, AgentState[]>();
-  for (const a of listAgents(state)) {
-    if (a.role === "treasury") continue;
-    const region = getRegion(state, a.region);
-    if (!region) continue;
-    if (a.valueProfile === regionStance(region)) continue; // satisfied
-    const key = `${a.region}::${a.valueProfile}`;
-    const bucket = groups.get(key);
-    if (bucket) bucket.push(a);
-    else groups.set(key, [a]);
-  }
-
-  for (const [key, bucket] of [...groups.entries()].sort(([a], [b]) => (a < b ? -1 : 1))) {
-    if (bucket.length < criticalMass) continue;
-    const [sourceRegion, profile] = key.split("::") as [string, "strict" | "lenient"];
-    // EMG-3: deterministic cohort order (don't lean on Object.values insertion order).
-    const cohort = [...bucket].sort((a, b) => (a.id < b.id ? -1 : 1));
-    const newId = `${profile}${sourceRegion}`; // deterministic, lowercase alnum
-
-    // EMG-1: found the region ONCE; ALWAYS migrate the current cohort into it, so a
-    // later wave immigrates rather than being silently stranded.
-    if (!getRegion(env.getState(), newId)) {
-      // Emergence inheritance: the seceded village INHERITS the parent's certificate
-      // vocabulary (schemaLedger), and translates the parent's certs into its local
-      // vocabulary (a "map" diplomacy override toward the source). The dissatisfaction
-      // still shapes its verification stance (strict ⇄ lenient). The cohort carries its
-      // own balances/credentials across (immigration preserves them).
-      const parent = getRegion(env.getState(), sourceRegion);
-      const institutions = makeInstitutions({
-        schemaLedger: parent ? parent.institutions.schemaLedger : [],
-        verificationPolicy:
-          profile === "strict"
-            ? { acceptedSchemaIds: [], rejectUnknownSchemas: true }
-            : { acceptedSchemaIds: [], rejectUnknownSchemas: false },
-        diplomacyPolicy: { defaultStance: profile === "strict" ? "reexamine" : "absorb", overrides: { [sourceRegion]: "map" } },
-      });
-
-      const def = defineRegion(newId, `${profile} secession from ${sourceRegion}`, institutions);
-      proposeFounding(
-        env,
-        emergenceProposal(
-          def,
-          sourceRegion,
-          `institutional mismatch: ${profile} cohort`,
-          cohort.map((a) => a.id),
-        ),
-      );
-      admitTreasury(env, newId);
-    }
-    for (const a of cohort) immigrate(env, a.id, newId);
-  }
 }

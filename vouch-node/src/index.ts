@@ -1,7 +1,7 @@
 // Entrypoint: load config, boot the node (replaying its journal), and serve.
 // Run: `bun src/index.ts` (see README for env vars).
 
-import { FileAccountLog, MemoryAccountLog } from "./accounts";
+import { FileAccountLog, MemoryAccountLog } from "./account-log";
 import { loadConfig } from "./config";
 import { createNodeApp } from "./http";
 import { FileJournal, MemoryJournal } from "./journal";
