@@ -27,8 +27,9 @@ time — **taken part in**.
 
 | Package | What it is | Tests |
 |---------|-----------|-------|
-| [`vouch-world`](./vouch-world) | The **simulator** — the deterministic world engine, the villages, the agents, the economy, typed credentials, diplomacy, a region market, digital items, a resource/scarcity model, and a read-only observation server. This is the world. | 100 |
+| [`vouch-world`](./vouch-world) | The **simulator** — the deterministic world engine, the villages, the agents, the economy, typed credentials, diplomacy, a region market, digital items, a resource/scarcity model, and a read-only observation server. This is the world. | 104 |
 | [`vouch-core`](./vouch-core) | The **trust engine** it runs on — a standalone, dependency-free\* factory that mints ids/keys/certificates and **formally verifies** signatures. It knows nothing of villages or economies; meaning lives outside it, and it's reusable on its own. | 35 |
+| [`vouch-node`](./vouch-node) | The **participate node** — a durable, authenticated write path *onto* the engine: Ed25519-signed commands (found / admit / transfer / vouch), a replay-on-boot journal, and the read-only observation surface. This is how you take part over the network. | 35 |
 
 \* depends on no other layer; only `@noble/curves`, `canonicalize`, `zod`.
 
@@ -94,33 +95,25 @@ Each package is self-contained ([Bun](https://bun.sh) runs the TypeScript direct
 ```bash
 cd vouch-world && bun install && bun test   # the simulator (depends on ../vouch-core)
 cd vouch-core  && bun install && bun test   # the trust engine, on its own
+cd vouch-node  && bun install && bun test   # the participate node (depends on both)
 ```
 
-### Docker (network node)
+### Take part — the participate node
 
-Run the network node (the app under `src/`, see [`docs/API.md`](./docs/API.md)) in a
-Docker container:
+`vouch-node` is the **canonical** node you take part through: it wraps the engine with a
+durable, authenticated write path (Ed25519-signed commands + a replay-on-boot journal).
+See [`vouch-node/README.md`](./vouch-node/README.md) for the full surface.
 
 ```bash
-# Build and run with Docker Compose
-docker compose up -d
-
-# Or build manually
-docker build -t vouch .
-docker run -d -p 3000:3000 -v vouch-data:/app/data vouch
-
-# Check logs
-docker compose logs -f
-
-# Stop
-docker compose down
+cd vouch-node && bun install
+VOUCH_NOTARY=seed://dev bun src/index.ts   # POST /v1/register + /v1/command; GET /state /regions /metrics
+bun examples/participate.ts                # in-process end-to-end tour (register -> found -> transfer -> restart)
 ```
 
-For development with hot reload:
-
-```bash
-docker compose --profile dev up vouch-dev
-```
+> **Legacy node.** An earlier prototype node also lives at the repo root (`src/`, plus
+> the root `Dockerfile` / `docker-compose.yml`). It is being **consolidated into
+> `vouch-node`** and should be treated as legacy — new work targets `vouch-node`. (It is
+> not deleted yet; the convergence lands incrementally.)
 
 ## Layout
 
@@ -135,8 +128,11 @@ vouch/
 │       ├── environment/        # L4   composition root · founding · economy · diplomacy · driver
 │       ├── credential/         #      typed, validated certificate types on the envelope
 │       └── observation/        # L5   read-only HTTP (hono) · metrics
-└── vouch-core/                 # L1 trust engine (standalone package)
-    └── src/                    #   identifier · keys · suite · jcs · encoding · certificate
+├── vouch-core/                 # L1 trust engine (standalone package)
+│   └── src/                    #   identifier · keys · suite · jcs · encoding · certificate
+└── vouch-node/                 # the participate node — durable, authed write path onto the engine
+    ├── examples/               #   participate.ts (register -> found -> transfer -> restart)
+    └── src/                    #   accounts (signed auth) · journal · commands · node · http · config
 ```
 
 ## Naming
