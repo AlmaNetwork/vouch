@@ -3,14 +3,14 @@
  */
 
 import { Hono } from "hono";
-import { logger } from "hono/logger";
 import { cors } from "hono/cors";
-import type { Env } from "./env.js";
-import { requestId, errorHandler } from "./middleware/index.js";
-import v1Routes from "./routes/v1/index.js";
-import docsRoutes from "./routes/docs.js";
-import type { NetworkState } from "../domain/models/types.js";
+import { logger } from "hono/logger";
 import type { CommandBus } from "../application/commandBus.js";
+import type { NetworkState } from "../domain/models/types.js";
+import type { Env } from "./env.js";
+import { errorHandler, requestId } from "./middleware/index.js";
+import docsRoutes from "./routes/docs.js";
+import v1Routes from "./routes/v1/index.js";
 
 export interface CreateAppOptions {
   getState: () => NetworkState;
@@ -60,7 +60,7 @@ export function createApp(options: CreateAppOptions): Hono<Env> {
           requestId: c.get("requestId"),
         },
       },
-      404
+      404,
     );
   });
 

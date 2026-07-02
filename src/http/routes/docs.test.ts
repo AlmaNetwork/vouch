@@ -2,9 +2,9 @@
  * Tests for documentation routes
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { boot, type BootResult } from "../../boot.js";
-import { unlinkSync, existsSync } from "node:fs";
+import { existsSync, unlinkSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { type BootResult, boot } from "../../boot.js";
 
 describe("Documentation Endpoints", () => {
   let bootResult: BootResult;
@@ -42,7 +42,7 @@ describe("Documentation Endpoints", () => {
       expect(res.headers.get("content-type")).toContain("application/json");
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const body = await res.json() as any;
+      const body = (await res.json()) as any;
       expect(body.openapi).toBe("3.0.3");
       expect(body.info.title).toBe("Vouch Network API");
       expect(body.paths).toBeDefined();

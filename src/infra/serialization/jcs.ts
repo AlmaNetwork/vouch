@@ -3,13 +3,11 @@
  * RFC 8785 compliant canonical JSON + hash chain
  */
 
-import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const canonicalize = require("canonicalize") as (
-  value: unknown
-) => string | undefined;
+const canonicalize = require("canonicalize") as (value: unknown) => string | undefined;
 
 /**
  * Convert value to canonical JSON string
@@ -45,10 +43,6 @@ export function chainHash(record: unknown, prevHash: string | null): string {
 /**
  * Verify hash chain integrity
  */
-export function verifyChain(
-  _recordHash: string,
-  prevHash: string | null,
-  expectedPrevHash: string | null
-): boolean {
+export function verifyChain(_recordHash: string, prevHash: string | null, expectedPrevHash: string | null): boolean {
   return prevHash === expectedPrevHash;
 }

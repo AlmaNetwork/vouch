@@ -1,8 +1,6 @@
-export { requestId } from "./requestId.js";
-export { session, optionalSession } from "./session.js";
-export { ownerGate, adminGate } from "./ownerGate.js";
-export { errorHandler, type ErrorResponse } from "./errorContract.js";
+export { type ErrorResponse, errorHandler } from "./errorContract.js";
 export { idempotencyGuard } from "./idempotency.js";
-
+export { adminGate, ownerGate } from "./ownerGate.js";
+export { requestId } from "./requestId.js";
 // Alias for session (used in new API routes)
-export { session as authenticate } from "./session.js";
+export { optionalSession, session, session as authenticate } from "./session.js";

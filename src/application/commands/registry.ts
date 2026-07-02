@@ -7,8 +7,8 @@
  * 2. apply: Execute the command and produce events
  */
 
-import type { NetworkState, Principal } from "../../domain/models/types.js";
 import { DomainError } from "../../domain/models/errors.js";
+import type { NetworkState, Principal } from "../../domain/models/types.js";
 
 // ============================================================
 // Command Payload Types
@@ -57,20 +57,149 @@ export interface TickPayload {
   reason: string;
 }
 
-/** Create Asset Type command */
-export interface CreateAssetTypePayload {
+/** Define Asset Type command */
+export interface DefineAssetTypePayload {
   assetTypeId: string;
   name: string;
   description?: string;
+  kind: "fungible" | "credential" | "nft";
+  // Fungible options
   precision?: number;
   allowNegative?: boolean;
+  // Credential/NFT options
+  schema?: Record<string, unknown>;
+  transferable?: boolean;
+  expirable?: boolean;
 }
 
-/** Create Asset command */
-export interface CreateAssetPayload {
+/** Issue Asset command */
+export interface IssueAssetPayload {
   assetId: string;
-  initialBalance?: string;
+  recipientId: string;
+  // Fungible
+  amount?: string;
+  // Credential/NFT
+  claims?: Record<string, unknown>;
+  expiresAt?: string;
   metadata?: Record<string, unknown>;
+}
+
+/** Transfer Asset command */
+export interface TransferAssetPayload {
+  assetId: string;
+  toAccountId: string;
+  amount?: string; // For partial transfer of fungible
+  memo?: string;
+}
+
+/** Dispose Asset command */
+export interface DisposeAssetPayload {
+  assetId: string;
+  reason?: string;
+}
+
+/** Revoke Asset command */
+export interface RevokeAssetPayload {
+  assetId: string;
+  reason: string;
+}
+
+/** Make Law command */
+export interface MakeLawPayload {
+  lawId: string;
+  name: string;
+  description?: string;
+  lawType: "constraint" | "requirement" | "trigger";
+  rule: {
+    target: string | string[];
+    condition?: Record<string, unknown>;
+    action?: Record<string, unknown>;
+    message?: string;
+  };
+  effectiveAt?: string;
+}
+
+/** Revise Law command */
+export interface ReviseLawPayload {
+  lawId: string;
+  changes: {
+    name?: string;
+    description?: string;
+    rule?: {
+      target?: string | string[];
+      condition?: Record<string, unknown>;
+      action?: Record<string, unknown>;
+      message?: string;
+    };
+    effectiveAt?: string;
+  };
+}
+
+/** Abolish Law command */
+export interface AbolishLawPayload {
+  lawId: string;
+  reason: string;
+}
+
+/** Invite command - create invitation */
+export interface InvitePayload {
+  inviteId?: string;
+  email: string;
+  roles?: string[];
+  expiresInDays?: number;
+}
+
+/** Accept Invite command */
+export interface AcceptInvitePayload {
+  inviteId: string;
+  accountId: string;
+  residentId: string;
+  residentName: string;
+}
+
+/** Suspend command - suspend an account */
+export interface SuspendPayload {
+  accountId: string;
+  reason: string;
+}
+
+/** Reinstate command - reinstate a suspended account */
+export interface ReinstatePayload {
+  accountId: string;
+  reason?: string;
+}
+
+/** Make Group command */
+export interface MakeGroupPayload {
+  groupId: string;
+  name: string;
+  description?: string;
+  groupType: "team" | "department" | "committee" | "community";
+  permissions?: string[];
+}
+
+/** Revise Group command */
+export interface ReviseGroupPayload {
+  groupId: string;
+  changes: {
+    name?: string;
+    description?: string;
+    permissions?: string[];
+  };
+}
+
+/** Dissolve Group command */
+export interface DissolveGroupPayload {
+  groupId: string;
+  reason: string;
+}
+
+/** Assign Member command */
+export interface AssignMemberPayload {
+  groupId: string;
+  accountId: string;
+  role: "leader" | "member";
+  action: "add" | "remove" | "update";
 }
 
 // ============================================================
@@ -84,8 +213,26 @@ export interface CommandPayloadMap {
   transact: TransactPayload;
   migrate: MigratePayload;
   tick: TickPayload;
-  createAssetType: CreateAssetTypePayload;
-  createAsset: CreateAssetPayload;
+  // Asset commands
+  defineAssetType: DefineAssetTypePayload;
+  issueAsset: IssueAssetPayload;
+  transferAsset: TransferAssetPayload;
+  disposeAsset: DisposeAssetPayload;
+  revokeAsset: RevokeAssetPayload;
+  // Law commands
+  makeLaw: MakeLawPayload;
+  reviseLaw: ReviseLawPayload;
+  abolishLaw: AbolishLawPayload;
+  // Membership commands
+  invite: InvitePayload;
+  acceptInvite: AcceptInvitePayload;
+  suspend: SuspendPayload;
+  reinstate: ReinstatePayload;
+  // Organization commands
+  makeGroup: MakeGroupPayload;
+  reviseGroup: ReviseGroupPayload;
+  dissolveGroup: DissolveGroupPayload;
+  assignMember: AssignMemberPayload;
 }
 
 export type CommandName = keyof CommandPayloadMap;
@@ -136,8 +283,22 @@ export type DomainEvent =
   | { type: "ResidentAdmitted"; payload: ResidentAdmittedEvent }
   | { type: "TransactionExecuted"; payload: TransactionExecutedEvent }
   | { type: "RegionAmended"; payload: RegionAmendedEvent }
-  | { type: "AssetTypeCreated"; payload: AssetTypeCreatedEvent }
-  | { type: "AssetCreated"; payload: AssetCreatedEvent }
+  | { type: "AssetTypeDefined"; payload: AssetTypeDefinedEvent }
+  | { type: "AssetIssued"; payload: AssetIssuedEvent }
+  | { type: "AssetTransferred"; payload: AssetTransferredEvent }
+  | { type: "AssetDisposed"; payload: AssetDisposedEvent }
+  | { type: "AssetRevoked"; payload: AssetRevokedEvent }
+  | { type: "LawCreated"; payload: LawCreatedEvent }
+  | { type: "LawRevised"; payload: LawRevisedEvent }
+  | { type: "LawAbolished"; payload: LawAbolishedEvent }
+  | { type: "InviteCreated"; payload: InviteCreatedEvent }
+  | { type: "InviteAccepted"; payload: InviteAcceptedEvent }
+  | { type: "AccountSuspended"; payload: AccountSuspendedEvent }
+  | { type: "AccountReinstated"; payload: AccountReinstatedEvent }
+  | { type: "GroupCreated"; payload: GroupCreatedEvent }
+  | { type: "GroupRevised"; payload: GroupRevisedEvent }
+  | { type: "GroupDissolved"; payload: GroupDissolvedEvent }
+  | { type: "MemberAssigned"; payload: MemberAssignedEvent }
   | { type: "SchemaVersionMigrated"; payload: SchemaVersionMigratedEvent };
 
 export interface RegionEstablishedEvent {
@@ -180,23 +341,152 @@ export interface RegionAmendedEvent {
   updatedAt: string;
 }
 
-export interface AssetTypeCreatedEvent {
+export interface AssetTypeDefinedEvent {
   assetTypeId: string;
   regionId: string;
+  issuerId: string;
   name: string;
   description: string;
+  kind: "fungible" | "credential" | "nft";
   precision: number;
   allowNegative: boolean;
+  schema: Record<string, unknown> | null;
+  transferable: boolean;
+  expirable: boolean;
   createdAt: string;
 }
 
-export interface AssetCreatedEvent {
+export interface AssetIssuedEvent {
   assetId: string;
   accountId: string;
   assetTypeId: string;
-  initialBalance: string;
+  issuerId: string;
+  balance: string;
+  claims: Record<string, unknown> | null;
+  expiresAt: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
+}
+
+export interface AssetTransferredEvent {
+  assetId: string;
+  fromAccountId: string;
+  toAccountId: string;
+  amount: string | null;
+  memo: string;
+  createdAt: string;
+}
+
+export interface AssetDisposedEvent {
+  assetId: string;
+  accountId: string;
+  reason: string;
+  disposedAt: string;
+}
+
+export interface AssetRevokedEvent {
+  assetId: string;
+  issuerId: string;
+  reason: string;
+  revokedAt: string;
+}
+
+export interface LawCreatedEvent {
+  lawId: string;
+  regionId: string;
+  createdBy: string;
+  name: string;
+  description: string;
+  lawType: "constraint" | "requirement" | "trigger";
+  rule: {
+    target: string | string[];
+    condition?: Record<string, unknown>;
+    action?: Record<string, unknown>;
+    message?: string;
+  };
+  effectiveAt: string | null;
+  createdAt: string;
+}
+
+export interface LawRevisedEvent {
+  lawId: string;
+  changes: Record<string, unknown>;
+  revisedBy: string;
+  revisedAt: string;
+}
+
+export interface LawAbolishedEvent {
+  lawId: string;
+  abolishedBy: string;
+  reason: string;
+  abolishedAt: string;
+}
+
+export interface InviteCreatedEvent {
+  inviteId: string;
+  regionId: string;
+  email: string;
+  invitedBy: string;
+  roles: string[];
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface InviteAcceptedEvent {
+  inviteId: string;
+  accountId: string;
+  residentId: string;
+  residentName: string;
+  email: string;
+  acceptedAt: string;
+}
+
+export interface AccountSuspendedEvent {
+  accountId: string;
+  suspendedBy: string;
+  reason: string;
+  suspendedAt: string;
+}
+
+export interface AccountReinstatedEvent {
+  accountId: string;
+  reinstatedBy: string;
+  reason: string;
+  reinstatedAt: string;
+}
+
+export interface GroupCreatedEvent {
+  groupId: string;
+  regionId: string;
+  createdBy: string;
+  name: string;
+  description: string;
+  groupType: "team" | "department" | "committee" | "community";
+  permissions: string[];
+  createdAt: string;
+}
+
+export interface GroupRevisedEvent {
+  groupId: string;
+  changes: Record<string, unknown>;
+  revisedBy: string;
+  revisedAt: string;
+}
+
+export interface GroupDissolvedEvent {
+  groupId: string;
+  dissolvedBy: string;
+  reason: string;
+  dissolvedAt: string;
+}
+
+export interface MemberAssignedEvent {
+  groupId: string;
+  accountId: string;
+  role: "leader" | "member";
+  action: "add" | "remove" | "update";
+  assignedBy: string;
+  assignedAt: string;
 }
 
 export interface SchemaVersionMigratedEvent {
@@ -217,19 +507,13 @@ export interface CommandHandler<N extends CommandName> {
    * Validate command preconditions.
    * Should throw DomainError if validation fails.
    */
-  validate(
-    payload: CommandPayloadMap[N],
-    ctx: CommandContext
-  ): void;
+  validate(payload: CommandPayloadMap[N], ctx: CommandContext): void;
 
   /**
    * Apply the command and produce events.
    * Called only after validation passes.
    */
-  apply(
-    payload: CommandPayloadMap[N],
-    ctx: CommandContext
-  ): CommandResult;
+  apply(payload: CommandPayloadMap[N], ctx: CommandContext): CommandResult;
 }
 
 // ============================================================
@@ -263,17 +547,10 @@ export class CommandRegistry {
    * Validate a single command.
    * Throws DomainError if validation fails.
    */
-  validateCommand(
-    command: CommandPacket,
-    ctx: CommandContext
-  ): void {
+  validateCommand(command: CommandPacket, ctx: CommandContext): void {
     const handler = this.getHandler(command.name);
     if (!handler) {
-      throw new DomainError(
-        "UNKNOWN_COMMAND",
-        `Unknown command: ${command.name}`,
-        { command: command.name }
-      );
+      throw new DomainError("UNKNOWN_COMMAND", `Unknown command: ${command.name}`, { command: command.name });
     }
     handler.validate(command.payload, ctx);
   }
@@ -282,17 +559,10 @@ export class CommandRegistry {
    * Apply a single command and produce events.
    * Assumes validation has already passed.
    */
-  applyCommand(
-    command: CommandPacket,
-    ctx: CommandContext
-  ): CommandResult {
+  applyCommand(command: CommandPacket, ctx: CommandContext): CommandResult {
     const handler = this.getHandler(command.name);
     if (!handler) {
-      throw new DomainError(
-        "UNKNOWN_COMMAND",
-        `Unknown command: ${command.name}`,
-        { command: command.name }
-      );
+      throw new DomainError("UNKNOWN_COMMAND", `Unknown command: ${command.name}`, { command: command.name });
     }
     return handler.apply(command.payload, ctx);
   }
@@ -302,10 +572,7 @@ export class CommandRegistry {
    * Validates all commands first, then applies them in order.
    * If any validation fails, no commands are applied.
    */
-  executeCommands(
-    commands: CommandPacket[],
-    initialCtx: CommandContext
-  ): { events: DomainEvent[]; finalState: NetworkState } {
+  executeCommands(commands: CommandPacket[], initialCtx: CommandContext): { events: DomainEvent[]; finalState: NetworkState } {
     // Phase 1: Validate all commands
     let currentCtx = { ...initialCtx };
     for (const command of commands) {
@@ -345,7 +612,7 @@ export class CommandRegistry {
    */
   simulateCommands(
     commands: CommandPacket[],
-    ctx: CommandContext
+    ctx: CommandContext,
   ): { events: DomainEvent[]; finalState: NetworkState; valid: boolean; error?: DomainError } {
     try {
       const result = this.executeCommands(commands, ctx);

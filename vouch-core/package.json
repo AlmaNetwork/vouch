@@ -1,0 +1,30 @@
+{
+  "name": "vouch-core",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "description": "ALMA Trust Core — a stateless factory that generates ids/keys/certificates and formally verifies signatures. Knows nothing of villages, economies, or agents.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.7.0",
+    "canonicalize": "^2.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.0",
+    "typescript": "^5.6.0"
+  }
+}

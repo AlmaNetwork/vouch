@@ -1,0 +1,92 @@
+import { describe, expect, test } from "bun:test";
+import { keyPairFromSeed } from "vouch-core";
+import {
+  admitAgent,
+  admitTreasury,
+  createAlmaWorld,
+  executeTransfer,
+  experimenterProposal,
+  proposeFounding,
+  seedGenesis,
+} from "../../src/environment";
+import { createObservationApp, gini, metrics, type ObservationServer } from "../../src/observation";
+import { defineRegion } from "../../src/region";
+
+const NOTARY = keyPairFromSeed(new Uint8Array(32).fill(9));
+
+// Response.json() is typed `unknown`; the world is the source of truth, not the wire.
+type App = ReturnType<typeof createObservationApp>;
+async function getJson(app: App, path: string): Promise<any> {
+  return (await app.request(path)).json();
+}
+
+function world() {
+  const w = createAlmaWorld("obs");
+  seedGenesis(w, [defineRegion("umi", "Umi")]); // genesis -> recognized
+  proposeFounding(w, experimenterProposal(defineRegion("nova", "Nova"))); // unrecognized
+  admitTreasury(w, "umi");
+  admitAgent(w, { id: "alice@umi", region: "umi", role: "merchant", valueProfile: "lenient", publicKey: "", currency: 100 });
+  admitAgent(w, { id: "bob@umi", region: "umi", role: "artisan", valueProfile: "lenient", publicKey: "", currency: 0 });
+  executeTransfer(w, { from: "alice@umi", to: "bob@umi", amount: 40 }, { tick: 0, notary: NOTARY });
+  return w;
+}
+
+describe("observation — read-only metrics (§5)", () => {
+  test("metrics summarize regions, agents, currency, and the log", () => {
+    const m = metrics(world());
+    expect(m.regions).toMatchObject({ total: 2, recognized: 1, unrecognized: 1 });
+    expect(m.agents.residents).toBe(2);
+    expect(m.agents.treasuries).toBe(1);
+    expect(m.agents.totalCurrency).toBe(100); // conserved across the transfer
+    expect(m.log.eventTypes["economy.settled"]).toBe(1);
+  });
+
+  test("gini is 0 when equal and rises with concentration", () => {
+    expect(gini([10, 10, 10])).toBe(0);
+    expect(gini([])).toBe(0);
+    expect(gini([0, 0, 100])).toBeGreaterThan(0.5);
+  });
+});
+
+describe("observation — the read-only HTTP connection point", () => {
+  test("GET endpoints serve the world as JSON", async () => {
+    const app = createObservationApp(world());
+
+    expect((await getJson(app, "/health")).ok).toBe(true);
+    expect((await getJson(app, "/metrics")).regions.total).toBe(2);
+
+    const state = await getJson(app, "/state");
+    expect(Object.keys(state.regions).sort()).toEqual(["nova", "umi"]);
+
+    expect(Array.isArray(await getJson(app, "/regions"))).toBe(true);
+    expect((await getJson(app, "/agents/alice@umi")).balances.currency).toBe(60);
+
+    expect((await app.request("/regions/ghost")).status).toBe(404);
+
+    const log = await getJson(app, "/log");
+    expect(Array.isArray(log)).toBe(true);
+    const tail = await getJson(app, "/log?since=3");
+    expect(tail.length).toBeLessThan(log.length);
+  });
+
+  test("it is read-only: no write route, and watching never changes the world (§2-6)", async () => {
+    const w = world();
+    const app = createObservationApp(w);
+    const before = w.log.digest();
+
+    // there is no POST/PUT/DELETE route — writes 404
+    expect((await app.request("/state", { method: "POST" })).status).toBe(404);
+    expect((await app.request("/agents", { method: "DELETE" })).status).toBe(404);
+
+    // reading every endpoint leaves the world byte-identical
+    for (const path of ["/health", "/tick", "/metrics", "/state", "/regions", "/agents", "/log", "/log/digest"]) {
+      await app.request(path);
+    }
+    expect(w.log.digest()).toBe(before);
+  });
+
+  test("the server type omits all mutators (read-only by construction)", () => {
+    const noop: ObservationServer = { port: 0, stop: () => {} };
+    expect(noop.port).toBe(0);
+  });
+});

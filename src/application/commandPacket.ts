@@ -83,13 +83,7 @@ export interface TickCommand extends BaseCommand {
 }
 
 /** Union of all command types */
-export type CommandPacket =
-  | FoundCommand
-  | AmendCommand
-  | AdmitCommand
-  | TransactCommand
-  | MigrateCommand
-  | TickCommand;
+export type CommandPacket = FoundCommand | AmendCommand | AdmitCommand | TransactCommand | MigrateCommand | TickCommand;
 
 /** Command type strings */
 export type CommandType = CommandPacket["type"];
@@ -100,7 +94,7 @@ export function createCommand<T extends CommandType>(
   payload: Extract<CommandPacket, { type: T }>["payload"],
   principal: Principal,
   meta: CommandMeta,
-  options: { commandId?: string; idempotencyKey?: string | null } = {}
+  options: { commandId?: string; idempotencyKey?: string | null } = {},
 ): Extract<CommandPacket, { type: T }> {
   return {
     commandId: options.commandId ?? crypto.randomUUID(),

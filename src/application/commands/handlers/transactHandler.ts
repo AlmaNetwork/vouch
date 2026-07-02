@@ -4,16 +4,10 @@
  * Executes a transaction between two accounts.
  */
 
-import type { CommandHandler, TransactPayload, CommandContext, CommandResult } from "../registry.js";
+import { type AccountId, type AssetTypeId, accountIdFromRaw, parseAssetId, parseAssetTypeId } from "../../../domain/models/almaId.js";
 import { DomainError } from "../../../domain/models/errors.js";
-import {
-  accountIdFromRaw,
-  parseAssetId,
-  parseAssetTypeId,
-  type AccountId,
-  type AssetTypeId,
-} from "../../../domain/models/almaId.js";
-import type { NetworkState, LedgerEntry } from "../../../domain/models/types.js";
+import type { LedgerEntry, NetworkState } from "../../../domain/models/types.js";
+import type { CommandContext, CommandHandler, CommandResult, TransactPayload } from "../registry.js";
 
 export const transactHandler: CommandHandler<"transact"> = {
   name: "transact",
@@ -21,11 +15,7 @@ export const transactHandler: CommandHandler<"transact"> = {
   validate(payload: TransactPayload, ctx: CommandContext): void {
     // Region must be established
     if (ctx.state.regionId === "") {
-      throw new DomainError(
-        "NETWORK_NOT_FOUNDED",
-        "Region has not been established",
-        {}
-      );
+      throw new DomainError("NETWORK_NOT_FOUNDED", "Region has not been established", {});
     }
 
     // Validate from account
@@ -33,11 +23,7 @@ export const transactHandler: CommandHandler<"transact"> = {
     try {
       fromAccountId = accountIdFromRaw(payload.from);
     } catch {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Invalid from account ID format: ${payload.from}`,
-        { field: "from" }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Invalid from account ID format: ${payload.from}`, { field: "from" });
     }
 
     // Validate to account
@@ -45,20 +31,12 @@ export const transactHandler: CommandHandler<"transact"> = {
     try {
       toAccountId = accountIdFromRaw(payload.to);
     } catch {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        `Invalid to account ID format: ${payload.to}`,
-        { field: "to" }
-      );
+      throw new DomainError("VALIDATION_ERROR", `Invalid to account ID format: ${payload.to}`, { field: "to" });
     }
 
     // Check self-transaction
     if (fromAccountId === toAccountId) {
-      throw new DomainError(
-        "SELF_TRANSACTION",
-        "Cannot transact with self",
-        { from: payload.from, to: payload.to }
-      );
+      throw new DomainError("SELF_TRANSACTION", "Cannot transact with self", { from: payload.from, to: payload.to });
     }
 
     // Validate asset ID
@@ -67,40 +45,24 @@ export const transactHandler: CommandHandler<"transact"> = {
       // Also accept asset type ID format
       const parsedAssetType = parseAssetTypeId(payload.assetId);
       if (!parsedAssetType) {
-        throw new DomainError(
-          "VALIDATION_ERROR",
-          `Invalid asset ID format: ${payload.assetId}`,
-          { field: "assetId" }
-        );
+        throw new DomainError("VALIDATION_ERROR", `Invalid asset ID format: ${payload.assetId}`, { field: "assetId" });
       }
     }
 
     // Check from account exists
     if (!ctx.state.accounts.has(fromAccountId)) {
-      throw new DomainError(
-        "NOT_FOUND",
-        `From account not found: ${payload.from}`,
-        { field: "from", accountId: payload.from }
-      );
+      throw new DomainError("NOT_FOUND", `From account not found: ${payload.from}`, { field: "from", accountId: payload.from });
     }
 
     // Check to account exists
     if (!ctx.state.accounts.has(toAccountId)) {
-      throw new DomainError(
-        "NOT_FOUND",
-        `To account not found: ${payload.to}`,
-        { field: "to", accountId: payload.to }
-      );
+      throw new DomainError("NOT_FOUND", `To account not found: ${payload.to}`, { field: "to", accountId: payload.to });
     }
 
     // Validate amount
     const amount = parseFloat(payload.amount);
     if (isNaN(amount) || amount <= 0) {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        "Amount must be a positive number",
-        { field: "amount", value: payload.amount }
-      );
+      throw new DomainError("VALIDATION_ERROR", "Amount must be a positive number", { field: "amount", value: payload.amount });
     }
 
     // Authorization: principal must be from account owner or region owner
@@ -109,11 +71,10 @@ export const transactHandler: CommandHandler<"transact"> = {
     const isFromAccountOwner = ctx.principal.accountId === fromAccount.id;
 
     if (!isOwner && !isFromAccountOwner) {
-      throw new DomainError(
-        "FORBIDDEN",
-        "Not authorized to transact from this account",
-        { principal: ctx.principal.accountId, from: payload.from }
-      );
+      throw new DomainError("FORBIDDEN", "Not authorized to transact from this account", {
+        principal: ctx.principal.accountId,
+        from: payload.from,
+      });
     }
   },
 

@@ -2,19 +2,19 @@
  * Tests for ALMA ID system
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  parseRegionId,
-  createRegionId,
-  parseAccountId,
-  createAccountId,
-  accountIdFromRaw,
-  parseAssetTypeId,
-  createAssetTypeId,
-  parseAssetId,
-  createAssetId,
-  getRegion,
   accountBelongsToRegion,
+  accountIdFromRaw,
+  createAccountId,
+  createAssetId,
+  createAssetTypeId,
+  createRegionId,
+  getRegion,
+  parseAccountId,
+  parseAssetId,
+  parseAssetTypeId,
+  parseRegionId,
 } from "./almaId.js";
 
 describe("ALMA ID System", () => {

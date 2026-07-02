@@ -4,10 +4,10 @@
  * Modifies region settings.
  */
 
-import type { CommandHandler, AmendPayload, CommandContext, CommandResult } from "../registry.js";
+import { type AccountId, accountIdFromRaw } from "../../../domain/models/almaId.js";
 import { DomainError } from "../../../domain/models/errors.js";
-import { accountIdFromRaw, type AccountId } from "../../../domain/models/almaId.js";
 import type { NetworkState } from "../../../domain/models/types.js";
+import type { AmendPayload, CommandContext, CommandHandler, CommandResult } from "../registry.js";
 
 export const amendHandler: CommandHandler<"amend"> = {
   name: "amend",
@@ -15,29 +15,17 @@ export const amendHandler: CommandHandler<"amend"> = {
   validate(payload: AmendPayload, ctx: CommandContext): void {
     // Region must be established
     if (ctx.state.regionId === "") {
-      throw new DomainError(
-        "NETWORK_NOT_FOUNDED",
-        "Region has not been established",
-        {}
-      );
+      throw new DomainError("NETWORK_NOT_FOUNDED", "Region has not been established", {});
     }
 
     // Only owner can amend
     if (ctx.principal.accountId !== ctx.state.ownerId) {
-      throw new DomainError(
-        "FORBIDDEN",
-        "Only the owner can amend region settings",
-        { principal: ctx.principal.accountId }
-      );
+      throw new DomainError("FORBIDDEN", "Only the owner can amend region settings", { principal: ctx.principal.accountId });
     }
 
     // Validate changes
     if (!payload.changes || Object.keys(payload.changes).length === 0) {
-      throw new DomainError(
-        "VALIDATION_ERROR",
-        "No changes provided",
-        { field: "changes" }
-      );
+      throw new DomainError("VALIDATION_ERROR", "No changes provided", { field: "changes" });
     }
 
     // Validate new owner if specified
@@ -46,20 +34,15 @@ export const amendHandler: CommandHandler<"amend"> = {
       try {
         newOwnerId = accountIdFromRaw(payload.changes.ownerId);
       } catch {
-        throw new DomainError(
-          "VALIDATION_ERROR",
-          `Invalid owner ID format: ${payload.changes.ownerId}`,
-          { field: "ownerId" }
-        );
+        throw new DomainError("VALIDATION_ERROR", `Invalid owner ID format: ${payload.changes.ownerId}`, { field: "ownerId" });
       }
 
       // New owner must exist
       if (!ctx.state.accounts.has(newOwnerId)) {
-        throw new DomainError(
-          "NOT_FOUND",
-          `Account not found: ${payload.changes.ownerId}`,
-          { field: "ownerId", accountId: payload.changes.ownerId }
-        );
+        throw new DomainError("NOT_FOUND", `Account not found: ${payload.changes.ownerId}`, {
+          field: "ownerId",
+          accountId: payload.changes.ownerId,
+        });
       }
     }
   },

@@ -1,1 +1,1 @@
-export { Scheduler, createScheduler, type SchedulerOptions } from "./scheduler.js";
+export { createScheduler, Scheduler, type SchedulerOptions } from "./scheduler.js";

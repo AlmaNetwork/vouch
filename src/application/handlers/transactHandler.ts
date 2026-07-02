@@ -3,28 +3,20 @@
  * Executes a transaction between residents
  */
 
-import type { TransactCommand } from "../commandPacket.js";
-import type {
-  NetworkState,
-  LedgerEntry,
-  ResidentId,
-  AssetTypeId,
-} from "../../domain/models/types.js";
 import {
-  networkNotFounded,
-  residentNotFound,
-  residentNotActive,
-  selfTransaction,
-  invalidAmount,
   forbidden,
+  invalidAmount,
+  networkNotFounded,
+  residentNotActive,
+  residentNotFound,
+  selfTransaction,
 } from "../../domain/models/errors.js";
+import type { AssetTypeId, LedgerEntry, NetworkState, ResidentId } from "../../domain/models/types.js";
 import { ownerPolicy } from "../../domain/policies/index.js";
 import type { TransactionExecutedEvent } from "../../domain/projector.js";
+import type { TransactCommand } from "../commandPacket.js";
 
-export function handleTransact(
-  state: NetworkState,
-  command: TransactCommand
-): TransactionExecutedEvent[] {
+export function handleTransact(state: NetworkState, command: TransactCommand): TransactionExecutedEvent[] {
   // Validate: network must exist
   if (state.regionId === "") {
     throw networkNotFounded();

@@ -4,23 +4,20 @@
 
 import { Hono } from "hono";
 import type { Env } from "../../env.js";
-
+import admitRoute from "./admit.js";
+import amendRoute from "./amend.js";
 // Command routes (new API)
 import establishRoute from "./establish.js";
 import executeRoute from "./execute.js";
-import simulateRoute from "./simulate.js";
-
 // Command routes (legacy - for backward compatibility)
 import foundRoute from "./found.js";
-import amendRoute from "./amend.js";
-import admitRoute from "./admit.js";
-import transactRoute from "./transact.js";
+import ledgerRoute from "./ledger.js";
 import migrateRoute from "./migrate.js";
-
+import residentsRoute from "./residents.js";
+import simulateRoute from "./simulate.js";
 // Query routes (read operations)
 import stateRoute from "./state.js";
-import residentsRoute from "./residents.js";
-import ledgerRoute from "./ledger.js";
+import transactRoute from "./transact.js";
 
 const v1 = new Hono<Env>();
 

@@ -5,8 +5,8 @@
 
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
-import type { Env } from "../env.js";
 import { ownerPolicy } from "../../domain/policies/index.js";
+import type { Env } from "../env.js";
 
 /**
  * Owner gate - requires principal to be network owner

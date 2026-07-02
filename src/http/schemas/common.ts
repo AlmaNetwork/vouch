@@ -5,9 +5,7 @@
 import { z } from "zod";
 
 /** Decimal amount (string to preserve precision) */
-export const Amount = z
-  .string()
-  .regex(/^[1-9]\d*(\.\d+)?$|^0\.\d*[1-9]\d*$/, "Invalid amount format");
+export const Amount = z.string().regex(/^[1-9]\d*(\.\d+)?$|^0\.\d*[1-9]\d*$/, "Invalid amount format");
 
 /** UUID format */
 export const UUID = z.string().uuid();

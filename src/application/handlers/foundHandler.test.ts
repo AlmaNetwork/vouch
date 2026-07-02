@@ -2,15 +2,13 @@
  * Tests for found handler
  */
 
-import { describe, it, expect } from "vitest";
-import { handleFound } from "./foundHandler.js";
-import { createInitialState, type AccountId, type RegionId } from "../../domain/models/types.js";
+import { describe, expect, it } from "vitest";
+import { type AccountId, createInitialState, type RegionId } from "../../domain/models/types.js";
 import type { FoundCommand } from "../commandPacket.js";
+import { handleFound } from "./foundHandler.js";
 
 describe("handleFound", () => {
-  const createFoundCommand = (
-    overrides: Partial<FoundCommand> = {}
-  ): FoundCommand => ({
+  const createFoundCommand = (overrides: Partial<FoundCommand> = {}): FoundCommand => ({
     commandId: "cmd-1",
     idempotencyKey: null,
     type: "found",
@@ -50,8 +48,6 @@ describe("handleFound", () => {
     };
     const command = createFoundCommand();
 
-    expect(() => handleFound(state, command)).toThrow(
-      "Network has already been founded"
-    );
+    expect(() => handleFound(state, command)).toThrow("Network has already been founded");
   });
 });

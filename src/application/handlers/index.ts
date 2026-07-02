@@ -2,24 +2,20 @@
  * Command handlers - pure functions that produce events from commands
  */
 
-import type { CommandPacket } from "../commandPacket.js";
 import type { NetworkState } from "../../domain/models/types.js";
 import type { DomainEvent } from "../../domain/projector.js";
-
-import { handleFound } from "./foundHandler.js";
-import { handleAmend } from "./amendHandler.js";
+import type { CommandPacket } from "../commandPacket.js";
 import { handleAdmit } from "./admitHandler.js";
-import { handleTransact } from "./transactHandler.js";
+import { handleAmend } from "./amendHandler.js";
+import { handleFound } from "./foundHandler.js";
 import { handleMigrate } from "./migrateHandler.js";
+import { handleTransact } from "./transactHandler.js";
 
 /**
  * Handle a command and produce events
  * This is a pure function - no I/O, deterministic
  */
-export function handle(
-  state: NetworkState,
-  command: CommandPacket
-): DomainEvent[] {
+export function handle(state: NetworkState, command: CommandPacket): DomainEvent[] {
   switch (command.type) {
     case "found":
       return handleFound(state, command);
@@ -43,8 +39,8 @@ export function handle(
   }
 }
 
-export { handleFound } from "./foundHandler.js";
-export { handleAmend } from "./amendHandler.js";
 export { handleAdmit } from "./admitHandler.js";
-export { handleTransact } from "./transactHandler.js";
+export { handleAmend } from "./amendHandler.js";
+export { handleFound } from "./foundHandler.js";
 export { handleMigrate } from "./migrateHandler.js";
+export { handleTransact } from "./transactHandler.js";

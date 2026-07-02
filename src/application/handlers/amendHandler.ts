@@ -3,20 +3,13 @@
  * Modifies network settings (owner only)
  */
 
-import type { AmendCommand } from "../commandPacket.js";
-import type { NetworkState, AccountId } from "../../domain/models/types.js";
-import {
-  networkNotFounded,
-  accountNotFound,
-  forbidden,
-} from "../../domain/models/errors.js";
+import { accountNotFound, forbidden, networkNotFounded } from "../../domain/models/errors.js";
+import type { AccountId, NetworkState } from "../../domain/models/types.js";
 import { ownerPolicy } from "../../domain/policies/index.js";
 import type { NetworkAmendedEvent } from "../../domain/projector.js";
+import type { AmendCommand } from "../commandPacket.js";
 
-export function handleAmend(
-  state: NetworkState,
-  command: AmendCommand
-): NetworkAmendedEvent[] {
+export function handleAmend(state: NetworkState, command: AmendCommand): NetworkAmendedEvent[] {
   // Validate: network must exist
   if (state.regionId === "") {
     throw networkNotFounded();

@@ -18,7 +18,7 @@ const server = serve(
   },
   (info) => {
     console.log(`[server] Listening on http://localhost:${info.port}`);
-  }
+  },
 );
 
 // Graceful shutdown

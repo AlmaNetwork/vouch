@@ -2,12 +2,12 @@
  * GET /v1/ledger - Get transaction ledger
  */
 
+import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
-import { zValidator } from "@hono/zod-validator";
+import type { AccountId } from "../../../domain/models/types.js";
 import type { Env } from "../../env.js";
 import { session } from "../../middleware/index.js";
-import type { AccountId } from "../../../domain/models/types.js";
 
 const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -28,11 +28,7 @@ route.get("/", session, zValidator("query", querySchema), (c) => {
   // Filter by accountId if provided
   if (accountId) {
     const typedAccountId = accountId as AccountId;
-    entries = entries.filter(
-      (entry) =>
-        entry.fromAccountId === typedAccountId ||
-        entry.toAccountId === typedAccountId
-    );
+    entries = entries.filter((entry) => entry.fromAccountId === typedAccountId || entry.toAccountId === typedAccountId);
   }
 
   // Legacy: filter by residentId if provided (map to account)
@@ -40,11 +36,7 @@ route.get("/", session, zValidator("query", querySchema), (c) => {
     // Find the account associated with this resident
     for (const resident of state.residents.values()) {
       if (resident.id === residentId) {
-        entries = entries.filter(
-          (entry) =>
-            entry.fromAccountId === resident.accountId ||
-            entry.toAccountId === resident.accountId
-        );
+        entries = entries.filter((entry) => entry.fromAccountId === resident.accountId || entry.toAccountId === resident.accountId);
         break;
       }
     }
@@ -53,18 +45,16 @@ route.get("/", session, zValidator("query", querySchema), (c) => {
   const total = entries.length;
 
   // Apply pagination
-  const paginatedEntries = entries
-    .slice(offset, offset + limit)
-    .map((entry) => ({
-      id: entry.id,
-      fromAccountId: entry.fromAccountId,
-      toAccountId: entry.toAccountId,
-      assetTypeId: entry.assetTypeId,
-      amount: entry.amount,
-      memo: entry.memo,
-      seq: entry.seq,
-      createdAt: entry.createdAt,
-    }));
+  const paginatedEntries = entries.slice(offset, offset + limit).map((entry) => ({
+    id: entry.id,
+    fromAccountId: entry.fromAccountId,
+    toAccountId: entry.toAccountId,
+    assetTypeId: entry.assetTypeId,
+    amount: entry.amount,
+    memo: entry.memo,
+    seq: entry.seq,
+    createdAt: entry.createdAt,
+  }));
 
   return c.json({
     entries: paginatedEntries,

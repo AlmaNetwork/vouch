@@ -3,13 +3,10 @@
  * Reconstructs state from journal records
  */
 
-import type { JournalStore, JournalRecord } from "./journalStore.js";
-import { chainHash } from "../serialization/jcs.js";
-import {
-  createInitialState,
-  type NetworkState,
-} from "../../domain/models/types.js";
+import { createInitialState, type NetworkState } from "../../domain/models/types.js";
 import { applyEvents, type DomainEvent } from "../../domain/projector.js";
+import { chainHash } from "../serialization/jcs.js";
+import type { JournalRecord, JournalStore } from "./journalStore.js";
 
 export interface ReplayResult {
   state: NetworkState;
@@ -60,16 +57,10 @@ export function replay(journal: JournalStore): ReplayResult {
  * Verify hash chain integrity for a single record
  * @throws Error if hash verification fails
  */
-function verifyHashIntegrity(
-  record: JournalRecord,
-  expectedPrevHash: string | null
-): void {
+function verifyHashIntegrity(record: JournalRecord, expectedPrevHash: string | null): void {
   // Verify prev_hash chain
   if (record.prevHash !== expectedPrevHash) {
-    throw new Error(
-      `Hash chain broken at seq ${record.seq}: ` +
-        `expected prevHash ${expectedPrevHash}, got ${record.prevHash}`
-    );
+    throw new Error(`Hash chain broken at seq ${record.seq}: ` + `expected prevHash ${expectedPrevHash}, got ${record.prevHash}`);
   }
 
   // Recompute hash to verify integrity
@@ -87,9 +78,6 @@ function verifyHashIntegrity(
   const computedHash = chainHash(recordForHash, record.prevHash);
 
   if (computedHash !== record.hash) {
-    throw new Error(
-      `Hash verification failed at seq ${record.seq}: ` +
-        `expected ${record.hash}, computed ${computedHash}`
-    );
+    throw new Error(`Hash verification failed at seq ${record.seq}: ` + `expected ${record.hash}, computed ${computedHash}`);
   }
 }

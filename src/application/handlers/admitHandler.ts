@@ -3,27 +3,13 @@
  * Adds a new resident to the network
  */
 
-import type { AdmitCommand } from "../commandPacket.js";
-import type {
-  NetworkState,
-  Account,
-  Resident,
-  AccountId,
-  ResidentId,
-} from "../../domain/models/types.js";
-import {
-  networkNotFounded,
-  accountAlreadyExists,
-  residentAlreadyExists,
-  forbidden,
-} from "../../domain/models/errors.js";
+import { accountAlreadyExists, forbidden, networkNotFounded, residentAlreadyExists } from "../../domain/models/errors.js";
+import type { Account, AccountId, NetworkState, Resident, ResidentId } from "../../domain/models/types.js";
 import { ownerPolicy } from "../../domain/policies/index.js";
 import type { ResidentAdmittedEvent } from "../../domain/projector.js";
+import type { AdmitCommand } from "../commandPacket.js";
 
-export function handleAdmit(
-  state: NetworkState,
-  command: AdmitCommand
-): ResidentAdmittedEvent[] {
+export function handleAdmit(state: NetworkState, command: AdmitCommand): ResidentAdmittedEvent[] {
   // Validate: network must exist
   if (state.regionId === "") {
     throw networkNotFounded();

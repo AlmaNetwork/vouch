@@ -5,8 +5,8 @@
 import type { ErrorHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
-import type { Env } from "../env.js";
 import { DomainError } from "../../domain/models/errors.js";
+import type { Env } from "../env.js";
 
 /** Standard error response format */
 export interface ErrorResponse {

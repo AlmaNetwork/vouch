@@ -23,7 +23,7 @@ export class Scheduler {
 
   constructor(
     private commandBus: CommandBus,
-    private options: SchedulerOptions
+    private options: SchedulerOptions,
   ) {
     if (options.autoStart) {
       this.start();
@@ -40,9 +40,7 @@ export class Scheduler {
     }
 
     this.running = true;
-    console.log(
-      `[scheduler] Starting with interval ${this.options.tickIntervalMs}ms`
-    );
+    console.log(`[scheduler] Starting with interval ${this.options.tickIntervalMs}ms`);
 
     this.intervalId = setInterval(() => {
       this.tick("scheduled");
@@ -91,7 +89,7 @@ export class Scheduler {
       {
         requestId: `tick-${Date.now()}`,
         receivedAt: now,
-      }
+      },
     );
 
     try {
@@ -113,10 +111,7 @@ export class Scheduler {
 /**
  * Create a scheduler with default options
  */
-export function createScheduler(
-  commandBus: CommandBus,
-  options: Partial<SchedulerOptions> = {}
-): Scheduler {
+export function createScheduler(commandBus: CommandBus, options: Partial<SchedulerOptions> = {}): Scheduler {
   return new Scheduler(commandBus, {
     tickIntervalMs: options.tickIntervalMs ?? 60000, // 1 minute default
     autoStart: options.autoStart ?? false,
