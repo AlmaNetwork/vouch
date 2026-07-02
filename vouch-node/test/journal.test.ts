@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { appendFileSync, mkdtempSync, rmSync } from "node:fs";
+import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AlmaEvent } from "vouch-world/foundation";
@@ -58,6 +58,44 @@ describe("FileJournal — crash tolerance", () => {
     const path = tmpFile("events.jsonl");
     appendFileSync(path, `{"broken":\n${JSON.stringify(events[0])}\n`); // bad line is NOT last
     expect(() => new FileJournal(path).load()).toThrow(/corrupt JSONL/);
+  });
+});
+
+describe("FileJournal — hash-chain tamper-evidence", () => {
+  test("a hand-edited event line is rejected on load (chain broken)", () => {
+    const path = tmpFile("events.jsonl");
+    new FileJournal(path).append(events);
+    // tamper: change the first persisted line's event payload, leave its stored hash
+    const lines = readFileSync(path, "utf8").trim().split("\n");
+    const first = JSON.parse(lines[0] as string) as { event: AlmaEvent; hash: string };
+    lines[0] = JSON.stringify({ ...first, event: { ...first.event, payload: { region: { id: "EVIL" } } } });
+    writeFileSync(path, `${lines.join("\n")}\n`);
+    expect(() => new FileJournal(path).load()).toThrow(/hash-chain broken/);
+  });
+
+  test("reordering two lines is detected", () => {
+    const path = tmpFile("events.jsonl");
+    new FileJournal(path).append(events);
+    const [a, b] = readFileSync(path, "utf8").trim().split("\n");
+    writeFileSync(path, `${b}\n${a}\n`); // swap
+    expect(() => new FileJournal(path).load()).toThrow(/hash-chain broken/);
+  });
+
+  test("a clean chain round-trips and survives a fresh instance", () => {
+    const path = tmpFile("events.jsonl");
+    new FileJournal(path).append(events);
+    expect(new FileJournal(path).load()).toEqual(events); // no throw, exact events back
+  });
+
+  test("legacy un-chained lines are trusted, and later chained lines still verify", () => {
+    const path = tmpFile("events.jsonl");
+    // simulate a pre-hash-chain file: bare AlmaEvent lines
+    appendFileSync(path, `${events.map((e) => JSON.stringify(e)).join("\n")}\n`);
+    const j = new FileJournal(path);
+    const extra: AlmaEvent = { seq: 2, tick: 1, type: "agent.vouched", actor: "world", payload: { from: "a@r", to: "b@r", weight: 3 } };
+    j.append([extra]); // appended as a chained line, linking onto the legacy tail
+    const loaded = j.load();
+    expect(loaded).toEqual([...events, extra]); // legacy read through + new event, no throw
   });
 });
 
