@@ -1,13 +1,10 @@
 {
-  "name": "vouch-node",
+  "name": "vouch-mcp",
   "version": "0.0.0",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
-  "description": "The participate node — a durable, authenticated write path onto the vouch-world engine (Track B).",
-  "exports": {
-    ".": "./src/lib.ts"
-  },
+  "description": "OAuth 2.1 protected MCP server — lets an AI participate in a vouch world by custodially signing engine commands on an authenticated subject's behalf (Track C).",
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
@@ -16,8 +13,12 @@
   "dependencies": {
     "vouch-core": "file:../vouch-core",
     "vouch-world": "file:../vouch-world",
+    "vouch-node": "file:../vouch-node",
+    "@modelcontextprotocol/sdk": "^1.19.0",
+    "@hono/mcp": "^0.1.4",
     "hono": "^4.6.0",
-    "zod": "^4.0.0"
+    "jose": "^5.9.0",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/bun": "^1.1.0",

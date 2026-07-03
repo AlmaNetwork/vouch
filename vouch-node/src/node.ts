@@ -44,6 +44,20 @@ export class VouchNode {
     return this.registry.register(req);
   }
 
+  /** Whether a principal has been bound to a key. */
+  isRegistered(principal: string): boolean {
+    return this.registry.has(principal);
+  }
+
+  /**
+   * The last nonce recorded for a principal, or null if unregistered. A custodial
+   * signer seeds its per-principal counter from this so its next signed command
+   * carries a strictly-increasing nonce even across a signer restart.
+   */
+  nonceOf(principal: string): number | null {
+    return this.registry.nonceOf(principal);
+  }
+
   /** Verify + apply a signed command, persisting whatever events it emits. */
   submit(req: SignedRequest): SubmitResult {
     // Parse first, so a malformed command doesn't consume the principal's nonce.
