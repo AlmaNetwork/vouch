@@ -122,3 +122,137 @@ describe("vouch CLI — run()", () => {
     expect(line).toContain("nova");
   });
 });
+
+describe("vouch CLI — usage, reads, and failure modes", () => {
+  test("help exits 0 with usage; no command exits 1", async () => {
+    const h = captureIo();
+    expect(await run(["help"], {}, h.io)).toBe(0);
+    expect(h.text()).toContain("usage: vouch");
+    expect(await run([], {}, captureIo().io)).toBe(1);
+  });
+
+  test("state and metrics reads (no key needed)", async () => {
+    const t = tmpConfigDir();
+    try {
+      const s = captureIo();
+      expect(await run(["state"], envFor(t.dir), s.io)).toBe(0);
+      const m = captureIo();
+      expect(await run(["metrics"], envFor(t.dir), m.io)).toBe(0);
+      expect(m.out[0]).toBeTruthy();
+    } finally {
+      t.cleanup();
+    }
+  });
+
+  test("whoami with a key but no registered principal shows (none)", async () => {
+    const t = tmpConfigDir();
+    try {
+      const e = envFor(t.dir);
+      await run(["keygen"], e, captureIo().io);
+      const io = captureIo();
+      expect(await run(["whoami"], e, io.io)).toBe(0);
+      expect(io.text()).toContain("(none");
+    } finally {
+      t.cleanup();
+    }
+  });
+
+  test("write commands without enough args print usage and fail", async () => {
+    const t = tmpConfigDir();
+    try {
+      const e = envFor(t.dir);
+      await run(["keygen"], e, captureIo().io);
+      await run(["register", "u@rgn"], e, captureIo().io);
+      for (const args of [
+        ["found", "onlyone"],
+        ["admit", "a", "b"],
+        ["transfer", "onlyto"],
+        ["vouch", "onlyto"],
+      ]) {
+        const io = captureIo();
+        expect(await run(args, e, io.io)).toBe(1);
+        expect(io.text()).toContain("usage:");
+      }
+    } finally {
+      t.cleanup();
+    }
+  });
+
+  test("keygen refuses to overwrite an existing key", async () => {
+    const t = tmpConfigDir();
+    try {
+      const e = envFor(t.dir);
+      expect(await run(["keygen"], e, captureIo().io)).toBe(0);
+      const io = captureIo();
+      expect(await run(["keygen"], e, io.io)).toBe(1);
+      expect(io.text()).toContain("already exists");
+    } finally {
+      t.cleanup();
+    }
+  });
+
+  test("--node overrides the configured (dead) node URL", async () => {
+    const t = tmpConfigDir();
+    try {
+      const io = captureIo();
+      const code = await run(["regions", "--node", base], { VOUCH_CONFIG_DIR: t.dir, VOUCH_NODE_URL: "http://127.0.0.1:1" }, io.io);
+      expect(code).toBe(0);
+    } finally {
+      t.cleanup();
+    }
+  });
+
+  test("a dead node fails fast with a clean error, not a hang", async () => {
+    const t = tmpConfigDir();
+    try {
+      const io = captureIo();
+      expect(
+        await run(["regions"], { VOUCH_CONFIG_DIR: t.dir, VOUCH_NODE_URL: "http://127.0.0.1:1", VOUCH_TIMEOUT_MS: "1500" }, io.io),
+      ).toBe(1);
+      expect(io.text().toLowerCase()).toContain("error");
+    } finally {
+      t.cleanup();
+    }
+  });
+
+  test("register needs a principal; a name taken by another key is refused", async () => {
+    const t1 = tmpConfigDir();
+    const t2 = tmpConfigDir();
+    try {
+      const e1 = envFor(t1.dir);
+      await run(["keygen"], e1, captureIo().io);
+      const noArg = captureIo();
+      expect(await run(["register"], e1, noArg.io)).toBe(1);
+      expect(noArg.text()).toContain("usage: vouch register");
+
+      expect(await run(["register", "taken@rgn"], e1, captureIo().io)).toBe(0);
+
+      const e2 = envFor(t2.dir);
+      await run(["keygen"], e2, captureIo().io);
+      const dup = captureIo();
+      expect(await run(["register", "taken@rgn"], e2, dup.io)).toBe(1);
+      expect(dup.text()).toContain("register failed");
+    } finally {
+      t1.cleanup();
+      t2.cleanup();
+    }
+  });
+
+  test("flag parsing handles both --k=v and bare --flag forms", async () => {
+    const t = tmpConfigDir();
+    try {
+      const io = captureIo();
+      // --foo=bar exercises the '=' form; --baz is a trailing boolean flag; reads ignore them
+      expect(await run(["regions", `--node=${base}`, "--baz"], { VOUCH_CONFIG_DIR: t.dir }, io.io)).toBe(0);
+    } finally {
+      t.cleanup();
+    }
+  });
+
+  test("formatEvent tolerates an unserializable payload", () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    const line = formatEvent({ seq: 1, type: "weird.event", actor: "world", payload: circular });
+    expect(line).toContain("weird.event");
+  });
+});

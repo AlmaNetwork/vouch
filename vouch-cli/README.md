@@ -47,7 +47,10 @@ read
 ```
 
 Flags: `--as <principal>` `--node <url>` `--currency N` `--interval N`.
-Env: `VOUCH_NODE_URL` `VOUCH_PRINCIPAL` `VOUCH_KEYFILE` `VOUCH_CONFIG_DIR`.
+Env: `VOUCH_NODE_URL` `VOUCH_PRINCIPAL` `VOUCH_KEYFILE` `VOUCH_CONFIG_DIR` `VOUCH_TIMEOUT_MS`.
+
+Requests carry a timeout (`VOUCH_TIMEOUT_MS`, default 10 s), so a dead or slow node
+fails fast with a clear error instead of hanging.
 
 ## A session
 

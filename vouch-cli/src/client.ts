@@ -37,6 +37,8 @@ export class VouchClient {
     private readonly nodeUrl: string,
     /** The signing key. Optional: reads work without one; register/submit throw if it is absent. */
     private readonly keyPair?: KeyPair,
+    /** Per-request timeout so a dead/slow node fails fast instead of hanging. */
+    private readonly timeoutMs = 10_000,
   ) {}
 
   private requireKey(): KeyPair {
@@ -49,8 +51,21 @@ export class VouchClient {
     return encodeBase64(this.requireKey().publicKey);
   }
 
+  /** fetch with a timeout, normalizing transport failures (timeout / connection refused) to a clear message. */
+  private async fetchWithTimeout(path: string, init?: RequestInit): Promise<Response> {
+    try {
+      return await fetch(`${this.nodeUrl}${path}`, { ...init, signal: AbortSignal.timeout(this.timeoutMs) });
+    } catch (e) {
+      const name = e instanceof Error ? e.name : "";
+      if (name === "TimeoutError" || name === "AbortError") {
+        throw new Error(`request to ${this.nodeUrl}${path} timed out after ${this.timeoutMs}ms — is the node running?`);
+      }
+      throw new Error(`request to ${this.nodeUrl}${path} failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   private async getJson<T>(path: string): Promise<T> {
-    const res = await fetch(`${this.nodeUrl}${path}`);
+    const res = await this.fetchWithTimeout(path);
     if (!res.ok) throw new Error(`GET ${path} → ${res.status} ${res.statusText}`);
     return (await res.json()) as T;
   }
@@ -59,7 +74,7 @@ export class VouchClient {
     path: string,
     body: unknown,
   ): Promise<{ ok: boolean; status: number; body: { detail?: Record<string, unknown>; events?: number; error?: { code: string } } }> {
-    const res = await fetch(`${this.nodeUrl}${path}`, {
+    const res = await this.fetchWithTimeout(path, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),

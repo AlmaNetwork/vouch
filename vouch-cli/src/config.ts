@@ -19,6 +19,7 @@ export interface CliConfig {
   readonly principal: string | null;
   readonly keyfile: string;
   readonly configPath: string;
+  readonly timeoutMs: number;
 }
 
 const DEFAULT_NODE_URL = "http://127.0.0.1:8787";
@@ -38,11 +39,13 @@ export function loadConfig(env: Env): CliConfig {
       // A corrupt config is non-fatal — fall back to defaults + env.
     }
   }
+  const t = Number(env.VOUCH_TIMEOUT_MS);
   return {
     nodeUrl: env.VOUCH_NODE_URL ?? stored.nodeUrl ?? DEFAULT_NODE_URL,
     principal: env.VOUCH_PRINCIPAL ?? stored.principal ?? null,
     keyfile: env.VOUCH_KEYFILE ?? join(dir, "key"),
     configPath,
+    timeoutMs: Number.isFinite(t) && t > 0 ? t : 10_000,
   };
 }
 

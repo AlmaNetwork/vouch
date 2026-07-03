@@ -107,7 +107,7 @@ export async function run(argv: string[], env: Env, io: Io): Promise<number> {
           io.err("usage: vouch register <principal>");
           return 1;
         }
-        const client = new VouchClient(nodeUrl, loadKey(cfg));
+        const client = new VouchClient(nodeUrl, loadKey(cfg), cfg.timeoutMs);
         const r = await client.register(principal);
         if (!r.ok) {
           io.err(`register failed (${r.status}): ${r.reason}`);
@@ -119,7 +119,7 @@ export async function run(argv: string[], env: Env, io: Io): Promise<number> {
       }
 
       case "whoami": {
-        const client = new VouchClient(nodeUrl, loadKey(cfg));
+        const client = new VouchClient(nodeUrl, loadKey(cfg), cfg.timeoutMs);
         io.out(`node:       ${nodeUrl}`);
         io.out(`public key: ${client.publicKey}`);
         const principal = activePrincipal();
@@ -143,7 +143,7 @@ export async function run(argv: string[], env: Env, io: Io): Promise<number> {
           io.err("no active principal — run: vouch register <name>, or pass --as <name>");
           return 1;
         }
-        const client = new VouchClient(nodeUrl, loadKey(cfg));
+        const client = new VouchClient(nodeUrl, loadKey(cfg), cfg.timeoutMs);
         const result = await dispatchWrite(client, principal, cmd, positional, flags, io);
         if (result === "usage") return 1;
         if (!result.ok) {
@@ -158,7 +158,7 @@ export async function run(argv: string[], env: Env, io: Io): Promise<number> {
       case "agents":
       case "state":
       case "metrics": {
-        const client = new VouchClient(nodeUrl);
+        const client = new VouchClient(nodeUrl, undefined, cfg.timeoutMs);
         const data = await client[cmd]();
         io.out(JSON.stringify(data, null, 2));
         return 0;
@@ -167,7 +167,7 @@ export async function run(argv: string[], env: Env, io: Io): Promise<number> {
       case "watch": {
         const interval = flags.interval !== undefined ? Math.max(0.2, Number(flags.interval)) : 2;
         const ticks = flags.ticks !== undefined ? Number(flags.ticks) : Number.POSITIVE_INFINITY;
-        const client = new VouchClient(nodeUrl);
+        const client = new VouchClient(nodeUrl, undefined, cfg.timeoutMs);
         io.out(`watching ${nodeUrl} every ${interval}s … (Ctrl-C to stop)`);
         let cursor = (await client.log(0)).length; // tail: start after existing history
         for (let i = 0; i < ticks; i++) {

@@ -25,6 +25,23 @@ afterAll(() => stop());
 const token = async (scopes: string[], sub: string): Promise<string> =>
   (await fetchDevToken({ baseUrl: base, resource, scopes, sub })).access_token;
 
+const ACCEPT = "application/json, text/event-stream";
+
+/** Raw MCP initialize; returns the minted session id (for session-lifecycle tests). */
+async function rawInitialize(tok: string): Promise<string | null> {
+  const res = await fetch(`${base}/mcp`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${tok}`, "content-type": "application/json", accept: ACCEPT },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "raw", version: "0" } },
+    }),
+  });
+  return res.headers.get("mcp-session-id");
+}
+
 describe("discovery / auth gate", () => {
   test("unauthenticated /mcp → 401 with a WWW-Authenticate challenge", async () => {
     const res = await fetch(`${base}/mcp`, {
@@ -120,5 +137,73 @@ describe("participation over MCP", () => {
     expect(r.isError).toBe(true);
     expect(toolText(r)).toContain("insufficient_scope");
     await reader.close();
+  });
+
+  test("world state is exposed as MCP resources", async () => {
+    const c = await connectMcp(base, await token(["vouch:read"], "res-reader"));
+    const regions = (await c.readResource({ uri: "vouch://regions" })) as { contents: Array<{ mimeType?: string; text?: string }> };
+    expect(regions.contents[0]?.mimeType).toBe("application/json");
+    const me = (await c.readResource({ uri: "vouch://me" })) as { contents: Array<{ text?: string }> };
+    expect((JSON.parse(me.contents[0]?.text ?? "{}") as { principal?: string }).principal).toBeTruthy();
+    await c.close();
+  });
+});
+
+describe("hardening / non-functional", () => {
+  test("GET /health is a cheap unauthenticated liveness probe", async () => {
+    const res = await fetch(`${base}/health`);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { ok: boolean }).ok).toBe(true);
+  });
+
+  test("an oversized request body is rejected (413) before any auth", async () => {
+    const res = await fetch(`${base}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "x".repeat(300 * 1024),
+    });
+    expect(res.status).toBe(413);
+  });
+
+  test("a session may only be driven by the principal that opened it", async () => {
+    const sid = await rawInitialize(await token(["vouch:read"], "sess-owner"));
+    expect(sid).toBeTruthy();
+    const intruder = await token(["vouch:read"], "sess-intruder");
+    const res = await fetch(`${base}/mcp`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${intruder}`, "content-type": "application/json", accept: ACCEPT, "mcp-session-id": sid ?? "" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  test("an unknown session id → 404", async () => {
+    const res = await fetch(`${base}/mcp`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${await token(["vouch:read"], "ghost")}`,
+        "content-type": "application/json",
+        accept: ACCEPT,
+        "mcp-session-id": "nope",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  test("DELETE tears a session down", async () => {
+    const tok = await token(["vouch:read"], "del-user");
+    const sid = await rawInitialize(tok);
+    const res = await fetch(`${base}/mcp`, { method: "DELETE", headers: { authorization: `Bearer ${tok}`, "mcp-session-id": sid ?? "" } });
+    expect(res.ok).toBe(true);
+  });
+
+  test("a non-initialize POST without a session id → 400", async () => {
+    const res = await fetch(`${base}/mcp`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${await token(["vouch:read"], "no-sess")}`, "content-type": "application/json", accept: ACCEPT },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    });
+    expect(res.status).toBe(400);
   });
 });
