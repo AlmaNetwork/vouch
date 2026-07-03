@@ -43,6 +43,9 @@ jobs:
       - name: Install vouch-node
         run: bun install --frozen-lockfile
         working-directory: vouch-node
+      - name: Install vouch-mcp
+        run: bun install --frozen-lockfile
+        working-directory: vouch-mcp
 
       - name: vouch-core — typecheck + test
         run: bun run typecheck && bun test
@@ -53,3 +56,6 @@ jobs:
       - name: vouch-node — typecheck + test
         run: bun run typecheck && bun test
         working-directory: vouch-node
+      - name: vouch-mcp — typecheck + test
+        run: bun run typecheck && bun test
+        working-directory: vouch-mcp

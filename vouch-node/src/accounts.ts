@@ -82,6 +82,16 @@ export class AccountRegistry {
     return this.accounts.has(principal);
   }
 
+  /**
+   * The last nonce recorded for a principal, or null if it isn't registered. A
+   * custodial signer (vouch-mcp) reads this to allocate the next strictly-increasing
+   * nonce for the principal it signs on behalf of — the registry stays the single
+   * source of truth for the replay counter, so a signer never drifts out of step.
+   */
+  nonceOf(principal: string): number | null {
+    return this.accounts.get(principal)?.lastNonce ?? null;
+  }
+
   /** Bind a principal to a public key via a self-signed registration (first-writer-wins). */
   register(req: RegisterRequest): AuthResult {
     if (typeof req.principal !== "string" || req.principal.length === 0 || req.principal === SYSTEM_ACTOR) {
