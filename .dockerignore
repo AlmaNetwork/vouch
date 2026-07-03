@@ -1,29 +1,32 @@
-# Dependencies
-node_modules/
+# Dependencies (root + every package — nested must be excluded so the image installs fresh)
+**/node_modules
 
 # Build output
-dist/
+**/dist
 
-# Database files
+# Database / journal data
 *.db
 *.db-wal
 *.db-shm
+**/data/
 
 # Environment files
 .env
 .env.local
 .env.*.local
 
-# Test files
-*.test.ts
+# Test files (not needed at runtime)
 **/*.test.ts
-coverage/
+**/test/
+**/coverage/
+**/examples/
 
 # Development files
 .git/
 .gitignore
 *.md
 docs/
+.mcp.json
 
 # IDE
 .vscode/
