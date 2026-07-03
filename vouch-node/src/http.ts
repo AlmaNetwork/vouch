@@ -53,6 +53,16 @@ export function createNodeApp(node: VouchNode): Hono {
       : c.json(errorBody(res.reason, requestId), res.status, header);
   });
 
+  // READ — a principal's account state: whether it is registered and its current
+  // nonce. A client (CLI, GUI) reads this to allocate the next strictly-increasing
+  // nonce for a signed command, so it never has to track nonces locally. The nonce is
+  // a public sequence counter (not a secret), like an account transaction count.
+  app.get("/v1/account/:principal", (c) => {
+    const principal = c.req.param("principal");
+    const nonce = node.nonceOf(principal);
+    return c.json({ principal, registered: nonce !== null, nonce: nonce ?? -1 });
+  });
+
   // READ — delegate everything else to the engine's read-only observation surface
   // (GET /state /regions /agents /metrics /log …). Delegating via `.fetch` keeps the
   // two packages' hono types decoupled and preserves the "reads can't write" boundary

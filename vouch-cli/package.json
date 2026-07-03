@@ -1,0 +1,28 @@
+{
+  "name": "vouch-cli",
+  "version": "0.0.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "description": "A non-custodial terminal client for vouch — you hold your own Ed25519 key, sign commands locally, and talk to a vouch-node over HTTP. Also the reusable VouchClient SDK (Track C).",
+  "bin": {
+    "vouch": "src/main.ts"
+  },
+  "exports": {
+    ".": "./src/client.ts",
+    "./client": "./src/client.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "vouch": "bun src/main.ts"
+  },
+  "dependencies": {
+    "vouch-core": "file:../vouch-core",
+    "vouch-node": "file:../vouch-node"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.0",
+    "typescript": "^5.6.0"
+  }
+}
