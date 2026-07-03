@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>vouch — live world</title>
+    <style>
+      :root {
+        --bg: #0b0d12;
+        --panel: #141821;
+        --panel2: #1b2029;
+        --line: #262c38;
+        --text: #e7ebf3;
+        --dim: #8b93a7;
+        --accent: #6ea8fe;
+        --good: #4ade80;
+        --warn: #fbbf24;
+        --pink: #f472b6;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      header {
+        display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap;
+        padding: 1rem 1.25rem; border-bottom: 1px solid var(--line);
+      }
+      header h1 { margin: 0; font-size: 1.35rem; letter-spacing: -0.02em; }
+      header .sub { color: var(--dim); }
+      header .spacer { flex: 1; }
+      .status { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--dim); font-size: 0.85rem; }
+      .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dim); }
+      .dot.ok { background: var(--good); box-shadow: 0 0 8px var(--good); }
+      .dot.bad { background: #ef4444; }
+      .metrics { display: flex; gap: 0.6rem; flex-wrap: wrap; padding: 0.9rem 1.25rem; }
+      .metric { background: var(--panel); border: 1px solid var(--line); border-radius: 0.6rem; padding: 0.5rem 0.9rem; min-width: 6.5rem; }
+      .metric .n { font-size: 1.4rem; font-weight: 650; letter-spacing: -0.02em; }
+      .metric .l { color: var(--dim); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+      main { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; padding: 0 1.25rem 1.25rem; }
+      @media (max-width: 820px) { main { grid-template-columns: 1fr; } }
+      section { background: var(--panel); border: 1px solid var(--line); border-radius: 0.7rem; overflow: hidden; }
+      section > h2 { margin: 0; padding: 0.7rem 1rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--dim); border-bottom: 1px solid var(--line); }
+      .regions { display: grid; gap: 0.6rem; padding: 0.8rem; }
+      .region { background: var(--panel2); border: 1px solid var(--line); border-radius: 0.6rem; padding: 0.7rem 0.85rem; }
+      .region .name { font-size: 1.05rem; font-weight: 600; }
+      .region .id { color: var(--dim); font-size: 0.78rem; font-family: ui-monospace, monospace; }
+      .region .row { margin-top: 0.4rem; display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+      .badge { font-size: 0.72rem; padding: 0.1rem 0.5rem; border-radius: 1rem; border: 1px solid var(--line); color: var(--dim); }
+      .badge.gov { color: var(--accent); border-color: var(--accent); }
+      .badge.active { color: var(--good); border-color: var(--good); }
+      .badge.dormant { color: var(--warn); border-color: var(--warn); }
+      .owner { color: var(--dim); font-size: 0.8rem; font-family: ui-monospace, monospace; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 0.45rem 1rem; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+      th { color: var(--dim); font-weight: 500; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+      td.mono { font-family: ui-monospace, monospace; font-size: 0.82rem; }
+      td.num { text-align: right; }
+      .feed { max-height: 22rem; overflow-y: auto; }
+      .event { display: flex; gap: 0.6rem; align-items: baseline; padding: 0.4rem 1rem; border-bottom: 1px solid var(--line); }
+      .event .seq { color: var(--dim); font-family: ui-monospace, monospace; font-size: 0.75rem; min-width: 2.5rem; }
+      .event .type { font-family: ui-monospace, monospace; font-size: 0.8rem; color: var(--pink); min-width: 11rem; }
+      .event .desc { color: var(--dim); font-size: 0.82rem; }
+      .empty { color: var(--dim); padding: 1.2rem 1rem; text-align: center; }
+      .full { grid-column: 1 / -1; }
+      footer { color: var(--dim); font-size: 0.78rem; padding: 0 1.25rem 1.5rem; }
+      code { background: var(--panel2); padding: 0.05rem 0.35rem; border-radius: 0.25rem; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>vouch</h1>
+      <span class="sub">live world viewer</span>
+      <span class="spacer"></span>
+      <span class="status"><span id="dot" class="dot"></span><span id="status">connecting…</span></span>
+    </header>
+
+    <div class="metrics">
+      <div class="metric"><div class="n" id="m-regions">–</div><div class="l">Regions</div></div>
+      <div class="metric"><div class="n" id="m-agents">–</div><div class="l">Agents</div></div>
+      <div class="metric"><div class="n" id="m-currency">–</div><div class="l">Currency</div></div>
+      <div class="metric"><div class="n" id="m-events">–</div><div class="l">Events</div></div>
+    </div>
+
+    <main>
+      <section>
+        <h2>Villages</h2>
+        <div class="regions" id="regions"><div class="empty">no villages yet</div></div>
+      </section>
+      <section>
+        <h2>Residents</h2>
+        <div id="agents"><div class="empty">no residents yet</div></div>
+      </section>
+      <section class="full">
+        <h2>📰 The village newspaper — live event feed</h2>
+        <div class="feed" id="feed"><div class="empty">no events yet</div></div>
+      </section>
+    </main>
+
+    <footer>
+      Read-only viewer. Participation happens through <code>vouch-cli</code> (your key) or
+      <code>vouch-mcp</code> (an AI via MCP). Polls <code>/api/regions</code>,
+      <code>/api/agents</code>, <code>/api/log</code> every 2s.
+    </footer>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+      const state = { cursor: 0, eventCount: 0 };
+
+      async function api(path) {
+        const r = await fetch(`/api${path}`);
+        if (!r.ok) throw new Error(`${path} → ${r.status}`);
+        return r.json();
+      }
+
+      function setStatus(ok, msg) {
+        $("dot").className = "dot " + (ok ? "ok" : "bad");
+        $("status").textContent = msg;
+      }
+
+      function renderRegions(regions) {
+        $("m-regions").textContent = regions.length;
+        if (!regions.length) { $("regions").innerHTML = '<div class="empty">no villages yet</div>'; return; }
+        $("regions").innerHTML = regions.map((r) => {
+          const gov = r.institutions?.governance?.kind ?? "?";
+          const life = r.lifecycle ?? "active";
+          return `<div class="region">
+            <div class="name">${esc(r.displayName ?? r.id)}</div>
+            <div class="id">${esc(r.id)}</div>
+            <div class="row">
+              <span class="badge gov">${esc(gov)}</span>
+              <span class="badge ${life}">${esc(life)}</span>
+              <span class="badge">${esc(r.status ?? "founded")}</span>
+              <span class="owner">owner: ${esc(r.owner ?? "—")}</span>
+            </div>
+          </div>`;
+        }).join("");
+      }
+
+      function renderAgents(agents) {
+        $("m-agents").textContent = agents.length;
+        const total = agents.reduce((n, a) => n + (a.balances?.currency ?? 0), 0);
+        $("m-currency").textContent = total.toLocaleString();
+        if (!agents.length) { $("agents").innerHTML = '<div class="empty">no residents yet</div>'; return; }
+        const rows = agents.map((a) => `<tr>
+          <td class="mono">${esc(a.id)}</td>
+          <td>${esc(a.role ?? "")}</td>
+          <td class="num">${(a.balances?.currency ?? 0).toLocaleString()}</td>
+          <td class="num">${a.trust ?? 0}</td>
+        </tr>`).join("");
+        $("agents").innerHTML = `<table><thead><tr><th>agent</th><th>role</th><th>currency</th><th>trust</th></tr></thead><tbody>${rows}</tbody></table>`;
+      }
+
+      function summarize(payload) {
+        if (!payload || typeof payload !== "object") return "";
+        const p = payload;
+        if (p.region?.id) return p.region.id;
+        if (p.agent?.id) return p.agent.id;
+        if (p.from && p.to) return `${p.from} → ${p.to}${p.weight ? " (" + p.weight + ")" : ""}`;
+        if (p.entries) return p.entries.map((e) => `${e.agentId}:${e.currencyDelta > 0 ? "+" : ""}${e.currencyDelta}`).join("  ");
+        const s = JSON.stringify(p);
+        return s.length > 90 ? s.slice(0, 87) + "…" : s;
+      }
+
+      function prependEvents(events) {
+        if (!events.length) return;
+        state.cursor += events.length;
+        state.eventCount += events.length;
+        $("m-events").textContent = state.eventCount;
+        const feed = $("feed");
+        if (feed.querySelector(".empty")) feed.innerHTML = "";
+        for (const e of events) {
+          const el = document.createElement("div");
+          el.className = "event";
+          el.innerHTML = `<span class="seq">#${e.seq}</span><span class="type">${esc(e.type)}</span><span class="desc">${esc(summarize(e.payload))}</span>`;
+          feed.insertBefore(el, feed.firstChild);
+        }
+        while (feed.childElementCount > 200) feed.removeChild(feed.lastChild);
+      }
+
+      async function poll() {
+        try {
+          const [regions, agents, events] = await Promise.all([api("/regions"), api("/agents"), api(`/log?since=${state.cursor}`)]);
+          renderRegions(regions);
+          renderAgents(agents);
+          prependEvents(events);
+          setStatus(true, "connected");
+        } catch (e) {
+          setStatus(false, "vouch-node unreachable");
+        }
+      }
+
+      poll();
+      setInterval(poll, 2000);
+    </script>
+  </body>
+</html>

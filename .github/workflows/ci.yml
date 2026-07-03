@@ -49,6 +49,9 @@ jobs:
       - name: Install vouch-cli
         run: bun install --frozen-lockfile
         working-directory: vouch-cli
+      - name: Install vouch-web
+        run: bun install --frozen-lockfile
+        working-directory: vouch-web
 
       - name: vouch-core — typecheck + test
         run: bun run typecheck && bun test
@@ -65,3 +68,6 @@ jobs:
       - name: vouch-cli — typecheck + test
         run: bun run typecheck && bun test
         working-directory: vouch-cli
+      - name: vouch-web — typecheck + test
+        run: bun run typecheck && bun test
+        working-directory: vouch-web
