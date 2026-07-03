@@ -172,3 +172,87 @@ describe("discovery documents", () => {
     expect(h).toContain('error="invalid_token"');
   });
 });
+
+describe("dev-AS request validation (error branches)", () => {
+  const dev = () => new DevAuthServer(ISSUER, RESOURCE, SCOPES);
+  const q = (o: Record<string, string>) => new URLSearchParams(o);
+  const ok = {
+    response_type: "code",
+    client_id: "c",
+    redirect_uri: REDIRECT,
+    code_challenge: "abc",
+    code_challenge_method: "S256",
+    scope: "vouch:read",
+    resource: RESOURCE,
+  };
+
+  test("authorize rejects a non-code response_type", () => {
+    expect("redirect" in dev().authorize(q({ ...ok, response_type: "token" }))).toBe(false);
+  });
+  test("authorize requires client_id", () => {
+    expect("redirect" in dev().authorize(q({ ...ok, client_id: "" }))).toBe(false);
+  });
+  test("authorize requires code_challenge_method=S256 (no plain downgrade)", () => {
+    expect("redirect" in dev().authorize(q({ ...ok, code_challenge_method: "plain" }))).toBe(false);
+  });
+  test("authorize requires a code_challenge (PKCE)", () => {
+    expect("redirect" in dev().authorize(q({ ...ok, code_challenge: "" }))).toBe(false);
+  });
+  test("token rejects an unsupported grant_type", async () => {
+    expect("access_token" in (await dev().token(q({ grant_type: "password" })))).toBe(false);
+  });
+  test("token requires a code", async () => {
+    expect("access_token" in (await dev().token(q({ grant_type: "authorization_code" })))).toBe(false);
+  });
+
+  // mint a valid code, then break ONE token-request field at a time
+  const mintCode = (d: DevAuthServer): { code: string; verifier: string } => {
+    const { verifier, challenge } = pkce();
+    const a = d.authorize(q({ ...ok, code_challenge: challenge }));
+    return { code: new URL((a as { redirect: string }).redirect).searchParams.get("code") ?? "", verifier };
+  };
+
+  test("token rejects a redirect_uri mismatch", async () => {
+    const d = dev();
+    const { code, verifier } = mintCode(d);
+    const r = await d.token(
+      q({
+        grant_type: "authorization_code",
+        code,
+        code_verifier: verifier,
+        redirect_uri: "http://127.0.0.1:1/other",
+        resource: RESOURCE,
+        client_id: "c",
+      }),
+    );
+    expect("access_token" in r).toBe(false);
+  });
+  test("token requires a code_verifier", async () => {
+    const d = dev();
+    const { code } = mintCode(d);
+    const r = await d.token(q({ grant_type: "authorization_code", code, redirect_uri: REDIRECT, resource: RESOURCE, client_id: "c" }));
+    expect("access_token" in r).toBe(false);
+  });
+  test("token rejects a resource mismatch (RFC 8707)", async () => {
+    const d = dev();
+    const { code, verifier } = mintCode(d);
+    const r = await d.token(
+      q({
+        grant_type: "authorization_code",
+        code,
+        code_verifier: verifier,
+        redirect_uri: REDIRECT,
+        resource: "https://evil.test/mcp",
+        client_id: "c",
+      }),
+    );
+    expect("access_token" in r).toBe(false);
+  });
+
+  test("jwks exposes the EdDSA signing public key", async () => {
+    const j = await dev().jwks();
+    expect(j.keys[0]?.alg).toBe("EdDSA");
+    expect(j.keys[0]?.kty).toBe("OKP");
+    expect(j.keys[0]?.kid).toBeTruthy();
+  });
+});

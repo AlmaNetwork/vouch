@@ -33,4 +33,20 @@ describe("config — dev-AS gating (fail closed)", () => {
     expect(() => loadMcpConfig({ VOUCH_NOTARY: "seed://t" })).toThrow(/VOUCH_MCP_MASTER_SECRET is required/);
     expect(() => loadMcpConfig({ VOUCH_NOTARY: "seed://t", VOUCH_MCP_MASTER_SECRET: "short" })).toThrow(/at least 16/);
   });
+
+  test("the public URL must be an absolute URL without a fragment", () => {
+    expect(() => loadMcpConfig({ ...base, VOUCH_MCP_DEV_AS: "1", VOUCH_MCP_PUBLIC_URL: "not-a-url" })).toThrow(/absolute URL/);
+    expect(() => loadMcpConfig({ ...base, VOUCH_MCP_DEV_AS: "1", VOUCH_MCP_PUBLIC_URL: "http://127.0.0.1:8788/mcp#frag" })).toThrow(
+      /fragment/,
+    );
+  });
+
+  test("VOUCH_MCP_AS_ISSUER and _JWKS_URL must be set together", () => {
+    expect(() => loadMcpConfig({ ...base, VOUCH_MCP_AS_ISSUER: "https://idp.example" })).toThrow(/must be set together/);
+  });
+
+  test("VOUCH_MCP_PORT must be a decimal integer in range", () => {
+    expect(() => loadMcpConfig({ ...base, VOUCH_MCP_DEV_AS: "1", VOUCH_MCP_PORT: "0x50" })).toThrow(/decimal integer/);
+    expect(() => loadMcpConfig({ ...base, VOUCH_MCP_DEV_AS: "1", VOUCH_MCP_PORT: "99999" })).toThrow(/in \[/);
+  });
 });

@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import { StreamableHTTPTransport } from "@hono/mcp";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { createRemoteJWKSet } from "jose";
 import { type AccountLog, FileAccountLog, FileJournal, type Journal, MemoryAccountLog, MemoryJournal, VouchNode } from "vouch-node";
 import { createObservationApp } from "vouch-world/observation";
@@ -22,6 +23,9 @@ import { buildMcpServer } from "./mcp";
 import { makeVerifier, protectedResourceMetadata, type VerifyKey, wwwAuthenticate } from "./resource-server";
 
 const SERVER_INFO = { name: "vouch-mcp", version: "0.0.0" } as const;
+
+/** Cap request bodies: a signed command / token request is tiny, so this bounds the pre-auth work an unauthenticated caller can force. */
+const MAX_BODY_BYTES = 256 * 1024;
 
 function rpcError(message: string): { jsonrpc: "2.0"; error: { code: number; message: string }; id: null } {
   return { jsonrpc: "2.0", error: { code: -32000, message }, id: null };
@@ -69,6 +73,11 @@ export async function createMcpApp(config: McpConfig): Promise<McpApp> {
 
   const app = new Hono();
 
+  // Liveness probe — cheap, unauthenticated, and deliberately EXEMPT from the Host
+  // guard so an orchestrator (whose probe sends the pod IP as Host, not the canonical
+  // origin) can always reach it.
+  app.get("/health", (c) => c.json({ ok: true, resource: config.resource, issuer: config.issuer, devAs: config.devAs }));
+
   // DNS-rebinding guard. @hono/mcp does not validate Host/Origin, so we do it here for
   // EVERY route: a rebound browser page keeps its attacker hostname in Host/Origin even
   // after DNS points it at our loopback bind, so pinning both to the canonical origin
@@ -76,12 +85,16 @@ export async function createMcpApp(config: McpConfig): Promise<McpApp> {
   const allowedHost = new URL(config.publicUrl).host;
   const allowedOrigin = config.publicUrl;
   app.use("*", async (c, next) => {
+    if (c.req.path === "/health") return next();
     const host = c.req.header("host");
     if (host && host !== allowedHost) return c.json(rpcError(`bad host "${host}"`), 421);
     const origin = c.req.header("origin");
     if (origin && origin !== allowedOrigin) return c.json(rpcError(`cross-origin request from "${origin}" refused`), 403);
     return next();
   });
+
+  // Bound request bodies before any parse/verify (pre-auth DoS surface).
+  app.use("*", bodyLimit({ maxSize: MAX_BODY_BYTES, onError: (c) => c.json(rpcError("request body too large"), 413) }));
 
   // RFC 9728 — protected resource metadata (path-inserted under /mcp, plus a root copy).
   const prm = () => protectedResourceMetadata(config.resource, config.issuer, config.scopesSupported);

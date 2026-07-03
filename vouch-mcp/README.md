@@ -134,6 +134,8 @@ Custody is the PoC posture, with that path documented.
 - **Loopback-only redirect_uri** in the dev-AS (no open-redirect / code leak).
 - **Full-digest principal** (no truncation), **exception-safe key zeroization**, and
   **per-token `jti`** recorded in the sign audit.
+- **Request-body cap** (256 KB) on every route — bounds pre-auth work.
+- **`GET /health`** — cheap, unauthenticated liveness (exempt from the Host guard).
 
 ### Still deferred (not in this PoC)
 

@@ -62,4 +62,15 @@ describe("VouchClient — non-custodial SDK", () => {
     expect(Array.isArray(await anon.regions())).toBe(true);
     expect(() => anon.publicKey).toThrow(/needs a key/);
   });
+
+  test("state and metrics reads", async () => {
+    const anon = new VouchClient(base);
+    expect(await anon.state()).toBeTruthy();
+    expect(await anon.metrics()).toBeTruthy();
+  });
+
+  test("a dead node fails fast with a clear transport error (not a hang)", async () => {
+    const dead = new VouchClient("http://127.0.0.1:1", undefined, 1500);
+    await expect(dead.regions()).rejects.toThrow(/failed|timed out/);
+  });
 });
