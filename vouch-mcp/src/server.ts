@@ -31,6 +31,34 @@ function rpcError(message: string): { jsonrpc: "2.0"; error: { code: number; mes
   return { jsonrpc: "2.0", error: { code: -32000, message }, id: null };
 }
 
+const HTML_ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch] ?? ch);
+}
+
+/**
+ * A minimal consent page. Some clients (e.g. Claude Code) expect the AS to present a
+ * consent screen rather than silently 302-ing. It just round-trips the (escaped)
+ * authorization params back with `approved=1`; programmatic callers never see it (it
+ * is served only to `Accept: text/html` requests), so the direct-302 flow is intact.
+ */
+function consentPage(params: URLSearchParams): string {
+  const client = params.get("client_id") ?? "an application";
+  const scope = params.get("scope") || "vouch:read";
+  const hidden = [...params.entries()].map(([k, v]) => `<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`).join("");
+  return `<!doctype html><html><head><meta charset="utf-8"><title>vouch-mcp — authorize</title>
+<style>body{font-family:system-ui,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1rem;line-height:1.5}
+button{font-size:1rem;padding:.6rem 1.4rem;cursor:pointer;border-radius:.4rem;border:1px solid #333;background:#111;color:#fff}
+code{background:#f4f4f5;padding:.1rem .35rem;border-radius:.25rem}</style></head><body>
+<h1>vouch-mcp</h1>
+<p><code>${escapeHtml(client)}</code> wants to participate in this vouch world.</p>
+<p>Scopes requested: <code>${escapeHtml(scope)}</code></p>
+<form method="get" action="/authorize">${hidden}<input type="hidden" name="approved" value="1">
+<button type="submit">Authorize</button></form>
+<p style="color:#888;font-size:.85rem">Local dev authorization server — you are authorizing as <code>dev</code>.</p>
+</body></html>`;
+}
+
 export interface McpApp {
   readonly app: Hono;
   readonly node: VouchNode;
@@ -105,8 +133,19 @@ export async function createMcpApp(config: McpConfig): Promise<McpApp> {
   if (devAs) {
     app.get("/.well-known/oauth-authorization-server", (c) => c.json(devAs.metadata()));
     app.get("/jwks", async (c) => c.json(await devAs.jwks()));
+    // RFC 7591 dynamic client registration — a client with no pre-registration POSTs here.
+    app.post("/register", async (c) => {
+      const body = await c.req.json().catch(() => ({}));
+      const r = devAs.register(body);
+      return c.json(r.body, r.status as 201 | 400);
+    });
     app.get("/authorize", (c) => {
-      const r = devAs.authorize(new URL(c.req.url).searchParams);
+      const params = new URL(c.req.url).searchParams;
+      // Browser navigations get a consent screen; programmatic callers (Accept: */*) go straight through.
+      if ((c.req.header("accept") ?? "").includes("text/html") && params.get("approved") !== "1") {
+        return c.html(consentPage(params));
+      }
+      const r = devAs.authorize(params);
       return "redirect" in r ? c.redirect(r.redirect) : c.json(r.body, r.status as 400);
     });
     app.post("/token", async (c) => {

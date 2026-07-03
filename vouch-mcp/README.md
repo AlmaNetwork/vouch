@@ -82,6 +82,27 @@ Boots the server, runs the OAuth dance for two subjects, and drives the tools: a
 founder creates a region, a joiner is admitted by the owner, the joiner transacts,
 a scope-denied write is refused, and the sign audit log is printed.
 
+## Connect it to Claude Code
+
+The point of this package: let **your Claude** participate in a vouch world through
+MCP. The dev-AS supports **Dynamic Client Registration (RFC 7591)**, so Claude Code
+can connect with no pre-shared client.
+
+```bash
+# 1. start the server (loopback, bundled dev-AS)
+cd vouch-mcp && bun run dev            # → http://127.0.0.1:8788/mcp
+
+# 2. either use the repo-root .mcp.json (auto-loaded; approve the trust prompt), or:
+claude mcp add --transport http vouch http://127.0.0.1:8788/mcp
+```
+
+On connect, Claude Code discovers the auth server (RFC 9728 → RFC 8414), **registers
+itself** at `/register`, opens a browser to `/authorize` (you click **Authorize** on
+the consent page), and gets an audience-bound token. It then drives the `vouch_*`
+tools below. You participate as the subject **`dev`** (the dev-AS has no login UI);
+production would delegate to a real IdP (`VOUCH_MCP_AS_*`) where the subject is the
+real user. The signing stays custodial — see [Security](#security).
+
 ## Tools
 
 | tool | scope | what |

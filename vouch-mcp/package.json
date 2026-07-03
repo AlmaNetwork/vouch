@@ -8,7 +8,8 @@
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "start": "bun src/index.ts"
+    "start": "bun src/index.ts",
+    "dev": "VOUCH_NOTARY=seed://vouch-mcp-dev VOUCH_MCP_MASTER_SECRET=dev-master-secret-change-me VOUCH_MCP_DEV_AS=1 bun src/index.ts"
   },
   "dependencies": {
     "vouch-core": "file:../vouch-core",

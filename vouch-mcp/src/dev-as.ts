@@ -11,12 +11,12 @@
 // the subject named by `login_hint` (default "dev"). Everything else (PKCE
 // verification, single-use codes, exact redirect echo, audience binding) is real.
 
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { exportJWK, generateKeyPair, type KeyLike, SignJWT } from "jose";
 
 const KID = "dev-ed25519-1";
 const CODE_TTL_MS = 60_000;
-const TOKEN_TTL_SEC = 600;
+const TOKEN_TTL_SEC = 3600;
 
 interface AuthCode {
   readonly codeChallenge: string;
@@ -28,11 +28,19 @@ interface AuthCode {
   readonly expiresAt: number;
 }
 
+/** A dynamically-registered client (RFC 7591) — we store only its redirect allowlist; we fetch nothing. */
+interface RegisteredClient {
+  readonly redirectUris: readonly string[];
+}
+
 type OAuthError = { readonly error: string; readonly error_description: string };
 type AuthorizeResult = { readonly redirect: string } | { readonly status: number; readonly body: OAuthError };
 type TokenResult =
   | { readonly access_token: string; readonly token_type: "Bearer"; readonly expires_in: number; readonly scope: string }
   | { readonly status: number; readonly body: OAuthError };
+type RegisterResult =
+  | { readonly status: 201; readonly body: Record<string, unknown> }
+  | { readonly status: 400; readonly body: OAuthError };
 
 function s256(verifier: string): string {
   return createHash("sha256").update(verifier).digest("base64url");
@@ -58,6 +66,7 @@ function redirectAllowed(raw: string): boolean {
 export class DevAuthServer {
   private readonly keys: Promise<{ publicKey: KeyLike; privateKey: KeyLike }>;
   private readonly codes = new Map<string, AuthCode>();
+  private readonly clients = new Map<string, RegisteredClient>();
 
   constructor(
     private readonly issuer: string,
@@ -79,11 +88,61 @@ export class DevAuthServer {
       authorization_endpoint: `${this.issuer}/authorize`,
       token_endpoint: `${this.issuer}/token`,
       jwks_uri: `${this.issuer}/jwks`,
+      // RFC 7591 dynamic client registration — a client with no pre-registration (e.g.
+      // Claude Code) POSTs here to obtain a client_id before the authorization request.
+      registration_endpoint: `${this.issuer}/register`,
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code"],
       code_challenge_methods_supported: ["S256"],
       token_endpoint_auth_methods_supported: ["none"],
+      // RFC 9207 — we stamp `iss` into the redirect so the client can pin the issuer.
+      authorization_response_iss_parameter_supported: true,
       scopes_supported: [...this.scopesSupported],
+    };
+  }
+
+  /**
+   * RFC 7591 Dynamic Client Registration. PUBLIC clients only: we mint an
+   * unguessable client_id and store ONLY the redirect allowlist — we fetch nothing
+   * the client supplies (no logo_uri/jwks_uri retrieval), so there is no SSRF surface.
+   * Registered clients are then held to their exact redirect_uris at /authorize.
+   */
+  register(metadata: unknown): RegisterResult {
+    const m = (typeof metadata === "object" && metadata !== null ? metadata : {}) as Record<string, unknown>;
+    const redirectUris = m.redirect_uris;
+    if (!Array.isArray(redirectUris) || redirectUris.length === 0 || !redirectUris.every((u): u is string => typeof u === "string")) {
+      return {
+        status: 400,
+        body: { error: "invalid_client_metadata", error_description: "redirect_uris must be a non-empty array of strings" },
+      };
+    }
+    for (const u of redirectUris) {
+      if (!redirectAllowed(u))
+        return { status: 400, body: { error: "invalid_redirect_uri", error_description: `redirect_uri "${u}" must be a loopback URL` } };
+    }
+    if (m.token_endpoint_auth_method !== undefined && m.token_endpoint_auth_method !== "none") {
+      return {
+        status: 400,
+        body: {
+          error: "invalid_client_metadata",
+          error_description: "only public clients (token_endpoint_auth_method=none) are supported",
+        },
+      };
+    }
+    const clientId = `dcr_${randomBytes(24).toString("base64url")}`;
+    this.clients.set(clientId, { redirectUris: [...redirectUris] });
+    return {
+      status: 201,
+      body: {
+        client_id: clientId,
+        client_id_issued_at: Math.floor(Date.now() / 1000),
+        redirect_uris: [...redirectUris],
+        grant_types: ["authorization_code"],
+        response_types: ["code"],
+        token_endpoint_auth_method: "none",
+        client_name: typeof m.client_name === "string" ? m.client_name : "mcp-client",
+        scope: this.scopesSupported.join(" "),
+      },
     };
   }
 
@@ -104,6 +163,12 @@ export class DevAuthServer {
     if (q.get("response_type") !== "code") return err("unsupported_response_type", "only response_type=code is supported");
     const clientId = q.get("client_id");
     if (!clientId) return err("invalid_request", "client_id is required");
+    // A DCR-registered client is held to its exact registered redirect_uris; an
+    // ad-hoc (unregistered) client_id keeps the loopback-only check above.
+    const registered = this.clients.get(clientId);
+    if (registered && !registered.redirectUris.includes(redirectUri)) {
+      return err("invalid_request", "redirect_uri is not registered for this client");
+    }
     const codeChallenge = q.get("code_challenge");
     if (!codeChallenge) return err("invalid_request", "code_challenge is required (PKCE)");
     if (q.get("code_challenge_method") !== "S256") return err("invalid_request", "code_challenge_method must be S256");
@@ -120,6 +185,7 @@ export class DevAuthServer {
 
     const back = new URL(redirectUri);
     back.searchParams.set("code", code);
+    back.searchParams.set("iss", this.issuer); // RFC 9207 issuer identification
     const state = q.get("state");
     if (state) back.searchParams.set("state", state);
     return { redirect: back.toString() };
