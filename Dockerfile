@@ -1,69 +1,38 @@
 # syntax=docker/dockerfile:1
+#
+# The deployable is vouch-node — the canonical participate node (Bun + a durable
+# JSONL journal). It depends on vouch-core + vouch-world through file: links, so all
+# three packages are copied in and installed together.
+#
+# NOTE: not smoke-tested in the dev environment — run `docker build .` before shipping.
 
-# ============================================
-# Stage 1: Build
-# ============================================
-FROM node:20-alpine AS builder
-
+FROM oven/bun:1.3.2-alpine AS runtime
 WORKDIR /app
 
-# Install build dependencies for better-sqlite3
-RUN apk add --no-cache python3 make g++
+# Copy the three packages the node needs (node_modules/tests/docs are excluded via .dockerignore).
+COPY vouch-core ./vouch-core
+COPY vouch-world ./vouch-world
+COPY vouch-node ./vouch-node
 
-# Copy package files
-COPY package.json package-lock.json* ./
+WORKDIR /app/vouch-node
+RUN bun install --frozen-lockfile
 
-# Install all dependencies (including devDependencies for build)
-RUN npm ci
-
-# Copy source files
-COPY tsconfig.json ./
-COPY src/ ./src/
-
-# Build TypeScript
-RUN npm run build
-
-# ============================================
-# Stage 2: Production
-# ============================================
-FROM node:20-alpine AS production
-
-WORKDIR /app
-
-# Install runtime dependencies for better-sqlite3
-RUN apk add --no-cache python3 make g++
-
-# Create non-root user for security
-RUN addgroup -g 1001 -S vouch && \
-    adduser -u 1001 -S vouch -G vouch
-
-# Copy package files
-COPY package.json package-lock.json* ./
-
-# Install production dependencies only
-RUN npm ci --omit=dev && \
-    npm cache clean --force
-
-# Copy built application
-COPY --from=builder /app/dist ./dist
-
-# Create data directory for SQLite
-RUN mkdir -p /app/data && chown -R vouch:vouch /app/data
-
-# Switch to non-root user
+# Run as a non-root user with a writable data dir for the journal + auth log.
+RUN addgroup -g 1001 -S vouch \
+ && adduser -u 1001 -S vouch -G vouch \
+ && mkdir -p /app/data \
+ && chown -R vouch:vouch /app/data
 USER vouch
 
-# Environment variables
-ENV NODE_ENV=production
-ENV PORT=3000
-ENV VOUCH_DB_PATH=/app/data/vouch.db
+ENV VOUCH_HOST=0.0.0.0 \
+    VOUCH_PORT=8787 \
+    VOUCH_JOURNAL=/app/data/journal.jsonl \
+    VOUCH_ACCOUNTS=/app/data/accounts.jsonl
+# VOUCH_NOTARY is REQUIRED at runtime (no fallback) — pass e.g.
+#   -e VOUCH_NOTARY=env://VOUCH_NOTARY_SECRET -e VOUCH_NOTARY_SECRET=<secret>
 
-# Expose port
-EXPOSE 3000
-
-# Health check
+EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8787/health || exit 1
 
-# Start application
-CMD ["node", "dist/index.js"]
+CMD ["bun", "src/index.ts"]

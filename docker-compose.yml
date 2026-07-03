@@ -1,39 +1,44 @@
 services:
-  vouch:
+  vouch-node:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: vouch-node
     ports:
-      - "3000:3000"
+      - "8787:8787"
     environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - VOUCH_DB_PATH=/app/data/vouch.db
+      - VOUCH_HOST=0.0.0.0
+      - VOUCH_PORT=8787
+      # VOUCH_NOTARY is required (no fallback); override with a real secret in production.
+      - VOUCH_NOTARY=${VOUCH_NOTARY:-seed://dev-change-me}
+      - VOUCH_JOURNAL=/app/data/journal.jsonl
+      - VOUCH_ACCOUNTS=/app/data/accounts.jsonl
     volumes:
       - vouch-data:/app/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8787/health"]
       interval: 30s
       timeout: 3s
       retries: 3
       start_period: 5s
 
-  # Development service with hot reload
-  vouch-dev:
+  # Development service with hot reload (docker compose --profile dev up vouch-node-dev)
+  vouch-node-dev:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    container_name: vouch-dev
+    container_name: vouch-node-dev
     ports:
-      - "3000:3000"
+      - "8787:8787"
     environment:
-      - NODE_ENV=development
-      - PORT=3000
-      - VOUCH_DB_PATH=/app/data/vouch.db
+      - VOUCH_HOST=0.0.0.0
+      - VOUCH_PORT=8787
+      - VOUCH_NOTARY=${VOUCH_NOTARY:-seed://dev-change-me}
+      - VOUCH_JOURNAL=/app/data/journal.jsonl
+      - VOUCH_ACCOUNTS=/app/data/accounts.jsonl
     volumes:
-      - ./src:/app/src:ro
+      - ./vouch-node/src:/app/vouch-node/src:ro
       - vouch-dev-data:/app/data
     profiles:
       - dev

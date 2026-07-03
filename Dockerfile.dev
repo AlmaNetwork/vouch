@@ -1,32 +1,23 @@
 # syntax=docker/dockerfile:1
+#
+# Development image for vouch-node with hot reload. Mount ./vouch-node/src over
+# /app/vouch-node/src (see docker-compose.yml, `dev` profile) and Bun re-runs on change.
 
-# Development Dockerfile with hot reload
-FROM node:20-alpine
-
+FROM oven/bun:1.3.2-alpine
 WORKDIR /app
 
-# Install build dependencies for better-sqlite3
-RUN apk add --no-cache python3 make g++
+COPY vouch-core ./vouch-core
+COPY vouch-world ./vouch-world
+COPY vouch-node ./vouch-node
 
-# Copy package files
-COPY package.json package-lock.json* ./
+WORKDIR /app/vouch-node
+RUN bun install
 
-# Install all dependencies
-RUN npm ci
-
-# Copy TypeScript config
-COPY tsconfig.json ./
-
-# Create data directory
 RUN mkdir -p /app/data
+ENV VOUCH_HOST=0.0.0.0 \
+    VOUCH_PORT=8787 \
+    VOUCH_JOURNAL=/app/data/journal.jsonl \
+    VOUCH_ACCOUNTS=/app/data/accounts.jsonl
 
-# Environment variables
-ENV NODE_ENV=development
-ENV PORT=3000
-ENV VOUCH_DB_PATH=/app/data/vouch.db
-
-# Expose port
-EXPOSE 3000
-
-# Start with hot reload
-CMD ["npm", "run", "dev"]
+EXPOSE 8787
+CMD ["bun", "--watch", "src/index.ts"]
