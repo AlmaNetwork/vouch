@@ -207,3 +207,52 @@ describe("hardening / non-functional", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("Claude Code / dynamic client registration flow", () => {
+  test("AS metadata advertises the registration endpoint + issuer identification", async () => {
+    const md = (await (await fetch(`${base}/.well-known/oauth-authorization-server`)).json()) as {
+      registration_endpoint: string;
+      authorization_response_iss_parameter_supported: boolean;
+    };
+    expect(md.registration_endpoint).toMatch(/\/register$/);
+    expect(md.authorization_response_iss_parameter_supported).toBe(true);
+  });
+
+  test("POST /register mints a client_id (RFC 7591)", async () => {
+    const res = await fetch(`${base}/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        client_name: "Claude Code",
+        redirect_uris: ["http://127.0.0.1:8080/callback"],
+        token_endpoint_auth_method: "none",
+      }),
+    });
+    expect(res.status).toBe(201);
+    expect(typeof ((await res.json()) as { client_id: string }).client_id).toBe("string");
+  });
+
+  test("/authorize serves a consent page to a browser (Accept: text/html)", async () => {
+    const url = `${base}/authorize?response_type=code&client_id=x&redirect_uri=http://127.0.0.1:8080/cb&code_challenge=abc&code_challenge_method=S256&scope=vouch:read&resource=${encodeURIComponent(resource)}`;
+    const res = await fetch(url, { headers: { accept: "text/html" } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type") ?? "").toContain("text/html");
+    expect((await res.text()).toLowerCase()).toContain("authorize");
+  });
+
+  test("a DCR-registered client completes the whole flow and can drive tools", async () => {
+    const reg = (await (
+      await fetch(`${base}/register`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ redirect_uris: ["http://127.0.0.1:53682/callback"], token_endpoint_auth_method: "none" }),
+      })
+    ).json()) as { client_id: string };
+    const tok = await fetchDevToken({ baseUrl: base, resource, scopes: ["vouch:read"], sub: "dcr-user", clientId: reg.client_id });
+    expect(tok.access_token.split(".").length).toBe(3);
+    const c = await connectMcp(base, tok.access_token);
+    const who = JSON.parse(toolText(await c.callTool({ name: "vouch_whoami", arguments: {} }))) as { principal: string };
+    expect(who.principal).toBeTruthy();
+    await c.close();
+  });
+});

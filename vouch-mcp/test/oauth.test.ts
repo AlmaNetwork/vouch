@@ -255,4 +255,52 @@ describe("dev-AS request validation (error branches)", () => {
     expect(j.keys[0]?.kty).toBe("OKP");
     expect(j.keys[0]?.kid).toBeTruthy();
   });
+
+  test("metadata advertises DCR + RFC 9207 issuer identification", () => {
+    const md = dev().metadata();
+    expect(md.registration_endpoint).toBe(`${ISSUER}/register`);
+    expect(md.authorization_response_iss_parameter_supported).toBe(true);
+  });
+});
+
+describe("dynamic client registration (RFC 7591)", () => {
+  const dev = () => new DevAuthServer(ISSUER, RESOURCE, SCOPES);
+  const LOOPBACK = "http://127.0.0.1:8080/callback";
+  const clientIdOf = (r: ReturnType<DevAuthServer["register"]>): string => (r.status === 201 ? (r.body.client_id as string) : "");
+
+  test("registers a public client and mints an unguessable client_id", () => {
+    const r = dev().register({ client_name: "Claude Code", redirect_uris: [LOOPBACK], token_endpoint_auth_method: "none" });
+    expect(r.status).toBe(201);
+    expect(clientIdOf(r).length).toBeGreaterThan(20);
+    if (r.status === 201) {
+      expect(r.body.token_endpoint_auth_method).toBe("none");
+      expect(r.body.redirect_uris).toEqual([LOOPBACK]);
+    }
+  });
+
+  test("requires redirect_uris, rejects non-loopback + confidential clients", () => {
+    expect(dev().register({ client_name: "x" }).status).toBe(400);
+    expect(dev().register({ redirect_uris: ["https://attacker.example/cb"] }).status).toBe(400);
+    expect(dev().register({ redirect_uris: [LOOPBACK], token_endpoint_auth_method: "client_secret_basic" }).status).toBe(400);
+  });
+
+  test("a registered client is held to its registered redirect_uri, and the redirect carries iss", () => {
+    const d = dev();
+    const clientId = clientIdOf(d.register({ redirect_uris: [LOOPBACK] }));
+    const { challenge } = pkce();
+    const common = {
+      response_type: "code",
+      client_id: clientId,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      scope: "vouch:read",
+      resource: RESOURCE,
+    };
+    // a loopback redirect that was NOT registered for this client is refused
+    expect("redirect" in d.authorize(new URLSearchParams({ ...common, redirect_uri: "http://127.0.0.1:9999/other" }))).toBe(false);
+    // the registered redirect works, and the response carries the RFC 9207 iss
+    const okr = d.authorize(new URLSearchParams({ ...common, redirect_uri: LOOPBACK }));
+    expect("redirect" in okr).toBe(true);
+    if ("redirect" in okr) expect(new URL(okr.redirect).searchParams.get("iss")).toBe(ISSUER);
+  });
 });
