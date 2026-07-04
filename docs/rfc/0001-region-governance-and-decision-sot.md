@@ -45,7 +45,7 @@ Keep two things apart and never conflate them:
 is *binding / legitimate*, X is procedure (set it here). If X only describes the regime
 that emerges, it is an outcome (measure it; see RFC 0002).
 
-Two corollaries that anchor the whole design:
+Three corollaries that anchor the whole design:
 
 - The knobs a founder sets are **presets / affordances** — a skill catalog. Maximize
   freedom here; offer opinionated presets plus tunable parameters.
@@ -53,6 +53,11 @@ Two corollaries that anchor the whole design:
   the project goal of observing governance conflict as an emergent result. RFC 0002 is
   therefore measurement-only, and the *independent variables* of an experiment are the
   presets/affordances below (swept across runs) — there is no separate control layer.
+- **No separate "law" concept.** Governance commands remain `amend` / `propose` / `vote`
+  over institution parameters — the procedure layer needs no additional vocabulary. The
+  "nation-feel" a region develops is the emergent regime RFC 0002 observes, not a new
+  command surface. (This also resolves the node-side taxonomy question of whether a
+  `law` command family is needed: it is not.)
 
 ## 3. Observed gaps (relative to `main`)
 
@@ -89,6 +94,10 @@ Two corollaries that anchor the whole design:
     ≥ N eligible members.
   - All three must fold deterministically from the log — no clock; any randomness via the
     engine RNG only.
+  - The new parameters are bounds-checked in `validateGovernance` at amend-time (the same
+    shape as the existing empty-council / owner-null-dictatorship brick guards), so an
+    incoherent preset is rejected before it can land. With region events typed through
+    `WorldEventMap` + `commit()`, the extended payloads stay compile-time-checked.
   - **Important separation.** Sybil resistance rests on **citizenship / one-person-one-ID**
     (proof-of-personhood), which blocks fake IDs *without* slowing genuine newcomers.
     `tenure` / `maturity` are **not** Sybil tools — they are the *incumbent-vs-insurgent*
@@ -99,7 +108,9 @@ Two corollaries that anchor the whole design:
   citizenship (the ID's home region), not current residence. **Naturalization** (granting
   newcomers political rights) is a **planned tunable, default off** — not a permanent
   exclusion. Keeping it tunable preserves the bottom-up-legitimacy / revolution-by-
-  newcomers regime as something the simulation can express and observe.
+  newcomers regime as something the simulation can express and observe. Eligibility is
+  exposed as a derived **eligible-as-of-`seq`** selector (citizenship × tenure, evaluated
+  at a given log `seq`), which both the vote path and the quorum denominator consume.
 
 - **Add vote weighting as a regime variable.** `equal | reputation | stake` as form data
   (`main`'s council is equal-weight today). Weighting is a legitimacy-source axis
@@ -112,6 +123,10 @@ Two corollaries that anchor the whole design:
   Transferring representation updates the pointer via the existing ownership/governance
   path (`transferRegionOwnership`) — no region-wide secret is ever handed over. This
   matches the Trust Core (no key directory; each ID signs with its own key).
+  *Status note:* cross-region acts today (`recognizeRegion`) are env-authored, not
+  owner-signed. The "verify signer == representative-of-record" check is therefore a
+  node-side concern (the signed-command model) to be specced alongside this RFC, not a
+  change to the engine's write path here.
 
 - **Electing / replacing the representative reuses the decision path.** It is a governance
   decision whose action transfers `owner`; no separate election subsystem is introduced.
@@ -127,9 +142,13 @@ Two corollaries that anchor the whole design:
   Entrenchment is a **per-region optional clause, default off** — so both self-coup-able
   regions (a legal "enabling act" path into autocracy) and constitutionally-entrenched
   regions are observable. Self-coup is handled by observation + logging, not prohibition.
-- **Quorum denominator.** Pin the eligible base by `seq`-based tenure
-  (citizenship × tenure = "eligible as of which `seq`"), so admission timing cannot game
-  the denominator.
+- **Quorum denominator.** **Snapshot the eligible base at proposal-open `seq`** (the
+  eligible-as-of-`seq` selector evaluated at the `seq` of `openProposal`). Joining or
+  leaving mid-proposal does not change that proposal's denominator or electorate — the
+  voter roll closes when the proposal opens, which keeps the fold deterministic and
+  un-gameable by admission timing. This mirrors real-world voter-roll cutoffs; the
+  *continuous* defense against move-in-to-vote behavior is `tenure` (tunable, default
+  low — a months-long residency rule would be excessive here), not the snapshot itself.
 
 ## 6. Out of scope / deferred (marked, not solved)
 
