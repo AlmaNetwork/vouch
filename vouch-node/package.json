@@ -1,0 +1,26 @@
+{
+  "name": "vouch-node",
+  "version": "0.0.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "description": "The participate node — a durable, authenticated write path onto the vouch-world engine (Track B).",
+  "exports": {
+    ".": "./src/lib.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "start": "bun src/index.ts"
+  },
+  "dependencies": {
+    "vouch-core": "file:../vouch-core",
+    "vouch-world": "file:../vouch-world",
+    "hono": "^4.6.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.0",
+    "typescript": "^5.6.0"
+  }
+}

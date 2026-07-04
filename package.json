@@ -1,7 +1,10 @@
 {
   "name": "vouch",
+  "version": "1.0.0",
   "private": true,
-  "description": "Repo-wide tooling (Biome lint + format) for the vouch monorepo. Each package builds/tests on its own.",
+  "type": "module",
+  "description": "vouch — a society simulator on the ALMA protocol. Monorepo: vouch-core, vouch-world, vouch-node, vouch-mcp, vouch-cli. This root package holds only the shared Biome tooling; each package is self-contained and run with Bun.",
+  "license": "Apache-2.0",
   "scripts": {
     "lint": "biome lint .",
     "format": "biome format --write .",

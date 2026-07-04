@@ -71,6 +71,34 @@ export class World<S> implements CommitSink<S>, WorldView<S> {
     this.log = this.events.asReadOnly();
   }
 
+  /**
+   * Rebuild a world from a previously-persisted event log — the replay-on-boot
+   * path for durability and multi-node bring-up. Each stored event is re-appended
+   * verbatim (its original tick / type / actor / payload) and folded through the
+   * reducer, exactly as the original live authoring did, so the rebuilt
+   * `{ tick, state, log.digest }` equals the original world's (see `replayState`).
+   *
+   * The `seq` guard catches accidental gaps / reordering (journal corruption) so a
+   * malformed log throws rather than silently rebuilding a divergent state. It is
+   * NOT a security control: the stored `actor` is trusted verbatim, so this replays
+   * whatever was persisted. The log is trusted local storage — a caller that can
+   * write it can author any event (incl. system-authored ones). Cryptographic
+   * tamper-evidence for the persisted log is a caller-side concern / a follow-up;
+   * the live write path (public `emit` rejects SYSTEM_ACTOR) is unaffected.
+   */
+  static fromLog<S>(opts: WorldOptions<S>, events: readonly AlmaEvent[]): World<S> {
+    const world = new World<S>(opts);
+    for (const event of events) {
+      const appended = world.events.append({ tick: event.tick, type: event.type, actor: event.actor, payload: event.payload });
+      if (appended.seq !== event.seq) {
+        throw new Error(`World.fromLog: journal seq gap — expected ${appended.seq}, got ${event.seq}`);
+      }
+      world.currentState = deepFreeze(world.reducer(world.currentState, appended));
+    }
+    world.currentTick = events.at(-1)?.tick ?? 0;
+    return world;
+  }
+
   get tick(): number {
     return this.currentTick;
   }

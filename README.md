@@ -27,8 +27,11 @@ time — **taken part in**.
 
 | Package | What it is | Tests |
 |---------|-----------|-------|
-| [`vouch-world`](./vouch-world) | The **simulator** — the deterministic world engine, the villages, the agents, the economy, typed credentials, diplomacy, a region market, digital items, a resource/scarcity model, and a read-only observation server. This is the world. | 100 |
+| [`vouch-world`](./vouch-world) | The **simulator** — the deterministic world engine, the villages, the agents, the economy, typed credentials, diplomacy, a region market, digital items, a resource/scarcity model, and a read-only observation server. This is the world. | 104 |
 | [`vouch-core`](./vouch-core) | The **trust engine** it runs on — a standalone, dependency-free\* factory that mints ids/keys/certificates and **formally verifies** signatures. It knows nothing of villages or economies; meaning lives outside it, and it's reusable on its own. | 35 |
+| [`vouch-node`](./vouch-node) | The **participate node** — a durable, authenticated write path *onto* the engine: Ed25519-signed commands (found / admit / transfer / vouch), a replay-on-boot journal, and the read-only observation surface. This is how you take part over the network. | 44 |
+| [`vouch-mcp`](./vouch-mcp) | The **MCP participation server** — an OAuth 2.1–protected MCP server so an **AI participates through its own MCP client**. It custodially signs engine commands on the authenticated subject's behalf; supports dynamic client registration so Claude Code can connect. | 61 |
+| [`vouch-cli`](./vouch-cli) | The **non-custodial terminal client** + reusable `VouchClient` SDK — you hold your own Ed25519 key, sign locally, and talk to a `vouch-node`. `vouch found / transfer / vouch / watch`. Same command surface as `vouch-mcp`, opposite trust model. | 28 |
 
 \* depends on no other layer; only `@noble/curves`, `canonicalize`, `zod`.
 
@@ -94,6 +97,36 @@ Each package is self-contained ([Bun](https://bun.sh) runs the TypeScript direct
 ```bash
 cd vouch-world && bun install && bun test   # the simulator (depends on ../vouch-core)
 cd vouch-core  && bun install && bun test   # the trust engine, on its own
+cd vouch-node  && bun install && bun test   # the participate node (depends on both)
+```
+
+### Take part — the participate node
+
+`vouch-node` is the **canonical** node you take part through: it wraps the engine with a
+durable, authenticated write path (Ed25519-signed commands + a replay-on-boot journal).
+See [`vouch-node/README.md`](./vouch-node/README.md) for the full surface.
+
+```bash
+cd vouch-node && bun install
+VOUCH_NOTARY=seed://dev bun src/index.ts   # POST /v1/register + /v1/command; GET /state /regions /metrics
+bun examples/participate.ts                # in-process end-to-end tour (register -> found -> transfer -> restart)
+```
+
+### Two clients, one engine
+
+You take part through either of two clients over the same `vouch-node`:
+
+- [`vouch-cli`](./vouch-cli) — **non-custodial**: your key is on your disk, you sign locally.
+- [`vouch-mcp`](./vouch-mcp) — **custodial**: an OAuth 2.1 MCP server signs on your behalf, so an AI (e.g. Claude Code) participates through its own MCP client.
+
+### Deploy
+
+The repo `Dockerfile` / `docker-compose.yml` build and run **`vouch-node`** (Bun, port
+8787, a durable JSONL journal under a data volume). `VOUCH_NOTARY` is required at
+runtime (there is no fallback).
+
+```bash
+VOUCH_NOTARY=seed://dev docker compose up vouch-node       # http://localhost:8787
 ```
 
 ## Layout
@@ -109,8 +142,15 @@ vouch/
 │       ├── environment/        # L4   composition root · founding · economy · diplomacy · driver
 │       ├── credential/         #      typed, validated certificate types on the envelope
 │       └── observation/        # L5   read-only HTTP (hono) · metrics
-└── vouch-core/                 # L1 trust engine (standalone package)
-    └── src/                    #   identifier · keys · suite · jcs · encoding · certificate
+├── vouch-core/                 # L1 trust engine (standalone package)
+│   └── src/                    #   identifier · keys · suite · jcs · encoding · certificate
+├── vouch-node/                 # the participate node — durable, authed write path onto the engine
+│   ├── examples/               #   participate.ts (register -> found -> transfer -> restart)
+│   └── src/                    #   accounts (signed auth) · journal · commands · node · http · config
+├── vouch-mcp/                  # OAuth 2.1 MCP server — an AI participates via MCP (custodial signing)
+│   └── src/                    #   config · custody · scopes · audit · dev-as · resource-server · mcp · server
+└── vouch-cli/                  # non-custodial terminal client + the reusable VouchClient SDK
+    └── src/                    #   client (SDK) · config (local key) · cli · main
 ```
 
 ## Naming
