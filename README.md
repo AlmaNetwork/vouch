@@ -10,8 +10,8 @@ economy or the guarded one.
 
 Every interaction is recorded in one append-only log, and the entire history replays
 deterministically — so you can rewind, compare two runs side by side, and ask *"what
-if this one thing were different?"* It's a world meant to be **watched**, and — in
-time — **taken part in**.
+if this one thing were different?"* It's a world meant to be **watched** — and now
+**taken part in** over the network, with your own key or through an AI.
 
 ### What happens in a run
 
@@ -20,8 +20,9 @@ time — **taken part in**.
 - the disadvantaged **migrate** to other villages
 - when a cohort's values clash with their village and reach critical mass, they
   **secede and found a new village** whose rules embody their dissatisfaction
-- *(coming)* villages meet across borders and negotiate whose certificates they honor;
-  a "village newspaper" narrates the turning points to viewers
+- villages meet across borders and negotiate **whose certificates they honor**
+  (absorb / map / reexamine / reject); a **village newspaper** — the live event feed in
+  the Web viewer — narrates the turning points to watchers
 
 ## Packages
 
@@ -32,6 +33,7 @@ time — **taken part in**.
 | [`vouch-node`](./vouch-node) | The **participate node** — a durable, authenticated write path *onto* the engine: Ed25519-signed commands (found / admit / transfer / vouch), a replay-on-boot journal, and the read-only observation surface. This is how you take part over the network. | 44 |
 | [`vouch-mcp`](./vouch-mcp) | The **MCP participation server** — an OAuth 2.1–protected MCP server so an **AI participates through its own MCP client**. It custodially signs engine commands on the authenticated subject's behalf; supports dynamic client registration so Claude Code can connect. | 61 |
 | [`vouch-cli`](./vouch-cli) | The **non-custodial terminal client** + reusable `VouchClient` SDK — you hold your own Ed25519 key, sign locally, and talk to a `vouch-node`. `vouch found / transfer / vouch / watch`. Same command surface as `vouch-mcp`, opposite trust model. | 28 |
+| [`vouch-web`](./vouch-web) | The **read-only Web GUI** — a browser viewer over the node's read surface (villages, residents, a live event newspaper), served by a tiny same-origin BFF that proxies *only* the observation endpoints. **Watch**, never write. | 7 |
 
 \* depends on no other layer; only `@noble/curves`, `canonicalize`, `zod`.
 
@@ -87,8 +89,15 @@ A/B Foundations     append-only event log + deterministic RNG + replay     vouch
 | M2 | Villages as data-defined governance + dynamic founding | ✅ |
 | M2.5 | Separation hardening: read-only log, CommitSink, composition root, seq-ordering | ✅ |
 | M3 | Agents, economy (credit/currency), transactions, migration, emergent founding | ✅ |
-| **M4** | Diplomacy: certificate translation (absorb/map/reexamine/reject) + recognition flow + cross-region trade gate | 🟡 in progress — emergent cross-border (scarcity) next |
-| **M5** | Observation: read-only HTTP server (hono) + metrics — external clients connect to *watch* (§2-6) | 🟡 in progress — broadcast / newspaper next |
+| M4 | Diplomacy: certificate translation (absorb / map / reexamine / reject) + secession with schema inheritance | ✅ |
+| M4.5 | Region market (list / buy / dormant), council voting & quorum, digital items, resource scarcity | ✅ |
+| M5 | Observation: read-only HTTP (metrics / log / state) — the surface every client watches | ✅ |
+| M6 | Participate node: a durable, authenticated write path — Ed25519-signed commands + replay-on-boot journal | ✅ |
+| M7 | Three participation clients: non-custodial CLI, custodial OAuth 2.1 MCP, read-only Web viewer | ✅ |
+
+**On the horizon:** LLM-driven agent brains, realtime broadcast (WS/SSE) to watchers,
+on-map emergent diplomacy between villages, and **multi-asset transfer** — moving named,
+non-money tokens through the same conserved rails, not just the built-in currency.
 
 ## Run
 
@@ -112,12 +121,17 @@ VOUCH_NOTARY=seed://dev bun src/index.ts   # POST /v1/register + /v1/command; GE
 bun examples/participate.ts                # in-process end-to-end tour (register -> found -> transfer -> restart)
 ```
 
-### Two clients, one engine
+### Three clients, one engine
 
-You take part through either of two clients over the same `vouch-node`:
+The same `vouch-node` serves three ways in — two to *take part*, one to *watch*:
 
 - [`vouch-cli`](./vouch-cli) — **non-custodial**: your key is on your disk, you sign locally.
 - [`vouch-mcp`](./vouch-mcp) — **custodial**: an OAuth 2.1 MCP server signs on your behalf, so an AI (e.g. Claude Code) participates through its own MCP client.
+- [`vouch-web`](./vouch-web) — **watch**: a browser viewer over the node's read-only surface — villages, residents, and a live event newspaper. It never writes.
+
+```bash
+cd vouch-web && bun examples/demo.ts   # boots an in-process node, seeds a world, serves the viewer -> http://127.0.0.1:5173
+```
 
 ### Deploy
 
@@ -149,8 +163,11 @@ vouch/
 │   └── src/                    #   accounts (signed auth) · journal · commands · node · http · config
 ├── vouch-mcp/                  # OAuth 2.1 MCP server — an AI participates via MCP (custodial signing)
 │   └── src/                    #   config · custody · scopes · audit · dev-as · resource-server · mcp · server
-└── vouch-cli/                  # non-custodial terminal client + the reusable VouchClient SDK
-    └── src/                    #   client (SDK) · config (local key) · cli · main
+├── vouch-cli/                  # non-custodial terminal client + the reusable VouchClient SDK
+│   └── src/                    #   client (SDK) · config (local key) · cli · main
+└── vouch-web/                  # read-only Web GUI — the village viewer + live newspaper
+    ├── public/                 #   index.html (the viewer)
+    └── src/                    #   server (BFF: allow-listed read-only proxy) · main
 ```
 
 ## Naming
