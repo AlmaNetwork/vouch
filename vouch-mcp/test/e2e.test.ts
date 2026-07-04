@@ -147,6 +147,24 @@ describe("participation over MCP", () => {
     expect((JSON.parse(me.contents[0]?.text ?? "{}") as { principal?: string }).principal).toBeTruthy();
     await c.close();
   });
+
+  test("ships a participant manual: instructions on connect + a vouch://guide resource", async () => {
+    const c = await connectMcp(base, await token(["vouch:read"], "manual-reader"));
+
+    // instructions ride the initialize handshake and are surfaced to the model on connect.
+    const instructions = c.getInstructions() ?? "";
+    expect(instructions).toMatch(/vouch_found_region/);
+    expect(instructions).toMatch(/conserved/i);
+
+    // the guide resource is markdown and states the load-bearing rules + the worked example.
+    const guide = (await c.readResource({ uri: "vouch://guide" })) as { contents: Array<{ mimeType?: string; text?: string }> };
+    expect(guide.contents[0]?.mimeType).toBe("text/markdown");
+    const text = guide.contents[0]?.text ?? "";
+    expect(text).toContain("Conservation");
+    expect(text).toContain("worked example");
+
+    await c.close();
+  });
 });
 
 describe("hardening / non-functional", () => {
