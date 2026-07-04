@@ -22,6 +22,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ReadResourceResult } from "@modelcontextprotocol/sdk/types.js";
 import { type ZodRawShape, z } from "zod";
 import type { Custody, Subject } from "./custody";
+import { PARTICIPANT_GUIDE_MD, PARTICIPANT_INSTRUCTIONS } from "./guide";
 import type { AuthContext } from "./resource-server";
 import { readAllowed } from "./scopes";
 
@@ -62,7 +63,11 @@ function errorResult(message: string): CallToolResult {
 }
 
 export function buildMcpServer(deps: McpDeps, ctx: AuthContext): McpServer {
-  const server = new McpServer(deps.serverInfo, { capabilities: { tools: {}, resources: {} } });
+  const server = new McpServer(deps.serverInfo, {
+    capabilities: { tools: {}, resources: {} },
+    // The participant manual, surfaced to the model on connect (rides `initialize`).
+    instructions: PARTICIPANT_INSTRUCTIONS,
+  });
   const subject: Subject = { iss: ctx.iss, sub: ctx.sub, jti: ctx.jti };
 
   // --- shared handlers ---------------------------------------------------------
@@ -242,6 +247,19 @@ export function buildMcpServer(deps: McpDeps, ctx: AuthContext): McpServer {
         },
       ],
     }),
+  );
+
+  // The participant manual as a pullable resource. Documentation, so it is NOT scope-
+  // gated — reading it reveals no world state (unlike regions/agents above).
+  server.registerResource(
+    "guide",
+    "vouch://guide",
+    {
+      title: "Participant guide",
+      description: "How to take part in vouch through this server — identity, the loop, the rules, a worked example.",
+      mimeType: "text/markdown",
+    },
+    () => ({ contents: [{ uri: "vouch://guide", mimeType: "text/markdown", text: PARTICIPANT_GUIDE_MD }] }),
   );
 
   return server;
