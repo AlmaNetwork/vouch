@@ -34,7 +34,10 @@ export function admitAgent(env: WorldCommit, spec: AdmitSpec): AgentState {
   if (!getRegion(env.getState(), spec.region)) throw new Error(`admitAgent: region "${spec.region}" does not exist`);
   if (getAgent(env.getState(), spec.id)) throw new Error(`admitAgent: agent "${spec.id}" already exists`);
 
-  const agent: AgentState = {
+  // admittedAtSeq is NOT part of the payload: it derives from the event's own log
+  // position, so the reducer stamps it at fold (RFC 0001 §4) and the log never carries
+  // a placeholder that could mislead a raw-payload consumer.
+  const agent: Omit<AgentState, "admittedAtSeq"> = {
     id: spec.id,
     region: spec.region,
     role: spec.role,
