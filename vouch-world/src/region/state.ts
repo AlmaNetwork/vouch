@@ -225,6 +225,31 @@ export function isOwner(region: RegionState, principal: string): boolean {
   return region.owner !== null && principal === region.owner;
 }
 
+/**
+ * May `principal` SPEAK FOR the region — act in its name toward the outside world
+ * (recognition, and later diplomacy at large)? This is the region's REPRESENTATION
+ * authority (auctoritas: the acknowledged entitlement to decide), kept distinct from
+ * the environment's execution power (potestas: the engine that actually applies it)
+ * and from `isOwner` (the asset right). Representation is a ROLE POINTER, never a
+ * shared key (RFC 0001 §4): the representative signs/acts with its own identity.
+ *
+ * MVP rule: dictatorship → the owner; council → any member. Collective (voted)
+ * external acts for councils are a deferred refinement (RFC 0001 §5 action scope) —
+ * today this predicate deliberately mirrors `canGovern`, but callers of external
+ * acts must go through THIS name so representation can evolve independently.
+ * A system/unowned region (owner null, no council) has NO representative — the
+ * world itself speaks for it (genesis / emergence, the experimenter's god view).
+ */
+export function canRepresent(region: RegionState, principal: string): boolean {
+  return canGovern(region, principal);
+}
+
+/** Does the region have ANY representative principal (vs system/unowned, spoken for by the world)? */
+export function hasRepresentation(region: RegionState): boolean {
+  const g = region.institutions.governance;
+  return g.kind === "council" ? g.members.length > 0 : region.owner !== null;
+}
+
 /** Regions currently listed for sale on the market (salePrice set). */
 export function regionsForSale(state: RegionSlice): RegionState[] {
   return listRegions(state).filter((r) => r.salePrice !== null);

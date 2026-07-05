@@ -2,7 +2,7 @@
 // certificate can carry, each with a different structured shape. Add your own with
 // defineCredentialType; the universal envelope never changes.
 
-import { isValidIdentifier } from "vouch-core";
+import { isValidIdentifier, isValidRegion } from "vouch-core";
 import { z } from "zod";
 import { CredentialRegistry, defineCredentialType } from "./types";
 
@@ -36,7 +36,32 @@ export const EndorsementCredential = defineCredentialType(
   "endorsement",
 );
 
-export const STANDARD_CREDENTIALS = [SkillCredential, MembershipCredential, AssetCredential, EndorsementCredential] as const;
+/**
+ * An OFFICE attestation (C2 representation): the subject holds a region's stewardship —
+ * the acknowledged entitlement to speak for the village (auctoritas). The office-of-record
+ * stays the region's `owner` pointer (RFC 0001 §4: a role pointer, never a shared key);
+ * this credential is the PORTABLE EVIDENCE of that office, issued and honored like any
+ * other cert — so "region X approved" gets a verifiable subject. `since` is any non-empty
+ * string (like membership's); deriving it from the tick (never the wall clock) is the
+ * ISSUER's responsibility, as with every `issuedAt` in domain code.
+ */
+export const StewardCredential = defineCredentialType(
+  "alma.gov/steward/v1",
+  z.object({
+    region: z.string().refine(isValidRegion, "must be a valid region string"),
+    title: z.string().min(1),
+    since: z.string().min(1),
+  }),
+  "steward",
+);
+
+export const STANDARD_CREDENTIALS = [
+  SkillCredential,
+  MembershipCredential,
+  AssetCredential,
+  EndorsementCredential,
+  StewardCredential,
+] as const;
 
 /** A registry pre-loaded with the standard credential types. */
 export function standardRegistry(): CredentialRegistry {

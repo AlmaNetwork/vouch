@@ -5,6 +5,7 @@
 // a tool and belong to a region, but never DEFINE institutions (§2-1).
 
 import type { Certificate } from "vouch-core";
+import type { InstitutionChange } from "../region";
 
 export type AgentRole = "artisan" | "merchant" | "broker" | "treasury";
 
@@ -31,11 +32,22 @@ export interface AgentState {
 /** The agent read-model slice of world state; the environment composes it in. */
 export type AgentSlice = { readonly agents: Readonly<Record<string, AgentState>> };
 
-/** What a brain returns. The environment EXECUTES it; the agent only requests (§2-4/§2-5). */
+/**
+ * What a brain returns. The environment EXECUTES it; the agent only requests (§2-4/§2-5).
+ * `propose` / `vote` are the GOVERNANCE intents (A2): an agent asks to open (or back)
+ * an amendment in a region where it claims standing. The same request → authority-check →
+ * execute split as the economy: the driver routes them through openProposal / castVote,
+ * whose canGovern gate decides whether this voice is binding — a non-member's governance
+ * intent fails quietly (journaled, but changes nothing). `regionId` defaults to the home
+ * region; a council SEAT is id-bound, not residency-bound, so an emigrated member names
+ * its region explicitly to keep voting (otherwise an open proposal could wedge forever).
+ */
 export type Intent =
   | { readonly kind: "idle" }
   | { readonly kind: "transfer"; readonly to: string; readonly amount: number } // currency only
-  | { readonly kind: "emigrate"; readonly to: string };
+  | { readonly kind: "emigrate"; readonly to: string }
+  | { readonly kind: "propose"; readonly change: InstitutionChange; readonly regionId?: string }
+  | { readonly kind: "vote"; readonly regionId?: string };
 
 export const EVENT_AGENT_ADMITTED = "agent.admitted";
 export const EVENT_AGENT_MIGRATED = "agent.migrated";

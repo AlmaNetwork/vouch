@@ -9,7 +9,7 @@
 import { type Certificate, decodeBase64, parseIdentifier, verifyCertificate } from "vouch-core";
 import { getAgent } from "../agent";
 import type { Result } from "../foundation";
-import { EVENT_REGION_RECOGNIZED, type ForeignCertStance, getRegion, type RegionState } from "../region";
+import { canRepresent, EVENT_REGION_RECOGNIZED, type ForeignCertStance, getRegion, hasRepresentation, type RegionState } from "../region";
 import { commit, readBackOrThrow, type WorldCommit, type WorldState } from "./state";
 
 /** A village's stance toward another village's certificates: an override, else the default. */
@@ -98,16 +98,36 @@ export function canTransactAcross(state: WorldState, fromRegion: string, toRegio
  * Recognition flow (§4-C): an already-recognized region recognizes a founded
  * (unrecognized) one, admitting it to the international society. A region cannot be
  * recognized by an unrecognized one. (Staged due-diligence is a future refinement.)
+ *
+ * Proof of authority (A2, auctoritas vs potestas): recognition is an act IN THE
+ * RECOGNIZER'S NAME, so — exactly like the economy's request → check → execute split
+ * (§5) — the environment stays the executor (potestas) and demands the acting
+ * principal (auctoritas) up front: when the recognizer HAS representation (an owner
+ * or a council), `approvedBy` is required and must satisfy `canRepresent`. Only a
+ * system/unowned recognizer (genesis / emergence, no representative to ask) is still
+ * spoken for by the world itself, and that absence is logged as `approvedBy: null` —
+ * provenance is never silent.
  */
-export function recognizeRegion(env: WorldCommit, by: string, target: string): RegionState {
+export function recognizeRegion(env: WorldCommit, by: string, target: string, approvedBy?: string): RegionState {
   const state = env.getState();
   const recognizer = getRegion(state, by);
   const t = getRegion(state, target);
   if (!recognizer) throw new Error(`recognizeRegion: recognizer "${by}" does not exist`);
   if (recognizer.status !== "recognized") throw new Error(`recognizeRegion: recognizer "${by}" is itself unrecognized`);
+  if (hasRepresentation(recognizer)) {
+    if (approvedBy === undefined) {
+      throw new Error(`recognizeRegion: region "${by}" has a representative — the acting principal (approvedBy) is required`);
+    }
+    if (!canRepresent(recognizer, approvedBy)) {
+      throw new Error(`recognizeRegion: "${approvedBy}" may not speak for region "${by}" under its governance`);
+    }
+  } else if (approvedBy !== undefined) {
+    // an unowned region has no representative to grant this authority — reject rather than launder
+    throw new Error(`recognizeRegion: region "${by}" is system/unowned — no principal can claim to represent it`);
+  }
   if (!t) throw new Error(`recognizeRegion: target "${target}" does not exist`);
   if (t.status === "recognized") return t; // idempotent
 
-  commit(env, EVENT_REGION_RECOGNIZED, { regionId: target, by });
+  commit(env, EVENT_REGION_RECOGNIZED, { regionId: target, by, approvedBy: approvedBy ?? null });
   return readBackOrThrow("recognizeRegion", getRegion(env.getState(), target));
 }

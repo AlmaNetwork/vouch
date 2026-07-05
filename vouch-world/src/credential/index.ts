@@ -15,6 +15,7 @@ export {
   MembershipCredential,
   SkillCredential,
   STANDARD_CREDENTIALS,
+  StewardCredential,
   standardRegistry,
 } from "./library";
 export { CredentialRegistry, type CredentialType, defineCredentialType } from "./types";

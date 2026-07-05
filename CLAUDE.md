@@ -32,7 +32,7 @@ Two packages:
 | Package | Role | Tests |
 |---|---|---|
 | `vouch-core` | L1 trust engine — mint ids/keys/certs, **formally verify** signatures. Standalone, no other layer. | 35 |
-| `vouch-world` | The simulator — foundations + region/agent/environment/credential/observation. | 76 |
+| `vouch-world` | The simulator — foundations + region/agent/environment/credential/observation. | 119 |
 
 When you change code, keep these test counts and the milestone table in the READMEs
 in lockstep with reality (see **Working rhythm**).
@@ -256,7 +256,7 @@ Reproduce these verbatim; tests assert on them and reducers match on them.
 - `ForeignCertStance`: `absorb` | `map` | `reexamine` | `reject`.
 - `AgentRole`: `artisan` | `merchant` | `broker` | `treasury`.
 - `ValueProfile`: `strict` | `lenient`.
-- `Intent.kind`: `idle` | `transfer` | `emigrate`.
+- `Intent.kind`: `idle` | `transfer` | `emigrate` | `propose` | `vote`.
 
 **Economy** (`environment/economy.ts`)
 - `BASE_COST_RATE=0.2`, `MIN_COST_RATE=0.05`, `REP_DISCOUNT=0.02`, `CREDIT_PER_TX=1`.

@@ -146,6 +146,76 @@ describe("M4 — recognition flow (§4-C)", () => {
   });
 });
 
+describe("A2 — proof of authority: recognition needs the recognizer's representative", () => {
+  // genesis umi is system/unowned (the world speaks for it); nova is OWNED by alice.
+  function withOwnedRecognizer() {
+    const w = createAlmaWorld("auth");
+    seedGenesis(w, [defineRegion("umi", "Umi")]);
+    proposeFounding(w, experimenterProposal(defineRegion("nova", "Nova"), undefined, "alice"));
+    recognizeRegion(w, "umi", "nova"); // the unowned genesis region admits nova
+    proposeFounding(w, experimenterProposal(defineRegion("rift", "Rift")));
+    return w;
+  }
+
+  test("an unowned recognizer is spoken for by the world, and that is logged as approvedBy null", () => {
+    const w = withOwnedRecognizer();
+    const recognized = w.log.all().find((e) => e.type === "region.recognized");
+    expect(recognized?.payload).toMatchObject({ regionId: "nova", by: "umi", approvedBy: null });
+  });
+
+  test("an unowned recognizer rejects any principal claiming to represent it", () => {
+    const w = createAlmaWorld("auth-unowned");
+    seedGenesis(w, [defineRegion("umi", "Umi")]);
+    proposeFounding(w, experimenterProposal(defineRegion("nova", "Nova")));
+    expect(() => recognizeRegion(w, "umi", "nova", "impostor")).toThrow(/system\/unowned/);
+    expect(getRegion(w.getState(), "nova")?.status).toBe("unrecognized");
+  });
+
+  test("an OWNED recognizer requires the acting principal", () => {
+    const w = withOwnedRecognizer();
+    expect(() => recognizeRegion(w, "nova", "rift")).toThrow(/approvedBy/);
+    expect(getRegion(w.getState(), "rift")?.status).toBe("unrecognized");
+  });
+
+  test("a principal outside the recognizer's governance may not speak for it", () => {
+    const w = withOwnedRecognizer();
+    expect(() => recognizeRegion(w, "nova", "rift", "mallory")).toThrow(/may not speak/);
+    expect(getRegion(w.getState(), "rift")?.status).toBe("unrecognized");
+  });
+
+  test("the owner speaks for its region; provenance lands in the event", () => {
+    const w = withOwnedRecognizer();
+    recognizeRegion(w, "nova", "rift", "alice");
+    expect(getRegion(w.getState(), "rift")?.status).toBe("recognized");
+    const events = w.log.all().filter((e) => e.type === "region.recognized");
+    expect(events.at(-1)?.payload).toMatchObject({ regionId: "rift", by: "nova", approvedBy: "alice" });
+    expect(replayState(w.log.all(), INITIAL_WORLD_STATE, rootReducer).state).toEqual(w.getState());
+  });
+
+  test("a FORGED region.recognized (non-world actor) is ignored by the reducer", () => {
+    const w = createAlmaWorld("auth-forge");
+    seedGenesis(w, [defineRegion("umi", "Umi")]);
+    proposeFounding(w, experimenterProposal(defineRegion("nova", "Nova")));
+    expect(getRegion(w.getState(), "nova")?.status).toBe("unrecognized");
+    // walk around the write path: a principal self-asserts the recognition event.
+    w.emit("region.recognized", "mallory", { regionId: "nova", by: "umi", approvedBy: "mallory" });
+    expect(getRegion(w.getState(), "nova")?.status).toBe("unrecognized");
+    expect(replayState(w.log.all(), INITIAL_WORLD_STATE, rootReducer).state).toEqual(w.getState());
+  });
+
+  test("a council member speaks for a council-governed recognizer", () => {
+    const w = createAlmaWorld("auth-council");
+    seedGenesis(w, [defineRegion("umi", "Umi")]);
+    const council = makeInstitutions({ governance: { kind: "council", members: ["a@nova", "b@nova"], threshold: 2 } });
+    proposeFounding(w, experimenterProposal(defineRegion("nova", "Nova", council), undefined, "alice"));
+    recognizeRegion(w, "umi", "nova");
+    proposeFounding(w, experimenterProposal(defineRegion("rift", "Rift")));
+    expect(() => recognizeRegion(w, "nova", "rift", "alice")).toThrow(/may not speak/); // owner is NOT on the council
+    recognizeRegion(w, "nova", "rift", "b@nova");
+    expect(getRegion(w.getState(), "rift")?.status).toBe("recognized");
+  });
+});
+
 describe("M4 — cross-region trade is gated by diplomacy (§4-C, Test 2)", () => {
   function econ(yamaStanceTowardUmi: ForeignCertStance) {
     const w = createAlmaWorld("xr");

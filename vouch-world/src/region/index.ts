@@ -7,7 +7,9 @@
 
 export {
   canGovern,
+  canRepresent,
   getRegion,
+  hasRepresentation,
   isOwner,
   listRegions,
   ownedRegionsOf,

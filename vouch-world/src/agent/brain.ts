@@ -33,6 +33,31 @@ export const tradingBrain: Brain = (view) => {
   return { kind: "idle" };
 };
 
+/** Is there an open proposal in `region` this agent holds a binding, not-yet-cast vote on? */
+function hasBindingVote(region: RegionState | undefined, agentId: string): boolean {
+  const g = region?.institutions.governance;
+  return Boolean(
+    region?.openProposal && g?.kind === "council" && g.members.includes(agentId) && !region.openProposal.votes.includes(agentId),
+  );
+}
+
+/**
+ * A civic-minded agent: when a council it SITS ON has an amendment on the table and
+ * its voice is binding (a member who hasn't voted yet), back it; otherwise trade.
+ * A seat is id-bound, not residency-bound, so the home region is checked first and
+ * then every other region — an emigrated member keeps voting (naming the region in
+ * the intent) instead of wedging the proposal. Deliberately NOT in defaultBrains —
+ * governance participation is an opt-in regime variable, so seeded histories keep
+ * their digests.
+ */
+export const voterBrain: Brain = (view) => {
+  if (hasBindingVote(view.homeRegion, view.self.id)) return { kind: "vote" };
+  for (const region of view.otherRegions) {
+    if (hasBindingVote(region, view.self.id)) return { kind: "vote", regionId: region.id };
+  }
+  return tradingBrain(view);
+};
+
 export const defaultBrains: Partial<Record<AgentState["role"], Brain>> = {
   artisan: tradingBrain,
   merchant: tradingBrain,
