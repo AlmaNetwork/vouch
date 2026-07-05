@@ -130,7 +130,8 @@ zero-sum; issuance is the only origin.
   `governance.ts`.
 - **Rights:** a region's `institutions` gains an optional `assetRights` policy mapping
   `assetId → conferred rights` (institutions-as-data; consumed by council-weight /
-  resource / fee logic).
+  resource / fee logic). Vote-weighting `assetRights` are read from the proposal-open `seq`
+  snapshot (RFC 0001 §5); passive rights are continuous — see key-decision #3.
 - **Value events** stay env-authored (`SYSTEM_ACTOR`), so the audit's actor-gate and the
   hash-chained journal cover assets for free.
 
@@ -151,8 +152,13 @@ zero-sum; issuance is the only origin.
    circulation.
 2. **Burn / redeem?** May an issuer burn units it issued (adjusting the origin baseline)?
    Proposed: yes, as a governed act symmetric to issuance. *(open)*
-3. **Rights binding:** is `assetRights` evaluated at spend-time or continuously on the
-   held balance (e.g. council weight = current holding)? Proposed: continuous, derived. *(open)*
+3. **Rights binding — RESOLVED (per RFC 0001 §5, thanks @sugiz650):** split by right type.
+   *Passive* rights (fee discount, resource priority, access) are **continuous** — derived
+   from the current holding. Any right that **weighs a council vote** MUST be read from the
+   **proposal-open `seq` snapshot**, identical to RFC 0001 §5's eligible-base / voter-roll
+   cutoff, so mid-vote asset transfers cannot game an open ballot (the asset analogue of
+   move-in-to-vote). `assetRights → council weight` then slots into RFC 0001's
+   `equal|reputation|stake` weighting model as another weighting source evaluated at open.
 4. **Cross-region honoring of *balances* vs *certs*:** `assessCertificate` honors a
    *document*; do we need an analogous `assessAsset(issuerRegion)` stance? Proposed: reuse
    the region-stance table. *(open)*
