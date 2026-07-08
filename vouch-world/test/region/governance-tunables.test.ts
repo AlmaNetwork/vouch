@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { keyPairFromSeed } from "vouch-core";
 import { getAgent } from "../../src/agent";
+import type { WorldState } from "../../src/environment";
 import {
   admitAgent,
   admitTreasury,
@@ -13,8 +14,8 @@ import {
   createAlmaWorld,
   executeTransfer,
   experimenterProposal,
-  immigrate,
   INITIAL_WORLD_STATE,
+  immigrate,
   mintCurrency,
   openProposal,
   proposeFounding,
@@ -22,8 +23,7 @@ import {
   seedGenesis,
 } from "../../src/environment";
 import { replayState, type World } from "../../src/foundation";
-import type { WorldState } from "../../src/environment";
-import { defineRegion, getRegion, type Governance, type InstitutionChange, makeInstitutions, validateGovernance } from "../../src/region";
+import { defineRegion, type Governance, getRegion, type InstitutionChange, makeInstitutions, validateGovernance } from "../../src/region";
 
 // A lenient genesis region so foreign-born citizens have a birthplace to come from.
 const UMI = defineRegion("umi", "Umi", makeInstitutions({ diplomacyPolicy: { defaultStance: "absorb", overrides: {} } }));
@@ -295,9 +295,7 @@ describe("governance tunables (RFC 0001)", () => {
     const world = createAlmaWorld("val");
     seedGenesis(world, [UMI]);
     proposeFounding(world, experimenterProposal(defineRegion("rep", "Rep", makeInstitutions()), undefined, "acct:gov"));
-    expect(() =>
-      amendInstitution(world, "rep", { policy: "governance", value: { ...base, quorum: 0 } }, "acct:gov"),
-    ).toThrow();
+    expect(() => amendInstitution(world, "rep", { policy: "governance", value: { ...base, quorum: 0 } }, "acct:gov")).toThrow();
     expect(world.log.all().filter((e) => e.type === "region.institution.changed").length).toBe(0);
     expectReplays(world);
   });
@@ -364,7 +362,13 @@ describe("governance tunables — hardening (RFC 0001 review)", () => {
   });
 
   test("the +1 weight floor: an all-zero-stake electorate still resolves (a fresh region cannot brick)", () => {
-    const world = councilWorld("floor", { kind: "council", members: ["acct:gov"], threshold: 2, electorate: "citizens", weighting: "stake" });
+    const world = councilWorld("floor", {
+      kind: "council",
+      members: ["acct:gov"],
+      threshold: 2,
+      electorate: "citizens",
+      weighting: "stake",
+    });
     admit(world, "alice", "rep"); // currency 0 -> weight 1 + 0 = 1: the floor is all she has
     admit(world, "bob", "rep");
     openProposal(world, "rep", DIPLO_REJECT, "acct:gov");
@@ -409,7 +413,13 @@ describe("governance tunables — hardening (RFC 0001 review)", () => {
   test("§5 snapshot: mid-proposal value movement never re-weights an open ballot", () => {
     // threshold 3 == the roll's frozen total (alice 1 + bob 2), so the open-time guard
     // passes — but bob ALONE stays short of it unless his weight were re-read live.
-    const world = councilWorld("freeze", { kind: "council", members: ["acct:gov"], threshold: 3, electorate: "citizens", weighting: "stake" });
+    const world = councilWorld("freeze", {
+      kind: "council",
+      members: ["acct:gov"],
+      threshold: 3,
+      electorate: "citizens",
+      weighting: "stake",
+    });
     admit(world, "alice", "rep"); // weight 1
     admit(world, "bob", "rep", 1); // weight 1 + 1 = 2
     openProposal(world, "rep", DIPLO_REJECT, "acct:gov");
