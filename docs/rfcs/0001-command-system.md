@@ -13,8 +13,9 @@
 本RFCは、Vouch Network node のコマンド体系を、**権限分立に基づくデータ定義コマンド体系**
 としてゼロベースで再設計する。柱は次の4つである。
 
-1. **自己記述カーネル** — コードに残るのは閉じた効果プリミティブ集とジェネシスシーダーのみ。
-   メタコマンド(`defineCommand` 等)を含む全コマンドはデータとして定義される。
+1. **自己記述カーネル** — コードに残るのは機構のみ(実行機関・閉じた効果プリミティブ集・
+   ジェネシスシーダー — §3.1)。メタコマンド(`defineCommand` 等)を含む全コマンドは
+   データとして定義される。
 2. **4権分立RBAC** — コマンドのライフサイクルに沿って権限を分立する:
    定義権 / 実行権 / 罰則権(刑法) / 監査・異議権。
 3. **尊法合理性** — 「予防(precondition)」と「抑止(penal law)」の二層で、
@@ -95,7 +96,7 @@ owner はほぼ全ての統治コマンド(law制定・admit・asset定義・sus
 
 コマンドの定義・Role・law・決定手続きはすべてデータであり、それ自体がコマンドによって
 変更される。`defineCommand` 自身もデータ定義されるため、**定義権に対しても**法・監査・
-異議申し立てが一様に働く。コードに固定されるのは効果プリミティブとジェネシスシーダーのみ。
+異議申し立てが一様に働く。コードに固定されるのは政策を含まない機構のみ(§3.1)。
 
 ### P2. 効果の独占 — 状態変更の語彙は閉じている
 > ヴェーバー: 国家とは正当な物理的暴力行使の独占である。
@@ -174,15 +175,21 @@ SoD・移譲スケジュール・tick カデンツ・法の前の平等さえも
 
 ## 3. カーネル仕様
 
-*(起草予定 — 決定済みの骨子)*
+### 3.1 機構と政策の分離
 
-- コード層に残るのは2つのみ: **効果プリミティブ集**(状態変更の閉じた語彙)と
-  **ジェネシスシーダー**(establish 時に初期定義一式を投入)。
-- 効果プリミティブ(案): `transferAsset` / `issueAsset` / `appendRecord` / `setRecord` /
-  `assignRole` / `revokeRole` / `suspendAccount` / `restrictCommands` / `seizeBond` /
-  `defineCommand効果` / `scheduleTrigger` — 一覧と各プリミティブの保存則・逆効果
-  (remedy 用)を §3 で確定する。
-- **規範階層の正典**(本RFC全体で「制定不可」「憲法級」の語はこの2層に正規化される):
+カーネルとは、コードに固定される最小核である。3つの部品からなり、いずれも
+**政策を含まない**:
+
+1. **実行機関** — 追記専用ジャーナル、ファイナリティ追跡、リオーグ実行器(§5)、
+   決定手続きインタープリタ(§7)、law 評価器(§8〜9)。すべて「データを解釈する機械」で
+   あり、何が正しいかを自分では知らない。
+2. **効果プリミティブ集** — 状態変更の閉じた語彙(§3.4)。
+3. **ジェネシスシーダー** — establish 時に初期政策一式をデータとして投入する(§3.7)。
+
+**機構(mechanism)はコード、政策(policy)はデータ。** カーネルの変更はハードフォークで
+あり、その統治は未解決問題(§14)。
+
+### 3.2 規範階層の正典(本RFC全体で「制定不可」「憲法級」の語はこの2層に正規化される)
   - **層K — カーネル不変条件**(改正不能・全ネットワーク共通。「ゲームの成立条件」):
     1. 保存則 — 効果の総和は価値を無から作らない
     2. リプレイ同一性・SYSTEM 起源イベントの偽造不可
@@ -196,6 +203,127 @@ SoD・移譲スケジュール・tick カデンツ・法の前の平等さえも
   - **層C — 憲法級 law**(厳格な改正手続き+長い異議窓で変更可能): SoD law /
     devolution law / tick カデンツ / 法の前の平等・免責禁止 / 前文 / 清算ルール /
     改正要件そのもの
+
+### 3.3 プリミティブの設計規則
+
+すべての効果プリミティブは次の4点を宣言しなければならない:
+
+| 宣言 | 意味 |
+|---|---|
+| **シグネチャ** | 型付きパラメータ。値域の設計が層K-4(不可譲性)を実装する(§3.6) |
+| **保存則クラス** | conserving(総和不変) / supply±(供給変化 — 監査対象) / non-economic |
+| **逆効果** | remedy の基盤(§3.5)。持たない場合は「不可逆」と宣言し補償経路を明示 |
+| **カーネルガード** | データ定義の precondition より前に走る絶対条件(残高非負・SYSTEM専用 等) |
+
+### 3.4 効果プリミティブ一覧
+
+**経済** — すべてアトミック適用(部分適用なし)、供給変化は監査可能:
+
+| プリミティブ | 保存則 | 逆効果 |
+|---|---|---|
+| `transfer(from, to, asset, amount)` | conserving | `transfer(to, from, …)` |
+| `mint(to, assetType, amount)` | supply+ | `burn`。発行はmintCurrency(憲法的手続き §11)経由のみ |
+| `burn(from, assetType, amount)` | supply− | `mint`(裁定による remedy のみ) |
+| `lockEscrow(owner, asset, amount, holdId)` | conserving(凍結) | `releaseEscrow(holdId → owner)` |
+| `resolveEscrow(holdId, to)` | conserving | 不可逆(裁定・清算の確定後のみ発行可能) |
+
+bond(供託)・係争中資産の保全・離脱時の清算(§10)は、すべて escrow 系の組合せで表現する。
+
+**記録**:
+
+| プリミティブ | 保存則 | 逆効果 |
+|---|---|---|
+| `appendRecord(collection, value)` | non-economic | 不可逆(追記のみ)。訂正は否定レコードの追記 |
+| `setRecord(collection, key, value)` | non-economic | `setRecord(key, 直前値)` — 直前値はログから決定論的に復元 |
+
+**アイデンティティ・関係** — 不可譲(§3.6)。`transfer` の値域外:
+
+| プリミティブ | 逆効果 |
+|---|---|
+| `admitId(id, sponsors[])` | 不可逆(final 後)。provisional 中はリオーグで消滅しうる |
+| `assignRole(id, role, term?)` | `revokeRole(id, role)` |
+| `revokeRole(id, role)` | `assignRole`(裁定による原状回復) |
+| `recordVouch(voucher, vouchee)` | `voidVouch`(保証責任の清算後のみ) |
+
+**制裁** — カーネルガード: §9 の執行経路(automatic penal law / 裁定)からのみ発行可能。
+通常のコマンド定義の effects には書けない:
+
+| プリミティブ | 逆効果 |
+|---|---|
+| `suspendId(id, untilTick)` | `reinstateId(id)` |
+| `restrictCommands(id, commands[], untilTick)` | `liftRestriction(id)` |
+
+追加のカーネルガード(層K-5, K-6): 制裁は**監査・訴追・異議・裁定コマンドを restrict の
+対象にできない**。また `suspendId` されたIDも `emigrate` だけは常に発行できる。
+
+**メタ**:
+
+| プリミティブ | 逆効果 |
+|---|---|
+| `putDefinition(kind, id, version, body)` | `putDefinition(kind, id, version+1, 旧body)` — 定義は版付き。逆効果=旧版の再発行、廃止= `status: retired` の新版 |
+| `scheduleTrigger(atTick, commandRef)` | `cancelTrigger(triggerId)` |
+
+kind ∈ { command, role, procedure, law, preamble } — コマンドも Role も law も前文も、
+すべて同じ版付き定義ストアに住む(P1 自己記述の実装)。
+
+**システム** — SYSTEM 専用・HTTP 非公開:
+
+| プリミティブ | 逆効果 |
+|---|---|
+| `advanceTick` | 不可逆 — 時間は戻らない。リオーグ(§5)は provisional 接尾辞の再実行であり、時間の巻き戻しではない |
+
+### 3.5 逆効果の完全性規則
+
+**規則: すべてのプリミティブは、逆効果を持つか、「不可逆」と宣言して補償経路を明示する。**
+
+- 裁定が remedy として命じられる操作の空間 = 逆効果が定義された空間。
+- 不可逆な効果(appendRecord / admitId / resolveEscrow / advanceTick)への救済は、
+  **普遍的な代替逆効果 = 通貨補償(`transfer`)** に必ずフォールバックできる。
+  補償基金(§9)はこのフォールバックの支払い能力を保証する装置である。
+- **リオーグは逆効果を使わない** — 分岐上の再実行で状態を再構成する。逆効果は
+  final 後の裁定(remedy)専用の道具である。この分離により「provisional は再実行で戻す /
+  final は補償で償う」という §5 の二相構造が、プリミティブ層で完結する。
+
+### 3.6 不可譲性の実装 — 存在しない操作は濫用できない
+
+層K-4 は禁止チェックではなく**語彙の欠落**として実装する: 票・Role・ID・保証関係は
+`transfer` のシグネチャの値域に含まれない別の状態名前空間に住み、これらを移転する
+プリミティブはそもそも存在しない。閉じた語彙(P2)がそのまま不可譲性の証明になる —
+違法な状態を「禁止」するのではなく「表現不能」にする型設計。
+
+### 3.7 ジェネシスシーダー
+
+`establish(genesisConfig)` は SYSTEM として t0 に一度だけ走り、以下を**通常のデータ**
+(層C — 以後は憲法級手続きで改正可能)として投入する:
+
+1. 前文(必須 — 裁定の解釈法源 §9)
+2. メタコマンド定義(defineCommand / defineRole / bindCommand / assignRole —
+   自身も `putDefinition` で書かれたデータ)
+3. デフォルト Role 構成と SoD law
+4. 決定手続き定義(sole / approval / vote / election)
+5. devolution law(移譲スケジュール §11)
+6. declareEmergency 定義 / mintCurrency 定義 / 清算ルール
+7. ネットワークパラメータ(保証人数 K・異議窓の最小値・tick カデンツ)
+
+シーダーは genesisConfig のみから決定論的に走る(P6)。シーダーが書けるのはデータだけで
+あり、層K には触れられない。
+
+### 3.8 実行パイプライン
+
+```
+CommandPacket
+  → ID・Role 束縛の解決(実行権)            … データ参照
+  → constraint law の評価(§8 予防層)        … データ参照
+  → コマンド定義の precondition 検証         … データ参照
+  → 効果リストのアトミック適用               … 全効果成功 or 全棄却
+      各効果: カーネルガード → 保存則検査(違反 = 内部バグとして throw)
+  → イベント追記(provisional、異議窓 開始)
+  → penal law の automatic 評価(§9 抑止層)  … 該当すれば制裁を schedule
+```
+
+パイプラインのすべての政策判断(束縛・law・precondition)はデータ参照であり、カーネルは
+解釈するだけである。保存則検査の失敗はユーザーエラーではなく内部バグとして扱う
+(vouch-world と同じ規律)。
 
 ## 4. コマンド定義モデル
 
