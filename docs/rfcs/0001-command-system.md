@@ -327,13 +327,99 @@ CommandPacket
 
 ## 4. コマンド定義モデル
 
-*(起草予定 — 決定済みの骨子)*
+### 4.1 定義の構造
 
-- `defineCommand` = ペイロードスキーマ(JSON Schema) + preconditions + effects(プリミティブ列)
-  + `objectionWindowTicks` + attestation/bond オプション。
-- メタコマンド(`defineCommand` / `defineRole` / `bindCommand` / `assignRole`)自身も
-  ジェネシスでシードされるデータ定義(自己記述)。
-- 名前空間・改版(revise/retire)・定義の versioning は起草時に確定。
+コマンド定義は `putDefinition(kind: "command", …)` で版付き定義ストアに書かれる
+データである:
+
+```
+{
+  kind: "command",
+  id: "scholarship.grant",          // <namespace>.<name>
+  version: 3,
+  status: "active" | "retired",
+  meta: { title, description },      // 人間・AI可読の説明(監査の一次資料)
+
+  payloadSchema: { …JSON Schema… },  // 入力の形
+
+  preconditions: [                   // 閉じた述語語彙(§4.2)
+    { check: "hasRole", id: "$.studentId", role: "student" },
+    { check: "balanceAtLeast", id: "treasury", asset: "coin", amount: "$.amount" }
+  ],
+
+  effects: [                         // §3.4 プリミティブのテンプレート列
+    { op: "transfer", from: "treasury", to: "$.studentId",
+      asset: "coin", amount: "$.amount" },
+    { op: "appendRecord", collection: "scholarships",
+      value: { student: "$.studentId", grantedAt: "$tick" } }
+  ],
+
+  objectionWindowTicks: 10,          // ネットワーク最小値以上(§5)
+  bond?:      { asset, amount },     // 実行に供託を要求(§4.5)
+  procedure?: "proc.treasurySpend"   // 実行自体に決定手続きを要求(§4.5)
+}
+```
+
+`$.field` はペイロード参照、`$tick` / `$actor` は実行文脈参照。参照はデータであり
+コードではない — 評価はカーネルの実行機関が行う(P2)。
+
+### 4.2 precondition の述語語彙
+
+効果と同様、precondition も**閉じた語彙**である(Q5 の決定を述語側にも適用):
+`hasRole` / `isSelf` / `isMember(group)` / `balanceAtLeast` / `recordExists` /
+`recordEquals` / `definitionActive` / `tickAfter` / `escrowHeld` — すべてログ由来の
+状態のみを参照する(§9 証拠のログ主義と同根)。任意の式・外部照会は書けない。
+語彙の拡張はカーネル変更(§14)。
+
+### 4.3 名前空間と版管理
+
+- **名前空間**: id は `<namespace>.<name>`。`kernel.*` は予約(定義不可)、`core.*` は
+  ジェネシスシーダー専用(メタコマンド・mintCurrency 等)。ユーザー定義は他の名前空間を
+  使う。同一 id の再定義は常に「新しい版」であり、別定義による**シャドーイングは存在しない**
+  (law・監査の対象指定が一意に解決できることを保証)。
+- **改版と異議窓**: `putDefinition` 自体がコマンドであり、自分の異議窓を持つ(定義の
+  影響範囲は広いため長い窓 — Q17 例: 100 tick)。**新版は provisional のまま直ちに有効**
+  になる — その版の下で実行されたコマンドは、版が異議で否決されれば リオーグにより
+  旧版の下で再実行される(§5 に特則は不要。定義も状態の一部にすぎない)。
+  provisional な定義を使うかどうかは実行者のリスク判断(Q17 と同じ意味論)。
+- **廃止**: `status: "retired"` の新版を発行する。retired 定義への `scheduleTrigger`
+  参照は発火時に no-op としてログされる。
+
+### 4.4 実行権の束縛 — Role とバンドル
+
+Role も定義ストアの住人である:
+
+```
+{
+  kind: "role",
+  id: "role.auditor",
+  version: 2,
+  commands: ["audit.charge", "audit.object", "audit.inspect"],  // バンドル
+  assignment: "proc.electAuditor",   // 付与の決定手続き(election 等)
+  term?: 90                          // 任期(tick)。期限で自動 revokeRole
+}
+```
+
+- **デフォルト拒否**: どの Role にも束ねられていないコマンドは誰も実行できない
+  (SYSTEM 専用を除く)。
+- バンドルの変更(bindCommand)もコマンドであり、SoD law(§6)の検査対象になる —
+  「監査コマンドを定義者 Role に束ねる」試みは law が弾く。
+
+### 4.5 高リスクコマンドの装備
+
+- **bond**: 実行時に `lockEscrow` で供託。異議窓が異議なく閉じれば `releaseEscrow` で
+  返還、有責確定なら裁定が被害者・基金へ `resolveEscrow`。抑止(P3)の事前担保。
+- **procedure**: 実行そのものに決定手続きの成立を要求する(例: `mintCurrency` は
+  approval/vote が通らないと precondition 段階で弾かれる)。「コマンド実行が手続きの
+  成果物になる」— 承認ゲートはこれで表現し、独立した attestation 機構は持たない
+  (Q11 で刑法モデルを採ったため。骨子にあった attestation オプションは本項に吸収)。
+
+### 4.6 メタコマンドのブートストラップ
+
+`defineCommand` 自身も上記構造の一つの定義であり、その effects は
+`[{ op: "putDefinition", kind: "command", … }]` である。ジェネシスシーダーが
+`core.defineCommand` を投入した瞬間から、体系は自分の語彙で自分を拡張できる(P1)。
+`core.*` 定義の改版は層C — 憲法級手続きを要する。
 
 ## 5. 状態モデルとファイナリティ
 
