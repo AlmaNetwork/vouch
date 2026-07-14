@@ -17,3 +17,5 @@ Three buckets keep the design legible:
 |-----|-------|--------|
 | [0001](0001-region-governance-and-decision-sot.md) | Region governance & decision source-of-truth | Draft |
 | [0002](0002-observation-of-emergent-regime.md) | Observation of the emergent regime | Draft stub |
+| [0003](0003-region-assets.md) | Region Assets: countable, region-issued holdings as first-class value | Draft |
+| [0004](0004-command-system.md) | コマンド体系 v2: 権限分立に基づくデータ定義コマンド体系 | Draft |

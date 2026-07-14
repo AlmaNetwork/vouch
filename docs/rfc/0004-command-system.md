@@ -1,12 +1,13 @@
-# RFC-0001: コマンド体系 v2 — 権限分立に基づくデータ定義コマンド体系
+# RFC 0004 — コマンド体系 v2: 権限分立に基づくデータ定義コマンド体系
 
 | | |
 |---|---|
-| **Status** | Draft |
+| **Status** | Draft (for discussion) |
 | **Authors** | Sonoko Mizuki, Claude (Claude Code) — 共著 |
 | **Created** | 2026-07-14 |
 | **理論的基礎** | [`data.md`](../../data.md) — 国家の構造的因子に関する学際的分析 |
-| **対象** | Vouch Network node のコマンド体系全体(ゼロベース再設計) |
+| **対象** | vouch-node のコマンド体系全体(ゼロベース再設計) |
+| **関連RFC** | [0001](0001-region-governance-and-decision-sot.md)(シミュレータL2の統治手続き — 本RFCはノード側の対応物) / [0003](0003-region-assets.md)(region資産 — §3 経済プリミティブと接続) |
 
 ## 0. 要旨
 
@@ -40,7 +41,10 @@
 
 ### 1.1 現状の実装と3つの空洞
 
-現行実装(`src/`)は22のコマンドを持つが、統治システムとして見ると3つの構造的空洞がある。
+本節の分析対象は `feat/impl-app` ブランチのコマンド駆動ノード実装(旧 root `src/`、
+22コマンド)である。main では #18 により `vouch-node` へ収斂が進んでいるが、本節が
+指摘する構造的空洞はコマンド体系の設計そのものに由来し、実装の置き場所には依存しない。
+統治システムとして見ると3つの空洞がある。
 
 **空洞1: 法は記録されるが、執行されない。**
 `makeLaw` は `lawType: constraint | requirement | trigger` と対象コマンド指定(`rule.target`)を持つ
