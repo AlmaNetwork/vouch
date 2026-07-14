@@ -9,7 +9,7 @@
 | **Created** | 2026-07-14 |
 | **Theoretical basis** | Interdisciplinary findings from the history of state formation, political philosophy, monetary theory, and information technology (cited individually in the text) |
 | **Scope** | The entire command system of vouch-node (zero-based redesign) |
-| **Related RFCs** | [0001](0001-region-governance-and-decision-sot.md) (governance procedures of simulator L2 — this RFC is the node-side counterpart) / [0003](0003-region-assets.md) (region assets — connects to the economic primitives of §3) / 0004 cross-region transfer, PR #24 (the §14 cross-region open problem) / 0005 signature suites, PR #25 (realizes the crypto-agility required by §10.1) / 0006 region authorization, PR #26 (capability delegation — complements the Role bundles of §4.4) |
+| **Related RFCs** | [0001](0001-region-governance-and-decision-sot.md) (governance procedures of simulator L2 — this RFC is the node-side counterpart) / [0003](0003-region-assets.md) (region assets — connects to the economic primitives of §3) / 0004 cross-region transfer, PR #24 (the §14 cross-region open problem) / 0005 signature suites, PR #25 (provides the suite registry / MTI that §10.1 builds on) / 0006 region authorization, PR #26 (governs the cross-region boundary; its intra-region capability model is not adopted — see §4.4) / [money boundary](../money-boundary.md) (this RFC's economy is the in-world side of that seam) |
 
 ## 0. Abstract
 
@@ -256,7 +256,10 @@ Every effect primitive must declare the following four things:
 
 ### 3.4 Effect primitive catalog
 
-**Economic** — all applied atomically (no partial application); supply changes are auditable:
+**Economic** — all applied atomically (no partial application); supply changes are
+auditable. All economic primitives denominate exclusively in **in-world assets** (the
+in-world side of [the money boundary](../money-boundary.md)); no primitive can reference or
+custody a real-world asset:
 
 | Primitive | Conservation | Inverse effect |
 |---|---|---|
@@ -436,6 +439,9 @@ change (§14).
   risk decision (the same semantics as Q17).
 - **Retirement**: issue a new version with `status: "retired"`. A `scheduleTrigger`
   reference to a retired definition is logged as a no-op when it fires.
+- **In-world only**: a definable assetType may not represent a claim on a real-world asset
+  ("USDC-IOU" and kin are inexpressible — the same make-illegal-states-unrepresentable
+  technique as §3.6). Real value stays behind the money boundary and never enters a reducer.
 
 ### 4.4 Binding the execution power — Roles and bundles
 
@@ -457,12 +463,22 @@ Roles are residents of the definition store too:
 - Changing a bundle (bindCommand) is itself a command and is subject to the SoD law (§6) —
   an attempt to "bundle audit commands into a definer Role" is blocked by law.
 
+Role bundles plus the procedure/bond gates of §4.5 are this system's answer to
+"authorization policy as data" (RFC 0006 §4). The **intra-region capability model** of
+RFC 0006 §5 — holder-driven, chained re-delegation — is deliberately **not adopted**:
+authority here is never a possessable object (Tier K-4 inalienability), only something
+exercised through procedures. Bearer capabilities are accordingly resolved **in the
+negative** for networks on this kernel (RFC 0006, open question 2); verifying a
+counterpart's capability chains would require extending the closed precondition
+vocabulary — a kernel change (§14).
+
 ### 4.5 Equipment for high-risk commands
 
 - **bond**: on execution, a deposit is locked via `lockEscrow`. If the objection window
   closes without objection, it is returned via `releaseEscrow`; if liability is confirmed,
   adjudication `resolveEscrow`s it to the victims or the fund. The up-front collateral of
-  deterrence (P3).
+  deterrence (P3). Bonds — and the fund's holdings (§9.6) — are denominated in in-world
+  assets only.
 - **procedure**: requires the completion of a decision procedure for execution itself (e.g.
   `mintCurrency` is rejected at the precondition stage unless the approval/vote has passed).
   "Command execution becomes the product of a procedure" — approval gates are expressed this
@@ -491,7 +507,9 @@ Roles are residents of the definition store too:
   The state itself carries no provenance annotations — the tree lives at the log layer.
 - **Self-certifying log** (after KERI's KEL): each event carries ① the digest of the
   preceding event (backward hash chain) and ② the author's signature (commands = the issuing
-  ID's key; SYSTEM events = the node key). An event's ID is the digest of its content (SAID:
+  ID's key; SYSTEM events = the node key). Every signature names its **Suite ID** from the
+  RFC 0005 registry — an algorithm is never inferred from key material (the anti-downgrade
+  rule) — and the node key's suite is declared the same way. An event's ID is the digest of its content (SAID:
   self-addressing identifier), and `branchId` is likewise **deterministically derived** from
   the digest of "fork point + adjudication event" (no randomness — P6). Verifying log
   integrity requires no trust in the operator (end-verifiable).
@@ -577,7 +595,8 @@ Following the lineage of KERI and Certificate Transparency, trust in the log is 
 
 - External anchoring of checkpoints (other nodes, public ledgers) and replication via a
   witness set (KERI's receipt issuers) are the connection points toward multi-node operation
-  (§14).
+  (§14). (Terminology: the money layer uses "finality"/"reorg" for on-chain settlement of
+  *real* transactions — a different layer from F here.)
 - Old branches are never deleted. Including "the worldlines not taken," they form the
   complete evidentiary record of governance.
 
@@ -789,6 +808,10 @@ Do not seal everything with prevention (P3). Constraints are for the floor of co
 and safety; penal law is the main body of governance — not "making murder impossible" but
 "defining the crime of murder."
 
+Trigger laws are the in-world realization of the money boundary's `TransferHook{engine}`.
+Because a law enacted by vote is **not a user-signed intent**, no law can fire a
+real-backend hook — automatic execution reaches in-world value only.
+
 ### 8.3 The amendment flow
 
 ```
@@ -955,9 +978,15 @@ law cease to be an instrument (a technique of rule, *shu*) and become the subjec
 - **The substance of an ID is not a key but a key-event sub-log** (KERI): each ID owns its
   own sequence of key events (generation, rotation) within the log, and each rotation event
   **pre-commits the digest of the next key** (pre-rotation). Keys can be recovered after
-  compromise without a central registry; the ID outlives its keys. The crypto suite is
-  versioned (crypto-agility — over 100 years, algorithms inevitably age; vouch-core's
-  `ed25519` / `alma-cert/v1` are inherited as the initial suite).
+  compromise without a central registry; the ID outlives its keys. Crypto-agility follows
+  RFC 0005: suites are **immutable Suite IDs in an append-only registry** (a change is a new
+  ID plus deprecation of the old — never a re-versioning); the MTI (mandatory-to-implement)
+  suite is `ed25519`, and `alma-cert/v1` is the certificate-envelope version, orthogonal to
+  suites. A rotation event pre-commits the pair **(next-key digest, next Suite ID)**, and the
+  revealed suite must be `active` in the registry and at or above the node's minimum-strength
+  policy (a Tier C parameter) — closing the rotate-to-a-weak-suite hole. Over 100 years
+  algorithms inevitably age; retirement happens by registry deprecation, and finalized
+  history remains verifiable under the suites it was written with.
 - **Voucher liability**: when a vouchee's grave violation becomes final, the vouchers are
   sanctioned too (bond forfeiture, suspension of vouching rights). The marginal cost of a
   Sybil attack = the vouchers' joint liability × K.
@@ -978,7 +1007,8 @@ condition under which rational compliance (P3) does not degenerate into coercion
   - **Portable history** (after the AT Protocol): the departer may carry out their own
     key-event sub-log and an **inclusion-proof-equipped extract** (§5.6) of the finalized
     events concerning them. No full log copy is needed, and the extract verifies standalone
-    at the destination — "a record that travels" further raises the substance of the right
+    at the destination at the **MTI floor** (`ed25519`); events signed under non-MTI suites
+    verify only where the destination supports that suite — "a record that travels" further raises the substance of the right
     of exit.
   - The freedom of exit is **Tier K (a kernel invariant)** — a law forbidding or punishing
     it is unenactable in the first place, and making the liquidation rules (Tier C)
@@ -1094,7 +1124,19 @@ and Claude Code (2026-07-13 to 14). Alternatives considered and rejected at the 
 
 - The procedure for extending the effect-primitive vocabulary (kernel change = hard-fork
   governance).
-- Extending this system across nodes (diplomacy, cross-region).
+- Extending this system across nodes (diplomacy, cross-region — RFC 0004 / PR #24). Known
+  gaps this kernel must close first: (i) custody export/import primitives with an
+  Agreement-audited conservation class — Tier K-3's "endowments and logged mints only"
+  needs a deliberate, narrow carve-out; (ii) a bridge that appends a counterpart's signed
+  artifacts (vouchers, checkpoints, duplicity proofs) to the local log, without which
+  Agreement obligations are unjusticiable under §9.8 log-evidentialism; (iii) evaluating a
+  counterpart's delegated capabilities (RFC 0006 §6.3) in the pipeline; (iv) reconciling
+  Agreement-triggered slashing (RFC 0004 §8.3) with the adjudication-only `resolveEscrow`
+  guard; (v) a cross-region time base — wall-clock timestamps and HTLC timelocks share no
+  clock with per-network, independently amendable tick cadences.
+- **Hash-function agility**: SAIDs, the hash chain, the MMR, and pre-rotation digests all
+  depend on a hash function; the RFC 0005 registry covers signatures only. On a 100-year
+  horizon the hash function ages too — currently owned by neither document.
 - Details of the protocol for notifying authors of commands dropped in a reorg and for
   resubmission.
 - The concrete design of procedural guarantees in adjudication (partially treated in §9).
@@ -1126,4 +1168,7 @@ and Claude Code (2026-07-13 to 14). Alternatives considered and rejected at the 
   system's laws, penalties, and assets can collide with the real jurisdiction in which the
   node physically exists (the state's caging and monopoly of violence). The design of
   coexistence with and recognition by existing states is beyond this RFC's scope, but on a
-  100-year span it is an unavoidable problem.
+  100-year span it is an unavoidable problem. For the monetary slice, the adopted stance is
+  the money boundary (Path A: users move their own money via user-signed intents; the node
+  issues, holds, and converts nothing real) — narrowing this open problem to the
+  non-monetary residue (penalties, legal recognition).
