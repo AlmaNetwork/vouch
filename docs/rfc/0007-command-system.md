@@ -233,6 +233,15 @@ constitutional:
   accumulated mode-A standing would purchase mode B (governing power) — Mann's observation
   that power reconstitutes itself from another source, answered at the type level.
 
+Mode A in its original form was **equal but unfree** (Karatani): reciprocity binds — the
+gift is also a political act that subordinates through debt (Mauss), and the community that
+vouches for you also holds you. This system takes A's *data* while returning the freedom:
+voucher liability is *hau* made machine-enforceable — the gift keeps binding the giver
+(§10.1) — while the right of exit (Tier K-6) severs the community's capacity to hold the
+person. Reciprocity under law, with a guaranteed exit, is this RFC's wager in the direction
+of Karatani's **mode D** — "A restored at a higher dimension," freedom and equality
+together — not as an achieved state but as the direction the kernel leaves open.
+
 ---
 
 ## 3. Kernel Specification
@@ -598,6 +607,11 @@ vocabulary — a kernel change (§14).
 Reorgs are deterministic: the adjudication event itself is on the log, so the same log
 reproduces the same reorg (P6).
 
+Objection is division institutionalized as metabolism — the inverted lesson of
+harmony-first orders ("nothing is born of division and negation"): a system that suppresses
+division to preserve the peace forfeits, with it, the capacity for structural revision.
+Here dissent is priced (the bond), channeled (adjudication), and productive (the reorg).
+
 ### 5.4 Handling dropped commands
 
 - A drop is recorded on the new branch as `command.dropped { originalSeq, reason }` — there
@@ -933,10 +947,24 @@ so the community can always object *before the first person is judged under a ne
   per-source marginal contribution and per-(from, to, kind, context) dedup, seeded at the
   governed anchors named in the law. A source with no standing contributes nothing (a
   no-standing accuser cannot defame); one high-standing source is capped. All of it is
-  amendable by procedure, none of it by an operator's hand.
-- **Context scoping.** A weight is *for* something: merchant trust is not adjudication
-  trust, and an edge signed for one context cannot be lifted into another (§10.5). Which
-  contexts exist — and which edges count in each — is the law's `contexts`/counting rule.
+  amendable by procedure, none of it by an operator's hand. Out-degree normalization is
+  simultaneously the **anti-patronage device** (Mauss; Flannery & Marcus): a patron who
+  vouches for everyone dilutes each of his gifts, so mass gift-giving cannot be converted
+  into a client network's worth of standing — the very conversion by which big-men once
+  turned generosity into social debt and social debt into hereditary rank.
+- **Context scoping = Luhmann's functional differentiation, applied to trust.** A weight is
+  *for* something: merchant trust is not adjudication trust, and an edge signed for one
+  context cannot be lifted into another (§10.5). Each context is a subsystem with its own
+  code, and Tier K-7 is the boundary that keeps the political system from being colonized
+  by the economic one — the same de-differentiation (one code swallowing all others) that
+  the limited state of §9.8 refuses. Which contexts exist — and which edges count in
+  each — is the law's `contexts`/counting rule.
+- **Reading standing is itself an act of power** (Foucault; Deleuze's control society is
+  modulation-by-score even when the score is lawful). A data-defined formula does not by
+  itself justify a universally queryable score. Whether a context's standing is freely
+  readable, counterparty-only, or warrant-gated is part of the fold law's declaration,
+  under the same graduated-disclosure discipline as §6.3 — "the authority to see" applies
+  to derived values no less than to transaction contents.
 - **The suffrage boundary (Tier K-7).** No fold output can be supplied as a weight to any
   governance-suffrage tally, and `standingAtLeast` (§4.2) cannot gate suffrage-family
   commands. Standing buys commerce, exposure, and display — never votes.
@@ -945,7 +973,10 @@ so the community can always object *before the first person is judged under a ne
   control (Deleuze / Zuboff). Making the fold a law makes the formula public, its amendment
   procedural, and its application objectionable. Graeber's value theory is the ground
   beneath: value is not a substance a subject owns but a process relations produce — so the
-  system stores the relations and derives the value, never the reverse.
+  system stores the relations and derives the value, never the reverse. And the standard
+  critique of MMT cuts here symmetrically: as a state can decree money but not its value,
+  the law defines the formula but the *value* of standing emerges only from the relations —
+  governance owns the measure, never the measured.
 
 ## 9. Criminal Law and Remedies
 
@@ -1057,7 +1088,10 @@ law cease to be an instrument (a technique of rule, *shu*) and become the subjec
 ### 9.8 Interpretive principles and log-evidentialism
 
 - **Interpretive principles for adjudication** (the supply of "ethical trust" per Aglietta &
-  Orléan): interpretation of judicial offense elements follows sources of law in this
+  Orléan — of their three trusts that make a monetary order livable, two are already
+  mechanical here: *methodical* trust is determinism and replay, *hierarchical* trust is
+  the signed checkpoints of §5.6; what adjudication must supply is the third):
+  interpretation of judicial offense elements follows sources of law in this
   order — ① the text of the law ② the network's **preamble** (§11: the genesis-mandatory
   declaration of values) ③ the design principles P1–P9 of this RFC (the default interpretive
   norms). Interpretation is not left to adjudicators' discretion (= the "kūki" of same-model
@@ -1168,6 +1202,11 @@ Constitutional properties — each inherited from an existing invariant rather t
 - **Identity continuity.** An edge binds to the ID — the key-event sub-log (§10.1) — not to
   a key: re-keying sheds no incoming sanction. The residual "fresh unlinked new ID" is
   §10.1's admission problem, priced at K × the vouchers' joint liability.
+- **Deliberately non-fungible — the counter-Simmel design.** Money depersonalizes: every
+  coin is anyone's, and that impersonality is both the freedom it grants and the dependence
+  it creates (Simmel). An edge re-personalizes: it names its endpoints, is inalienable
+  (Tier K-4), and dies with the relationship. Mode C's anonymity and mode A's namedness are
+  kept as different substances — money cannot buy the shape of one's relations.
 - **Weight is context-scoped and never suffrage** (Tier K-7). `context` scopes what a
   weight is *for*; when an edge travels, contexts are region-namespaced so an edge cannot
   be lifted into a scope it was not signed for (RFC 0008). Weight feeds the fold law (§8.5)
@@ -1290,7 +1329,11 @@ and Claude Code (2026-07-13 to 14). Alternatives considered and rejected at the 
   extralegal sovereign with physical control of the process and DB. However, the three
   layers of §5.6 (self-certifying, provable, duplicity detection) have made tampering
   "unpreventable, but always provable" — the remaining future work is the operational
-  design of witness-set replication and external anchoring.
+  design of witness-set replication and external anchoring. Netting's smallholders are the
+  counter-image to the hydraulic despot (the archaeology runs against Wittfogel: intensive
+  cultivation did not require central despotism, and the great waterworks were the state's
+  result, not its cause) — the multi-node direction should preserve the smallholder
+  option, many small self-hosted nodes federating, rather than assume the mega-node.
 - Selection of the cryptographic realization (commitments / selective disclosure) for
   graduated disclosure (§6) and secret ballots (§7).
 - Grinding resistance of the lottery seed (§7.1) — countermeasures to the attack of
@@ -1310,10 +1353,19 @@ and Claude Code (2026-07-13 to 14). Alternatives considered and rejected at the 
   identifiers — is RFC 0008's owned scope, downstream of the cross-region gaps (i)–(v)
   above. (The earlier deferral of "governance of reputation" to an independent RFC is
   resolved: the constitutional layer lives here — §8.5, Tier K-7, P9 — and RFC 0008 retains
-  the wire format and portability.)
+  the wire format and portability.) The theoretical frame is the English School: anarchy
+  between regions is made livable not by a super-sovereign but by **protocol** — the
+  connection edge and the honor table are this system's Vienna conventions, mutual
+  recognition reproduced through form (Bull's anarchical society).
 - Fold-law parameter defaults (anchor sets, caps, decay curves) and the retirement of the
   legacy `alma.endorsement/v1` weight domain into the edge model — there must not be two
   conflicting `alma.*` weight domains.
+- **Reputation dynamics under mimesis** (Girard): standing is itself a mimetic object.
+  Weight-revocation cascades (a bank run on standing), sanction pile-ons, and league-table
+  publication amplifying rivalry are not prevented by the fold's mechanics — decay,
+  per-source caps, and anchor seeding bound the arithmetic, not the psychology. The current
+  levers are display-context design and read-access policy (§8.5); to be examined together
+  with the observation layer (ISA governance above).
 - **The interface with real-world jurisdictions** (the aporia of the network state): this
   system's laws, penalties, and assets can collide with the real jurisdiction in which the
   node physically exists (the state's caging and monopoly of violence). The design of
