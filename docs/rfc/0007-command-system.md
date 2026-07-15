@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Draft (for discussion) |
-| **Authors** | Sonoko Mizuki, Claude (Claude Code) — co-authored |
+| **Authors** | Sonoko Mizuki, yutonano (the relationship-edge & reputation layer absorbed from the RFC 0008 draft — P9 / Tier K-7 / §8.5 / §10.5), Claude (Claude Code) — co-authored |
 | **Created** | 2026-07-14 |
 | **Theoretical basis** | Interdisciplinary findings from the history of state formation, political philosophy, monetary theory, and information technology (cited individually in the text) |
 | **Scope** | The entire command system of vouch-node (zero-based redesign) |

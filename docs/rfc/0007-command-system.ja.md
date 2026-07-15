@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Status** | Draft (for discussion) |
-| **Authors** | Sonoko Mizuki, Claude (Claude Code) — 共著 |
+| **Authors** | Sonoko Mizuki, yutonano(RFC 0008 草稿から吸収した関係エッジ・評判レイヤ — P9 / 層K-7 / §8.5 / §10.5), Claude (Claude Code) — 共著 |
 | **Created** | 2026-07-14 |
 | **理論的基礎** | 国家形成史・政治哲学・貨幣論・情報技術の学際的知見(本文中で個別に引用) |
 | **対象** | vouch-node のコマンド体系全体(ゼロベース再設計) |
