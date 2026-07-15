@@ -1,21 +1,22 @@
-# RFC 0008 — Relationship Edges & Reputation Substrate
+# RFC 0008 — Relationship Edges: Wire Format & Cross-Region Portability
 
 - **Status:** Draft
-- **Layer:** ALMA protocol candidate — the **substrate beneath RFC 0007 (Command System v2, PR #30)**. This RFC defines only the relationship-**edge** data structure, its weight, its per-edge hash chain, the deterministic reputation **fold**, and **cross-region edge portability**. It **normatively depends on RFC 0007 (Command System v2)** for command definition and execution, the four-power separation, penal/criminal law, intra-node finality and reorg, suffrage, and identity. It does not re-specify, extend, or contradict any of those; where it touches them it defers with explicit citation.
-- **Date:** 2026-07-14
-- **Requires:** RFC 0007 (Command System v2, PR #30) — load-bearing throughout; RFC 0004 (Cross-region Due Diligence & Value Transfer) §9/§10; RFC 0005 (Signature Suites & Negotiation).
-- **Related:** RFC 0006 (Region Authorization & Capability Delegation) — its capability model survives here **only as a cross-region artifact** (§10; RFC 0007 §4.4 does not adopt it intra-node). RFC 0003 (Region Assets) — holdings project into **non-suffrage** economic signals only (§8.4, §11.1). RFC 0001 (region governance) — its node-side authority is RFC 0007; every former direct dependency on RFC 0001 §4/§5 is re-pointed to RFC 0007 §10.1/§5.2.
+- **Authors:** yutonano, Claude — co-authored. The constitutional layer originally drafted here (the reputation fold, the suffrage boundary, the edge read-model) was absorbed into RFC 0007 (§8.5 / Tier K-7 / §10.5 / P9) and is co-credited there.
+- **Layer:** ALMA protocol candidate — the **wire format and cross-region portability layer** for the relationship edges of RFC 0007 (Command System v2, PR #30). RFC 0007 now owns what an edge *means*: the edge read-model (RFC 0007 §10.5), the reputation fold as a native lawType (`fold`, RFC 0007 §8.5), the suffrage boundary (RFC 0007 Tier K-7), and derived standing as a design principle (RFC 0007 P9). This RFC defines only what *travels*: the `alma-edge/v1` envelope and per-edge hash chain, and the cross-region freshness/corroboration machinery that makes an edge trustworthy outside its origin. It does not re-specify, extend, or contradict RFC 0007; where it touches it, it defers with explicit citation.
+- **Date:** 2026-07-14 (constitutional layer moved to RFC 0007: 2026-07-15)
+- **Requires:** RFC 0007 (Command System v2, PR #30) — load-bearing throughout, in particular §10.5 (edge read-model), §8.5 (fold law), Tier K-7 (suffrage boundary); RFC 0004 (Cross-region Due Diligence & Value Transfer) §9/§10; RFC 0005 (Signature Suites & Negotiation).
+- **Related:** RFC 0006 (Region Authorization & Capability Delegation) — its capability model survives here **only as a cross-region artifact** (§10; RFC 0007 §4.4 does not adopt it intra-node). RFC 0003 (Region Assets) — holdings project into **non-suffrage** economic signals only (RFC 0007 §8.5/§13; §11.1). RFC 0001 (region governance) — its node-side authority is RFC 0007.
 - **Requirements language:** MUST / MUST NOT / SHOULD / MAY / REQUIRED / OPTIONAL per RFC 2119.
 
 ## 1. Summary
 
-This document specifies the **relationship edge**: a signed, weighted, directed relationship carrying its own tamper-evident hash chain, and the deterministic **fold** that derives a node's reputation/standing from its incoming edges. It is deliberately **subordinate** to RFC 0007 (Command System v2). RFC 0007 owns commands, the closed effect-primitive vocabulary, the four-power separation, penal law, intra-node finality/reorg, suffrage, and identity. RFC 0008 owns only what RFC 0007 §14 explicitly defers to an independent RFC: **how a relationship is represented as folding, hash-chained, portable data; how a reputation law folds it; and how these artifacts travel across regions.**
+This document specifies the **wire form of a relationship edge** — a signed, weighted, directed relationship carrying its own tamper-evident hash chain — and how edges **travel across regions**: self-verification, head-checkpoints, freshness, and sanction-pull. The edge's *meaning* is not specified here. RFC 0007 §10.5 defines the edge read-model (edges as projections of write primitives, endpoint immutability, identity binding); RFC 0007 §8.5 defines the reputation fold as a native `lawType: "fold"` derivation law (with its determinism contract, Sybil-resistance parameters, and per-context read-access declaration); RFC 0007 Tier K-7 fixes the suffrage boundary. This RFC is subordinate to all three and owns only what RFC 0007 §14 still defers: **how edges are serialized, and how they travel.**
 
 Three positioning claims frame everything below:
 
-- **An edge is a read-model of RFC 0007's write primitives, not a competing write path** (§4, §11). A `vouch` edge is the representation of what RFC 0007 §3.4 `recordVouch` records; a `sanction` edge is the representation of what RFC 0007 §9's penal path (`suspendId`/`restrictCommands`) emits. RFC 0008 defines no new way to admit, vouch, punish, or authorize.
-- **The fold is a data-defined reputation law by governance, and a read-time derivation by evaluation** (§8). It is specified as a `putDefinition(kind: "law", …)` in RFC 0007's versioned definition store (§8.1), amendable via RFC 0007 §8.3 with objection windows — because RFC 0007 §14 forbids reputation computed at kernel/operator discretion as a "fifth power." But a reputation fold is **not** one of RFC 0007 §8.2's three lawTypes (constraint/penal/trigger); it neither blocks, penalizes, nor schedules a command. Its **evaluation** — a graph fixpoint over incoming edges — exceeds RFC 0007's closed precondition vocabulary (§4.2) and therefore requires a **named RFC 0007 §14 kernel extension** (a read-law/fold evaluation mode plus a graph-aggregation predicate class), stated as a normative dependency, not silently assumed to run on the existing §8 evaluator (§8.1, §8.6).
-- **Weight is confined to non-suffrage contexts** (§8.4). Governance suffrage is RFC 0007's exclusive domain — 1-ID-1-vote (§10.1), exercised through RFC 0007 §7 decision procedures over Group electorates. Admission and identity are established by the **binary, unweighted** primitives `admitId`/`recordVouch` (§3.4) and RFC 0008's `membership` edge; RFC 0008 adds no weight to either the admission artifact or the §7 tally. RFC 0008's optional weight+context layer feeds only the reputation law and cross-region diligence.
+- **An edge is the wire form of RFC 0007 §10.5's read-model, not a competing write path** (§4, §11). A `vouch` edge is the representation of what RFC 0007 §3.4 `recordVouch` records; a `sanction` edge is the representation of what RFC 0007 §9's penal path (`suspendId`/`restrictCommands`) emits. RFC 0008 defines no new way to admit, vouch, punish, or authorize.
+- **The fold is RFC 0007 §8.5's; this RFC profiles only its cross-region inputs** (§8): which *foreign* edges may enter a local fold (honoring + context mapping + MMD), at what corroborated snapshot they are read, and how read-access declarations cross regions. The former hedge that fold evaluation "requires a kernel extension" is dissolved — `fold` is a native RFC 0007 lawType with a closed graph-fixpoint evaluation capability.
+- **Weight is confined to non-suffrage contexts by RFC 0007 Tier K-7** (§4.4). Governance suffrage is RFC 0007's exclusive domain — 1-ID-1-vote (§10.1), exercised through RFC 0007 §7 decision procedures. Admission and identity are established by the **binary, unweighted** primitives `admitId`/`recordVouch` (§3.4) and the `membership` edge; this RFC adds no weight to either the admission artifact or the §7 tally, and inherits the boundary rather than restating it.
 
 The per-edge micro-chain (§5) remains the load-bearing choice, but its purpose is now narrow: **portability** — an edge self-verifies cross-region from its content hash, signature, suite, and the signer-AID's RFC 0007 §10.2 key-event-log extract, without trusting the origin's database. Intra-node freshness, ordering, anti-equivocation, and consistent snapshots are **not** re-solved here; they are RFC 0007 §5's single node log. RFC 0008 retains only the **cross-region corroboration layer** (§6): head-checkpoints, multi-source freshness, heartbeat, and anti-gerrymander, built **on top of** RFC 0007 §5.6 signed checkpoints/MMR and §10.2 inclusion-proof extract — never as a parallel intra-node structure.
 
@@ -27,13 +28,13 @@ RFC 0007 gives a single node a self-certifying, hash-chained append-only log wit
 
 RFC 0007 §14 enumerates exactly that layer as open and defers it:
 
-- **"Governance of reputation … deferred to an independent RFC,"** with the constitutional condition that a reputation function MUST be a *data-defined law* (transparent formula, amendment procedure, objection-window applicability); discretionary reputation is a forbidden fifth power (Deleuze/Zuboff). **This RFC is that independent reputation RFC** (§8). RFC 0007 §14 fixes only the *conditions* for such a law; it provides **no kernel evaluator that can execute a fold** — its §8.2 lawTypes have no value-deriving mode and its §4.2 predicate vocabulary is closed (extending it "is a kernel change (§14)"). RFC 0008 therefore names the fold-evaluation mode as an explicit RFC 0007 §14 kernel-change dependency (§8.1, §8.6) rather than overstating compatibility with the existing §8 engine.
+- **Reputation is no longer deferred.** RFC 0007 §8.5 natively owns the fold — a `lawType: "fold"` derivation law with a closed graph-fixpoint evaluation capability, the determinism contract, Sybil-resistance parameters, the per-context read-access declaration — and RFC 0007 Tier K-7 fixes the suffrage boundary. This document's earlier role as "the independent reputation RFC," and its hedge that fold evaluation was a pending kernel-extension dependency, are both dissolved. What RFC 0007 §14 still lists as this RFC's scope is **cross-region portability of edges and reputation**.
 - **"A bridge that appends a counterpart's signed artifacts (vouchers, checkpoints, duplicity proofs) to the local log"** (§14(ii)), plus counterpart-capability evaluation (§14(iii)). **This RFC's portable, self-verifying edges, head-checkpoints, and cross-region sanction-pull ARE those artifacts** (§10).
 - **Hash-function agility** — "owned by neither document" (§14). RFC 0008 shares that unowned gap and names it explicitly (§14).
 
 ### 2.2 Trust is FOR something (context), but weight is never a vote
 
-An edge carries a **`context`** (§4.4): the same holder MAY have different effective weight in different decision contexts, and a cheaply-minted `nova:merchant` edge MUST NOT silently satisfy a `delta:econtrust` fold. But this contextual weighting is bounded by an absolute rule inherited from RFC 0007: **it never weights a governance-suffrage vote.** RFC 0007 §10.1/§13 fix 1-ID-1-vote and reject stake-weighted governance. So `context`-scoped weight lives entirely in *non-suffrage* reputation, economic-trust, cross-region-exposure, and display space (§8.4). The old `equal|reputation|stake` triple is split accordingly (§8.3): `equal` is RFC 0007's domain (1-ID-1-vote exercised through §7 procedures) and leaves this RFC; `reputation`/`stake` survive only as non-suffrage signals.
+An edge carries a **`context`** (§4.4): the same holder MAY have different effective weight in different decision contexts, and a cheaply-minted `nova:merchant` edge MUST NOT silently satisfy a `delta:econtrust` fold. But this contextual weighting is bounded by an absolute rule inherited from RFC 0007: **it never weights a governance-suffrage vote** — RFC 0007 Tier K-7 is the kernel invariant, and RFC 0007 §8.5 confines context-scoped weight to *non-suffrage* reputation, economic-trust, cross-region-exposure, and display space. The old `equal|reputation|stake` projection triple is gone: `equal` is RFC 0007's suffrage (1-ID-1-vote through §7 procedures), and `reputation`/`stake` survive only as non-suffrage signals inside the RFC 0007 §8.5 law's contexts.
 
 ## 3. Terminology
 
@@ -45,13 +46,12 @@ An edge carries a **`context`** (§4.4): the same holder MAY have different effe
 - **AID** — the stable RFC 0007 §10.1 identity of an *agent* (a KERI key-event sub-log). Agent edges and sanctions bind to the **AID**, not to a rotating key (§4.3, §5.3, §11.2). A *region* endpoint binds instead to the region/node key (RFC 0005; RFC 0007 §5.1), not to a §10.1 vouched AID (§4.3).
 - **KEL extract** — an inclusion-proof-equipped extract of a signer's key-event sub-log (RFC 0007 §10.2), needed alongside an edge for cross-region signature verification when the signing key has rotated (§5.5, §10.1).
 - **Head-checkpoint (Signed Tree Root, STR)** — a region's periodically-published, signed, monotone, authenticated `genesisId → head` map, built on RFC 0007 §5.6 checkpoints for **cross-region** corroboration (§6.2).
-- **Fold** — the deterministic reputation derivation over a node's incoming edges, governed as an RFC 0007 `kind:law` definition and evaluated at read time (§8).
-- **Projection** — a named specialization of the fold for a non-suffrage context (§8.3).
+- **Fold** — the deterministic reputation derivation over a node's incoming edges: an RFC 0007 §8.5 `lawType: "fold"` law, evaluated at read time at F. Used in this RFC only for its **cross-region input profile** (§8).
 - **Endpoint** — an agent identifier `name@region` **or** a bare region id `/^[a-z0-9]+$/` (§4.3).
 
 ## 4. The edge (canonical schema)
 
-An edge is the **data** that an RFC 0007 primitive appends and that the reputation law (§8) folds. It introduces no write path of its own: minting/altering an edge is executing the corresponding RFC 0007 command (`recordVouch`, a §9 sanction issuance or clearing, membership admission, a cross-region capability grant), whose effect appends the edge state to the node log and whose finality is RFC 0007 §5.
+An edge is the **data** that an RFC 0007 primitive appends (RFC 0007 §10.5) and that the reputation law (RFC 0007 §8.5) folds. It introduces no write path of its own: minting/altering an edge is executing the corresponding RFC 0007 command (`recordVouch`, a §9 sanction issuance or clearing, membership admission, a cross-region capability grant), whose effect appends the edge state to the node log and whose finality is RFC 0007 §5.
 
 ### 4.1 Envelope, signed core, and identity
 
@@ -92,7 +92,7 @@ This is the **RFC 0007 §5.1/§10.1 crypto stance** (Suite ID first-class and ne
   "prev":     "6cc8…a52c",           // edgeId of the PREVIOUS state of THIS SAME edge (§5); null at genesis
   "counter":  1,                     // monotonic per-edge state counter (§5.2); 0 at genesis
   "parent":   null,                  // cross-region capability only: attenuation parent (§10.6)
-  "status":   "active"               // "active" | "revoked" — explicit tombstone (§5.4, §8.5)
+  "status":   "active"               // "active" | "revoked" — explicit tombstone (§5.4)
 }
 
 // --- detached attachments (NOT in core, NOT in edgeId, NOT covered by `from`'s signature) ---
@@ -129,11 +129,11 @@ Per-kind legality:
 
 ### 4.4 Weight (`weightBp`), context, and the suffrage boundary
 
-`weightBp` is a **signed integer** in basis points; effective weight is `weightBp / 10000`, constrained to `[−10000, 10000]` per edge. A positive `weightBp` is supporting standing; a negative `weightBp` represents a §9 sanction (§11). The fold, not the edge, decides how weight composes (§8.2).
+`weightBp` is a **signed integer** in basis points; effective weight is `weightBp / 10000`, constrained to `[−10000, 10000]` per edge. A positive `weightBp` is supporting standing; a negative `weightBp` represents a §9 sanction (§11). The fold law, not the edge, decides how weight composes (RFC 0007 §8.5).
 
-**Weight is normatively confined to NON-suffrage contexts** (§8.4): economic/commercial trust, cross-region exposure caps, and reputation display. Weight **MUST NOT** weight a governance-suffrage vote. Governance suffrage is RFC 0007's exclusive domain — 1-ID-1-vote (RFC 0007 §10.1) exercised through RFC 0007 §7 decision procedures over Group electorates; stake-weighting is rejected (RFC 0007 §13). RFC 0008's weight+context layer sits **alongside** the binary admission/identity primitives and is consumed only by the reputation law (§8) and cross-region diligence (§10).
+**Weight is confined to NON-suffrage contexts by kernel invariant** (RFC 0007 Tier K-7): economic/commercial trust, cross-region exposure caps, and reputation display. Weight **MUST NOT** weight a governance-suffrage vote — this is RFC 0007's invariant, inherited here, not restated as an RFC 0008 rule. The weight+context layer sits **alongside** the binary admission/identity primitives and is consumed only by the reputation law (RFC 0007 §8.5) and cross-region diligence (§10).
 
-**Pure-suffrage kinds carry no weight (MUST).** On `membership` (and any kind whose sole role is a suffrage/admission unit), `weightBp` MUST be the sentinel `0` — the field is structurally required for determinism (§4.1) but carries no meaning — and its `context` is a **suffrage-layer label** (e.g. `nova:citizen`), *not* a non-suffrage weight scope. The fold (§8) MUST ignore both fields on such kinds. This removes the contradiction of a "binary, unweighted suffrage unit" nonetheless carrying a folded weight.
+**Pure-suffrage kinds carry no weight (MUST).** On `membership` (and any kind whose sole role is a suffrage/admission unit), `weightBp` MUST be the sentinel `0` — the field is structurally required for determinism (§4.1) but carries no meaning — and its `context` is a **suffrage-layer label** (e.g. `nova:citizen`), *not* a non-suffrage weight scope. The fold's counting rule (RFC 0007 §8.5) ignores both fields on such kinds. This removes the contradiction of a "binary, unweighted suffrage unit" nonetheless carrying a folded weight.
 
 `context` on weight-bearing kinds is a region-namespaced string `"<region>:<purpose>"` and is part of the signed core, so an edge cannot be lifted into a scope it was not signed for. A cross-region verifier MUST map contexts explicitly via the RFC 0004 honor entry (§10.2) and MUST reject an edge whose context is unmapped for the deciding context.
 
@@ -151,7 +151,7 @@ A `revoked` state is a resolvable head that is never `valid_at` any `S`.
 
 ### 4.6 Consent and `cosign`
 
-`vouch` and `sanction` are **unilateral** (only `from` signs) — endorsements and accusations do not need the target's cooperation, gated instead by the fold (§8.2). `membership` and `connection` are **consent-bearing** and MUST be co-signed: the edge carries a `cosign` map keyed by the co-signer's identifier, holding that principal's signature over the **same** `canonicalBytes(core)`. A verifier MUST reject a `membership`/`connection` edge lacking a valid counterparty co-signature over the identical core bytes. (`membership` co-sign is the agent's own key; `connection` co-sign is the `to` region's key.) On co-signed pure-suffrage `membership`, `weightBp` is the sentinel `0` (§4.4).
+`vouch` and `sanction` are **unilateral** (only `from` signs) — endorsements and accusations do not need the target's cooperation, gated instead by the fold's source-weighting (RFC 0007 §8.5). `membership` and `connection` are **consent-bearing** and MUST be co-signed: the edge carries a `cosign` map keyed by the co-signer's identifier, holding that principal's signature over the **same** `canonicalBytes(core)`. A verifier MUST reject a `membership`/`connection` edge lacking a valid counterparty co-signature over the identical core bytes. (`membership` co-sign is the agent's own key; `connection` co-sign is the `to` region's key.) On co-signed pure-suffrage `membership`, `weightBp` is the sentinel `0` (§4.4).
 
 ### 4.7 Capability edges are cross-region only
 
@@ -221,74 +221,34 @@ Because a region controls its own log order, `validFrom` (signed) and the anchor
 
 The old "consistent snapshot at proposal-open seq" (a cut over the region journal, dependent on RFC 0001 §5) is **removed**. On a single node, the consistent cut already exists: **RFC 0007's finality boundary F** (§5.2), monotone and reorg-safe.
 
-- A non-suffrage fold (§8) reads each relationship's latest state finalized at or before its decision seq, i.e. **at F** (RFC 0007 §5.2). Torn reads across independently-chained edges are resolved by reading all relationships at the single F, exactly as RFC 0007 reads state at F.
-- **Suffrage snapshots are not RFC 0008's.** Any vote roll, eligibility cut, or objection-window timing is RFC 0007 §5.2/§7. RFC 0008 contributes no weight to a vote (§4.4), so it defines no vote snapshot. Where a region's own governance wishes to *display* reputation at a decision time, it reads the fold at F; that display is informational and never a tally input.
+- A non-suffrage fold (RFC 0007 §8.5) reads each relationship's latest state finalized at or before its decision seq, i.e. **at F** (RFC 0007 §5.2). Torn reads across independently-chained edges are resolved by reading all relationships at the single F, exactly as RFC 0007 reads state at F.
+- **Suffrage snapshots are not RFC 0008's.** Any vote roll, eligibility cut, or objection-window timing is RFC 0007 §5.2/§7. RFC 0008 contributes no weight to a vote (§4.4, RFC 0007 Tier K-7), so it defines no vote snapshot. Where a region's own governance wishes to *display* reputation at a decision time, it reads the fold at F; that display is informational and never a tally input.
 - A verifier MAY confirm no torn read between two cross-region snapshots with the RFC 0007 §5.6 consistency proof between the two signed checkpoints.
 
-## 8. The reputation fold: a data-defined law by governance, a read-time derivation by evaluation
+## 8. The fold is RFC 0007 §8.5's — this RFC profiles its cross-region inputs
 
-### 8.1 The fold is a `kind:law` definition, governed but not a §8.2 lawType (MUST)
+The fold itself is **not specified here**. Its status as a native `lawType: "fold"` derivation law, its governance via the RFC 0007 §8.3 amendment flow, its determinism contract (fixed-point integers, single-F reads, all parameters in the law body), its Sybil-resistance parameters (source-weighted recursion, out-degree normalization, per-source caps, `(from, to, kind, context)` dedup, governed seed anchors), the suffrage boundary (Tier K-7), and the per-context **read-access declaration** are all **RFC 0007 §8.5**. The earlier hedge that fold evaluation "requires a kernel extension" is dissolved: `fold` is a native lawType with a closed graph-fixpoint evaluation capability. A node stores no scalar rank, cross-region or otherwise.
 
-A node stores no scalar rank; standing is **derived** as a fold over incoming edges. Per **RFC 0007 §14**, a reputation function computed at kernel/operator discretion is a forbidden fifth power; it MUST be a **data-defined law**. Therefore the fold **MUST** be specified as a `putDefinition(kind: "law", …)` in RFC 0007's versioned definition store (§3.4/§8.1) and amendable **only** via the RFC 0007 §8.3 amendment flow (procedure + timelock + objection window), inheriting objection-window applicability so the community can object before the first subject is judged under a new fold.
+What remains in this RFC is the **cross-region profile** — the rules deciding which *foreign* edges may enter a local fold, and at what snapshot:
 
-But a reputation fold is **not** one of RFC 0007 §8.2's three lawTypes. `constraint` blocks execution before preconditions, `penal` penalizes after effects, `trigger` schedules a command at tick boundaries; a fold does **none** of these — it returns a standing value on read. It also does not fit the RFC 0007 §8.1 `rule:{target, condition, effect}` shape. RFC 0008 therefore marks the definition with a distinct `derivation: "fold"` flavor and a `body` of fold parameters, and is explicit (§8.6) that **evaluating** it requires a kernel capability RFC 0007 does not yet have. All fold parameters live **in the law body** — not in code, not in region metadata:
+### 8.1 Admissible foreign inputs (MUST)
 
-```jsonc
-{ kind: "law", id: "law.reputationFold", version: 3, status: "active",
-  derivation: "fold",                     // NOT constraint|penal|trigger (RFC 0007 §8.2):
-                                          //   a read-time standing derivation, governed as a law,
-                                          //   evaluated by the §8.6 kernel-extension mode
-  body: {
-    contexts: ["nova:merchant", "nova:econtrust", "nova:display"],  // NON-SUFFRAGE only (§8.4)
-    seedAnchors: ["nova", "delta"],       // pre-trusted anchor set (a law parameter, not metadata)
-    anchorQuorumToChange: "proc.constitutional",  // amended via RFC 0007 §8.3
-    iterations: 20,                        // fixed iteration count (or an integer convergence predicate)
-    convergencePredicate: "maxDeltaBpLE:1",
-    perSourceCapBp: 3000,                  // bounded single-source marginal contribution
-    outDegreeNormalized: true,            // max-flow / Advogato-class propagation
-    decayPerSeq: { … },                   // decay curve
-    fixedPoint: "int64-bp"                 // fixed-point integer arithmetic (§8.5)
-  },
-  amendment: { procedure: "proc.constitutional", timelockTicks: 30 } }
-```
+A foreign edge enters a local fold only if all four hold:
 
-The old "anchor-set governance in region metadata" is **relocated into this law body** and amended via RFC 0007 §8.3.
+1. it **verifies** per §10.1 (self-verification: `edgeId` + `signature` + `suite` + the signer's KEL extract);
+2. its `schemaId` **and** `context` are **honor-mapped** for the deciding context (§10.2) — an unmapped context is rejected, so a `nova:merchant` edge cannot silently satisfy a `delta:econtrust` fold;
+3. it passes **proof-of-latest** within the bounded staleness window (§6.4); and
+4. it survives the **MMD anti-gerrymander bound** (§6.5).
 
-### 8.2 Sybil-resistant, bounded-influence fold (parameters in the law)
+High-magnitude foreign `sanction`s SHOULD additionally carry bonded stake and/or second-region co-attestation before entering a fold at full magnitude — issuance, clearing, and slashing remain RFC 0007 §9 / RFC 0004 §8.
 
-A naive sum-of-weights is trivially gamed by unilateral zero-cost edges. The fold weights each incoming edge by the **source's own derived standing** (the recursion), and additionally: uses **out-degree-normalized / max-flow (Advogato-class)** propagation with a **bounded per-source marginal contribution**; **dedups per `(from, to, kind, context)`** (at most one edge per tuple counts — the latest, non-revoked) and caps a source's total contribution across parallel edges; requires high-magnitude `sanction`s to carry bonded stake and/or second-region co-attestation (slashable if false — but issuance, clearing, and slashing are RFC 0007 §9 / RFC 0004 §8, not defined here); and seeds propagation at the **governed pre-trusted anchors** named in the law. **All of these are law parameters (§8.1), not code.**
+### 8.2 Snapshot discipline (MUST)
 
-```
-standing(context, S) = fixpoint over nodes of:
-  s(v) = base(v) + Σ_{ e ∈ counted-dedup(v, context, S) } project(e, context) · cap( s(e.from) )
-  seeded at the law's pre-trusted anchors; out-degree-normalized; per-source contribution bounded.
-```
-`project(e, context)` returns the signed context-scoped weight (already negative for sanctions; zero and ignored for pure-suffrage kinds, §4.4). A Sybil source with ~0 incoming standing contributes ~0; a no-standing accuser cannot defame; one high source is capped.
+A cross-region fold reads local edges at F (RFC 0007 §5.2) and foreign edges at the origin's most recent **multi-source-corroborated STR** (§6). Two regions computing the same subject's non-suffrage standing under the same law version and the same corroborated inputs MUST reach the same value — the RFC 0007 §8.5 determinism contract, extended over the corroboration layer.
 
-### 8.3 Projections are non-suffrage only
+### 8.3 Read access crosses regions with the edge (MUST)
 
-The old `equal|reputation|stake` triple is split at the suffrage boundary:
-
-- **`equal`** (one-ID-one-vote) is **removed from RFC 0008's projection menu** — it is RFC 0007's domain, unweighted, established via the binary `admitId`/`recordVouch`/`membership` admission artifacts (RFC 0007 §10.1) and exercised through RFC 0007 §7 decision procedures. RFC 0008 does not project it.
-- **`reputation`** — the source-weighted §8.2 fold, for **non-suffrage** economic/trust/display contexts.
-- **`stake`** — a holdings-magnitude signal (§11.1) for **non-suffrage** economic/display contexts only. **`stake` is deleted as a governance projection** (it directly contradicts RFC 0007 §13's rejection of stake-weighted voting).
-
-### 8.4 What counts, and the absolute suffrage boundary (MUST)
-
-`counted(context)` selects the edge kinds admissible in a **non-suffrage** context. A `merchant`/`econtrust` fold counts `vouch`, commerce-scoped `sanction`, and (cross-region) `capability`; `sanction` edges lower the fold; `membership` (a pure-suffrage unit) is **not** counted and its sentinel weight is ignored. **No fold output MAY be supplied as a weight to a governance-suffrage tally** — this is a normative invariant of RFC 0008, mirroring RFC 0007 §10.1/§13. Suffrage runs on RFC 0007's binary admission/identity artifacts and §7 procedures; RFC 0008's weight is economic/trust/exposure/display only.
-
-### 8.5 Fold determinism (MUST)
-
-The fold MUST be deterministic and replayable across regions: **fixed-point integer arithmetic** (no floats); a **fixed iteration count or an exact integer-comparable convergence predicate** with defined normalization; all edge state read at the single decision seq **F**; and all parameters (iteration count/threshold, normalization, per-source cap, seed anchors, decay) **bound to a snapshot seq** and carried **in the law body** (§8.1). The **authority** for these determinism rules is the data-defined law, not code or metadata: two regions computing the same subject's non-suffrage standing under the same law version reach the same value. Only the parameter *values* are policy; the determinism contract is normative.
-
-### 8.6 Evaluation is a named RFC 0007 §14 kernel-extension dependency (MUST)
-
-Because a graph fixpoint over incoming edges is outside RFC 0007's closed precondition vocabulary (§4.2, whose extension "is a kernel change (§14)") and has no evaluation point among the §8.2 lawTypes, RFC 0008 does **not** claim the fold runs on RFC 0007's existing law evaluator. Instead it declares a normative dependency on a **new kernel capability**, to be introduced under RFC 0007 §14 hard-fork governance:
-
-1. a **read-law/fold evaluation mode** that deterministically evaluates a `derivation:"fold"` definition at read time (at F, §7), returning a per-context standing value rather than blocking, penalizing, or scheduling; and
-2. a **graph-aggregation predicate class** (bounded, out-degree-normalized fixpoint over the incoming-edge set) added to the kernel's evaluation surface.
-
-Until that capability exists, an implementation MAY evaluate the fold as an **off-kernel deterministic computation over the finalized log** that any verifier replays from the same law body and the same edges at F — with only the fold's *parameters* stored as the `kind:law` definition, and no claim that the kernel itself computes it. Either way, the determinism (§8.5) and data-defined-law governance (§8.1) contracts are normative; the evaluation mechanism is the RFC 0007 §14 dependency, not a silently-assumed feature of the existing engine.
+RFC 0007 §8.5 makes per-context read access part of the fold law ("reading standing is itself an act of power"). Cross-region, this declaration MUST NOT be evadable through the §10.3 pull-from-authority index: the honor entry (§10.2) states **which contexts' standing a counterpart may evaluate**, and completeness proofs are scoped to those contexts. The tension between completeness (a subject cannot omit its sanctions) and graduated disclosure (not every counterpart may probe every context) is resolved per-context in the honor agreement, with one fixed point: **`sanction` edges are always pullable** (§10.5) — negative facts cannot be shielded by read policy, or cross-region diligence collapses.
 
 ## 9. Anti-equivocation defers to RFC 0007 intra-node
 
@@ -316,17 +276,17 @@ This is RFC 0008's primary owned scope: exactly the "bridge that appends a count
 
 ## 11. What an edge represents (read-model table)
 
-Every row is **data appended by an RFC 0007 primitive and folded by §8** — never a new write path.
+Every row is **data appended by an RFC 0007 primitive (RFC 0007 §10.5) and folded by RFC 0007 §8.5** — never a new write path.
 
 | Concept | Edge representation | Source primitive / fold effect |
 |---|---|---|
 | Received vouch / endorsement | `vouch`, positive `weightBp`, `context` | RFC 0007 §3.4 `recordVouch` (admission-vouching, binary; §4.4 weight is non-suffrage only) |
-| Power / standing / reputation | *not an edge* — the §8 fold | data-defined law by governance, read-time derivation by evaluation (RFC 0007 §14); derived, never stored |
-| Citizenship / one-ID | `membership`, co-signed, sentinel `weightBp:0` | RFC 0007 §10.1 admission; the **binary, unweighted** suffrage unit exercised via §7 procedures — RFC 0008 adds no weight |
+| Power / standing / reputation | *not an edge* — the RFC 0007 §8.5 fold law | derived at read time, never stored; discretionary reputation is a forbidden fifth power (RFC 0007 P9) |
+| Citizenship / one-ID | `membership`, co-signed, sentinel `weightBp:0` | RFC 0007 §10.1 admission; the **binary, unweighted** suffrage unit exercised via §7 procedures — no weight (RFC 0007 Tier K-7) |
 | Crime / criminal record | `sanction`, negative `weightBp`, magnitude downward-immutable except by §9 (§5.4) | representation of RFC 0007 §9 `suspendId`/`restrictCommands`; cleared only by a §9-authored clearing head (`reinstateId`/`liftRestriction`/expiry) |
 | Cross-region honoring | `connection`, co-signed | RFC 0004 Connection Agreement; asymmetry = a separate reverse edge |
 | Capability / power lending | `capability` — **cross-region only** (§10.6) | RFC 0006 boundary (RFC 0007 §14(iii)); intra-node authority is RFC 0007 §4.4 Roles |
-| Holdings as standing | **projected**, non-suffrage only (§11.1) | RFC 0003; feeds `stake`/economic signals — **never** a vote (RFC 0007 §13) |
+| Holdings as standing | **projected**, non-suffrage only (§11.1) | RFC 0003; feeds economic signals — **never** a vote (RFC 0007 Tier K-7/§13) |
 
 There is no RFC 0008-native command execution, penal semantics, or suffrage rule in this table; those are RFC 0007 §3–§10.
 
@@ -346,17 +306,17 @@ Sanction durability and Sybil resistance both rest on a subject being unable to 
 
 RFC 0008 is **subordinate to RFC 0007 (Command System v2)**. It is not a super-substrate governing RFC 0001/0003/0006.
 
-- **RFC 0007 (Command System v2) — the authority.** Commands, effect primitives, the four-power separation, penal law, intra-node finality/reorg (§5), governance procedures and suffrage (§7, §10.1), identity (§10.1), and Tier K invariants are RFC 0007's. RFC 0008 defers to all of them by citation and contributes only edges, weight, the hash chain, the reputation-law fold, and cross-region portability/sanction-pull.
+- **RFC 0007 (Command System v2) — the authority.** Commands, effect primitives, the four-power separation, penal law, intra-node finality/reorg (§5), governance procedures and suffrage (§7, §10.1), identity (§10.1), Tier K invariants, **and — since its §8.5/§10.5/Tier K-7 revision — the constitutional reputation layer formerly drafted here** (the fold law, the suffrage boundary, the edge read-model, derived standing as principle P9). RFC 0008 defers to all of them by citation and contributes only the wire format, the per-edge hash chain, and cross-region portability/sanction-pull.
 - **RFC 0001 / RFC 0003.** Their node-side roles are **mediated by RFC 0007**. Governance weighting/suffrage/snapshot (the old claim over RFC 0001 §4–§5) is RFC 0007 §5/§7/§10.1. Holdings-as-standing (RFC 0003) projects into **non-suffrage** signals only (§11.1); asset authority (mint/transfer/burn) is RFC 0007 §3.4.
 - **RFC 0004.** The Connection Agreement is a co-signed `connection` edge; revocations/clearings ride the existing RFC 0004 §9 gossip; slashing is RFC 0004 §8. RFC 0008 invents no parallel mechanism.
 - **RFC 0005.** Edges carry `suite`; verification order and MTI (`ed25519`) are RFC 0005; this matches RFC 0007 §5.1/§10.1. Region endpoints bind to the RFC 0005 region key (§4.3).
 - **RFC 0006.** Its capability model is **not** adopted intra-node (RFC 0007 §4.4); it survives here only as a cross-region `capability` edge (§10.6).
 
-The honest "edges are a read-model/substrate" claim is kept, but **scoped to reputation + cross-region**, deferring command definition, penal law, finality, suffrage, and identity to RFC 0007.
+The honest "edges are a read-model" claim now lives in RFC 0007 §10.5 itself; this RFC is **scoped to wire format + cross-region**, deferring everything else — including the fold and the suffrage boundary — to RFC 0007.
 
 ## 13. Mapping to vouch
 
-The existing signed vouch is already an `alma-edge/v1` of `kind: "vouch"`: vouch-core's Certificate (`alma-cert/v1`, JCS over all-but-`signature`, Ed25519, `suite: "ed25519"`) is the exact signing discipline §4.1 mandates, and the exact stance RFC 0007 §5.1/§10.1 takes on Suite IDs. The `alma.endorsement/v1` `{ of, weight: 1..5 }` maps to a `vouch` edge with `weightBp = round(weight/5 · 10000)`, consumed **only** by the non-suffrage reputation law (§8) — the admission-layer `recordVouch` stays binary and unweighted, and suffrage is exercised through RFC 0007 §7 (RFC 0007 §3.4/§10.1). `alma.endorsement/v1` SHOULD retire into the `vouch` edge; there MUST NOT be two conflicting `alma.*` weight domains. The node log that anchors edge heads is RFC 0007's single node log (§5); its acknowledged full-file-rewrite gap is closed by RFC 0007 §5.6 signed checkpoints — RFC 0008 adds only the cross-region STR map (§6).
+The existing signed vouch is already an `alma-edge/v1` of `kind: "vouch"`: vouch-core's Certificate (`alma-cert/v1`, JCS over all-but-`signature`, Ed25519, `suite: "ed25519"`) is the exact signing discipline §4.1 mandates, and the exact stance RFC 0007 §5.1/§10.1 takes on Suite IDs. The `alma.endorsement/v1` `{ of, weight: 1..5 }` maps to a `vouch` edge with `weightBp = round(weight/5 · 10000)`, consumed **only** by the non-suffrage reputation law (RFC 0007 §8.5) — the admission-layer `recordVouch` stays binary and unweighted, and suffrage is exercised through RFC 0007 §7 (RFC 0007 §3.4/§10.1). `alma.endorsement/v1` SHOULD retire into the `vouch` edge; there MUST NOT be two conflicting `alma.*` weight domains. The node log that anchors edge heads is RFC 0007's single node log (§5); its acknowledged full-file-rewrite gap is closed by RFC 0007 §5.6 signed checkpoints — RFC 0008 adds only the cross-region STR map (§6).
 
 ## 14. Security Considerations
 
@@ -369,14 +329,13 @@ Intra-node freshness/ordering/anti-equivocation/finality are **RFC 0007's** (§5
 - **Cross-region relationship fork.** Divergent-checkpoint detection is slashable (§6.3); bilateral kinds are structurally fork-proof by co-signature (§9). Intra-node forking is RFC 0007 §5.6 duplicity detection.
 - **Cross-region revocation/clearing/decay & pruning-neutralized negatives.** Anchored `status:"revoked"` tombstones (including §9-authored sanction clearings, §5.4) gossiped over RFC 0004 §9 + a fresh status list for high-urgency kinds; sanction magnitude is downward-immutable except by §9 (§5.4).
 - **Signature verification across key rotation.** A cross-region edge binds to the AID, not the signing key; verification requires the signer's RFC 0007 §10.2 KEL extract to travel with the edge (§5.5, §10.1) — a verifier MUST refuse an edge whose signing key it cannot resolve from an inclusion-proof-equipped KEL extract, rather than trusting the origin's live DB.
-- **Sybil edge-spam / bootstrapped collusion / high-standing griefing (in the fold).** Source-weighting + out-degree-normalized/max-flow with bounded per-source contribution + `(from,to,kind,context)` dedup/cap + governed pre-trusted anchors — **all as parameters of the reputation law** (§8.2, RFC 0007 §8/§14); bonded/second-region co-attestation for high-magnitude sanctions is issued/cleared/slashed by RFC 0007 §9 / RFC 0004 §8.
+- **Sybil edge-spam / bootstrapped collusion / high-standing griefing (in the fold).** Source-weighting + out-degree-normalized/max-flow with bounded per-source contribution + `(from,to,kind,context)` dedup/cap + governed pre-trusted anchors — **all as parameters of the RFC 0007 §8.5 reputation law**; bonded/second-region co-attestation for high-magnitude foreign sanctions (§8.1) is issued/cleared/slashed by RFC 0007 §9 / RFC 0004 §8.
 - **Suite downgrade / omission.** Reject `suite ∉ agreedSuites` before any crypto; never infer the algorithm from key material (§4.1; RFC 0007 §5.1).
 
 **Inherited residuals (not RFC 0008 defects):**
 
 1. **Fresh unlinked new ID (sanction evasion by discontinuity).** RFC 0007 §10.1 admission + voucher liability; cross-region sanction-pull (§10.5) covers disclosed prior identifiers. Tracked as RFC 0007's residual, not the edge layer's.
 2. **Non-equivocation for unilateral kinds is detection, not prevention.** Intra-node: RFC 0007 §5.6 duplicity detection. Cross-region: RFC 0008 §6.3 detection contingent on gossip liveness.
-3. **Fold-evaluation kernel capability.** The `derivation:"fold"` read-law mode and graph-aggregation predicate class (§8.6) are an RFC 0007 §14 kernel-change dependency; until introduced, off-kernel deterministic replay stands in. Tracked as a shared RFC 0007/RFC 0008 dependency, not an edge-layer defect.
 
 **Shared unowned gap — hash-function agility.** RFC 0008's edge hashes (`edgeId`/sha256, STR root, per-edge MMR accumulator) share the hash-agility gap RFC 0007 §14 flags as "owned by neither document." RFC 0008 **names it explicitly** and does not silently hard-wire sha256. **Recommended:** introduce a `hashSuite` tag on edge hashes parallel to the RFC 0005 signature-suite registry (an immutable append-only hash-suite registry, MTI `sha256`, never inferred). **Otherwise:** defer explicitly to a future *joint* hash-suite registry shared with RFC 0007 §14. Either way the gap is owned jointly and MUST NOT be treated as closed.
 
@@ -387,15 +346,15 @@ A conforming implementation MUST:
 1. represent relationships as `alma-edge/v1` edges signed per §4.1 (JCS over the core = all fields except `signature`/`cosign`/`anchor`; Ed25519; `version`+`suite`+every core field present; `weightBp` an integer; `edgeId = sha256_hex(canonicalBytes(core))`; `genesis` carrying the genesisId), aligned to RFC 0007 §5.1/§10.1 (Suite ID never inferred; SAID-class content address);
 2. enforce the closed `kind` enum, per-kind endpoint legality with **type-correct identity binding** (agent → RFC 0007 §10.1 AID; bare region → RFC 0005 region key, §4.3), region-namespaced non-suffrage `context`, and per-kind consent (`cosign` for `membership`/`connection`, §4.6);
 3. maintain each edge's `prev`/`counter`/`genesis` micro-chain of a **fixed `(from,to,kind)` triple**, rejecting bad `prev`/`genesis`, non-monotone `counter`, and any endpoint change (§5.1–§5.3);
-4. compute node standing **only** as the **data-defined-law fold** — a `putDefinition(kind:law, derivation:"fold", …)` governed and amended via RFC 0007 §3.4/§8.1/§8.3 with objection windows, **not** claimed to run on an RFC 0007 §8.2 lawType — source-weighted, bounded-influence, Sybil-resistant, deterministic (fixed-point integer, params in the law body bound to a snapshot seq), read at F (§8, RFC 0007 §5.2), evaluated via the §8.6 kernel-extension mode or an equivalent off-kernel deterministic replay — never a stored scalar; dedup/cap per `(from,to,kind,context)`;
-5. confine all weight to **non-suffrage** contexts, set sentinel `weightBp:0` (ignored) on pure-suffrage kinds, and never supply a fold output as a weight to a governance-suffrage tally (§4.4, §8.4; RFC 0007 §10.1/§13);
+4. compute node standing **only** via the RFC 0007 §8.5 fold law (`lawType: "fold"`, governed and amended via RFC 0007 §8.1/§8.3, deterministic, read at F) — never a stored scalar — and, cross-region, admit foreign inputs only per this RFC's §8.1–§8.3 (verification, honor-mapped context, proof-of-latest, MMD, corroborated-STR snapshot, read-access scoping);
+5. confine all weight to **non-suffrage** contexts, set sentinel `weightBp:0` (ignored) on pure-suffrage kinds, and never supply a fold output as a weight to a governance-suffrage tally (§4.4; RFC 0007 Tier K-7);
 6. represent `sanction` edges as RFC 0007 §9 outputs only — issued via §9, and cleared only by a §9-authored clearing head (`reinstateId`/`liftRestriction`) or expiry, with magnitude downward-immutable except by that §9 head — defining **no** RFC 0008 pardon path (§5.4);
 7. on any cross-region decision, demand a multi-source-corroborated lookup-proof-of-latest within a bounded per-context staleness window, consult the tombstone list for high-urgency kinds, enforce MMD anti-gerrymander on non-suffrage cross-region folds, and fail closed (§6, §10.4);
 8. fold cross-region over a pull-from-authority set with an authenticated target-keyed range proof, never a subject-curated bundle (§10.3);
 9. treat cross-region `capability` as the sole capability form, preserving RFC 0006 §5.3 monotonic narrowing via `parent`, and model **no** intra-node possessable capability (§4.7, §10.6; RFC 0007 §4.4);
 10. verify foreign edges from `edgeId` + `signature` + `suite` + the signer-AID's RFC 0007 §10.2 KEL extract under the RFC 0006 §3 invariant, subject to RFC 0004 honoring on `schemaId` **and** `context` (§10.1–§10.2).
 
-A conforming implementation MUST NOT: store a node's power/reputation as a scalar; compute reputation at kernel/operator discretion rather than via the data-defined law (RFC 0007 §14); mislabel the fold as an RFC 0007 §8.2 constraint/penal/trigger lawType or assume the existing §8 evaluator runs it (§8.6); weight a governance vote with any edge weight (RFC 0007 §13); define a new punish/clear/pardon path (defer to RFC 0007 §9); reinvent intra-node finality, ordering, or anti-equivocation (defer to RFC 0007 §5); read a foreign `seq` as a global clock; claim signature-alone verification while binding to a rotating-key AID (require the KEL extract, §10.1); include `anchor`/`cosign`/`kel` in `edgeId` or the `from` signature; encode `weightBp` as a float; model an intra-node possessable capability; or invent a revocation/gossip mechanism parallel to RFC 0004 §9.
+A conforming implementation MUST NOT: store a node's power/reputation as a scalar; compute reputation at kernel/operator discretion rather than via the RFC 0007 §8.5 fold law; restate, fork, or locally amend the fold's constitutional contract (it is RFC 0007 §8.5's — this RFC owns only the cross-region input profile, §8); weight a governance vote with any edge weight (RFC 0007 Tier K-7/§13); evade a counterpart's read-access declaration via the pull-from-authority index (§8.3); define a new punish/clear/pardon path (defer to RFC 0007 §9); reinvent intra-node finality, ordering, or anti-equivocation (defer to RFC 0007 §5); read a foreign `seq` as a global clock; claim signature-alone verification while binding to a rotating-key AID (require the KEL extract, §10.1); include `anchor`/`cosign`/`kel` in `edgeId` or the `from` signature; encode `weightBp` as a float; model an intra-node possessable capability; or invent a revocation/gossip mechanism parallel to RFC 0004 §9.
 
 ## 16. Test vectors (normative)
 
@@ -451,7 +410,7 @@ cosign["bob@nova"]= rdi37Iyj9zlQD+0HGanbYZ+vjBtGOCrMqHpks+MDn+fmCBlmgZtzorR3QBVL
 
 ## 17. Worked example (informative)
 
-A `nova:merchant`-context vouch `alice@nova → bob@nova` evolves `0.5 → 0.7 → revoked` (V0/V1/V2) over a **fixed `(from,to,kind)` triple**; a region sanction (V3) representing an RFC 0007 §9 output lands on `bob@nova`; and the reputation law (§8) folds `bob@nova`'s **non-suffrage** merchant standing. All figures are in the mandated basis-point integer domain (§8.5, `fixedPoint:"int64-bp"`).
+A `nova:merchant`-context vouch `alice@nova → bob@nova` evolves `0.5 → 0.7 → revoked` (V0/V1/V2) over a **fixed `(from,to,kind)` triple**; a region sanction (V3) representing an RFC 0007 §9 output lands on `bob@nova`; and the reputation law (RFC 0007 §8.5) folds `bob@nova`'s **non-suffrage** merchant standing. All figures are in the mandated basis-point integer domain (RFC 0007 §8.5, `fixedPoint:"int64-bp"`).
 
 Each edge state is on RFC 0007's node log (V0@412, V1@640, V2@815, V3@700), finalized under RFC 0007 §5.2; the cross-region STR (§6.2) commits `map[6cc8…] = a996…1ef7` at counter 2. A holder presenting V1 (weightBp 7000) to a foreign region **fails** proof-of-latest — the corroborated STR shows counter 2 > 1 (§6.4).
 
@@ -462,7 +421,7 @@ counted-dedup("nova:merchant") at F:
   - nova→bob sanction: V3, weightBp -4000, s(nova)=10000 bp → -4000 · (10000/10000) = -4000 bp
 standing(bob, "nova:merchant") = base(bob)=0 + 0 + (-4000) = -4000 bp   (= -0.40)
 ```
-This is a **non-suffrage** economic/display figure; it never enters a governance tally (§8.4). Reading the vouch at V1 (+5600 bp) would be a stale read: V2 is finalized ≤ F, so §7 selects V2. Were `bob` to re-register under a new identifier to shed the −4000 bp, RFC 0007 §10.1 admission + cross-region sanction-pull (§10.5) re-attach the person-level sanction — the residual is RFC 0007's, not the edge layer's.
+This is a **non-suffrage** economic/display figure; it never enters a governance tally (RFC 0007 Tier K-7). Reading the vouch at V1 (+5600 bp) would be a stale read: V2 is finalized ≤ F, so §7 selects V2. Were `bob` to re-register under a new identifier to shed the −4000 bp, RFC 0007 §10.1 admission + cross-region sanction-pull (§10.5) re-attach the person-level sanction — the residual is RFC 0007's, not the edge layer's.
 
 ## 18. Open Questions
 
@@ -474,13 +433,13 @@ RFC 0008 owns only the following; identity strength, intra-node finality, suffra
 4. **Non-suffrage holdings encoding (§11.1).** Read-time `AssetSlice` projection vs. an explicit bare-region-sourced asset edge — for the **non-suffrage** economic/display signal only (the `stake` governance projection is deleted per RFC 0007 §13).
 5. **Cross-region STR / verifiable-map profile (§6.2).** CONIKS-style prefix tree vs. tiled log + separate map, and the per-edge history accumulator profile — an encoding decision; the map/lookup/absence property is normative.
 6. **Hash-suite tag vs. joint deferral (§14).** Adopt a `hashSuite` tag parallel to the RFC 0005 registry, or defer to a joint hash-suite registry shared with RFC 0007 §14. The gap must not be left silently hard-wired.
-7. **Shape of the RFC 0007 §14 fold-evaluation kernel extension (§8.6).** The exact `derivation:"fold"` evaluation-mode API and the graph-aggregation predicate class are an RFC 0007 kernel-change item co-owned with RFC 0007; until landed, off-kernel deterministic replay is the interim. What is the minimal predicate surface that keeps evaluation deterministic and auditable?
+7. **Granularity of cross-region read-access mapping (§8.3).** Per-context honor entries vs. per-kind defaults; whether display contexts should ever be honorable cross-region; and how a counterpart proves it evaluated only the contexts it was granted. Sanctions stay always-pullable regardless.
 
 ## 19. Non-goals
 
 - Command definition/execution, the four-power separation, penal/criminal law, intra-node finality/reorg, suffrage, and identity — all **RFC 0007 (Command System v2)**.
 - Intra-node ordering, anti-equivocation, snapshots, and anchoring — RFC 0007 §5/§5.6.
 - The person-level identity-binding mechanism and the "fresh unlinked ID" admission problem — RFC 0007 §10.1 (§11.2, §14).
-- The kernel evaluation mechanism for the fold — an RFC 0007 §14 kernel-change dependency (§8.6); RFC 0008 owns only the fold's *governed data-defined law form and determinism contract*, not the engine that runs it.
-- The Merkle/verifiable-map wire-encoding of cross-region head-checkpoints (§6.2) and the exact fold parameter *values* (§8) — implementation/law-configuration profile. *(The map/lookup/absence property and the determinism-and-data-defined-law contract are normative.)*
+- The fold's constitutional and evaluation contract — native `lawType: "fold"`, determinism, Sybil parameters, read-access declaration, suffrage boundary — all **RFC 0007 §8.5 / Tier K-7**; this RFC owns only the cross-region input profile (§8).
+- The Merkle/verifiable-map wire-encoding of cross-region head-checkpoints (§6.2) and the exact fold parameter *values* (RFC 0007 §8.5) — implementation/law-configuration profile. *(The map/lookup/absence property is normative.)*
 - Real-money settlement and the internal region authorization mechanism — RFC 0004/0006 non-goals carry over.

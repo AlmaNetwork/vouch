@@ -17,4 +17,4 @@ Three buckets keep the design legible:
 |-----|-------|--------|
 | [0001](0001-region-governance-and-decision-sot.md) | Region governance & decision source-of-truth | Draft |
 | [0002](0002-observation-of-emergent-regime.md) | Observation of the emergent regime | Draft stub |
-| [0008](0008-relationship-edges.md) | Relationship edges & reputation substrate | Draft |
+| [0008](0008-relationship-edges.md) | Relationship edges: wire format & cross-region portability (constitutional layer absorbed into RFC 0007) | Draft |
