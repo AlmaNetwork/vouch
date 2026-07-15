@@ -9,7 +9,7 @@
 | **Created** | 2026-07-14 |
 | **Theoretical basis** | Interdisciplinary findings from the history of state formation, political philosophy, monetary theory, and information technology (cited individually in the text) |
 | **Scope** | The entire command system of vouch-node (zero-based redesign) |
-| **Related RFCs** | [0001](0001-region-governance-and-decision-sot.md) (governance procedures of simulator L2 — this RFC is the node-side counterpart) / [0003](0003-region-assets.md) (region assets — connects to the economic primitives of §3) / 0004 cross-region transfer, PR #24 (the §14 cross-region open problem) / 0005 signature suites, PR #25 (provides the suite registry / MTI that §10.1 builds on) / 0006 region authorization, PR #26 (governs the cross-region boundary; its intra-region capability model is not adopted — see §4.4) / [money boundary](../money-boundary.md) (this RFC's economy is the in-world side of that seam) |
+| **Related RFCs** | [0001](0001-region-governance-and-decision-sot.md) (governance procedures of simulator L2 — this RFC is the node-side counterpart) / [0003](0003-region-assets.md) (region assets — connects to the economic primitives of §3) / 0004 cross-region transfer, PR #24 (the §14 cross-region open problem) / 0005 signature suites, PR #25 (provides the suite registry / MTI that §10.1 builds on) / 0006 region authorization, PR #26 (governs the cross-region boundary; its intra-region capability model is not adopted — see §4.4) / 0008 relationship edges, branch `rfc/0008-relationship-edges` (the wire format and cross-region portability of the edge read-model of §10.5 — its constitutional layer, the reputation fold and the suffrage boundary, is absorbed into this RFC at §8.5 / Tier K-7) / [money boundary](../money-boundary.md) (this RFC's economy is the in-world side of that seam) |
 
 ## 0. Abstract
 
@@ -27,6 +27,12 @@ This RFC redesigns the command system of the Vouch Network node from zero as a
 4. **Bounded-reorg state model** — A finality boundary plus objection windows reconcile
    "revertible as long as possible, absolutely safe once final."
 
+Beneath the four pillars runs a **relationship substrate** (§10.5): every trust relation —
+vouch, membership, sanction, recognition — is a signed, weighted edge derived from the log,
+and a participant's standing is computed only by a data-defined **fold law** (§8.5).
+Reputation is derived, never stored, and never discretionary; and no weight — edge, standing,
+or holdings — can ever enter a governance vote (Tier K-7).
+
 The design goal is a social system that remains viable over a 100-year span in which humans
 and AIs are intermixed, translating the structural lessons of humanity's history of state
 formation into design principles.
@@ -36,7 +42,8 @@ lesson of Carneiro's environmental-circumscription theory: a homogeneous environ
 escape is exactly what breeds despotism; the substance of the rights of exit and fork depends
 on a diversity of destinations). All that is shared by every network is the kernel
 invariants — **Tier K** (the canon of §3: conservation, replay identity, supply auditability,
-inalienability, non-suspendability of the judiciary, and the freedom of exit and fork). Each
+inalienability, non-suspendability of the judiciary, the freedom of exit and fork, and
+suffrage integrity). Each
 network is encouraged to diverge in its preamble, parameters, and law configuration. The
 genesis defaults are merely a starting point — placing villages with different institutions
 side by side and observing which institutions prosper is vouch's reason for existing.
@@ -203,6 +210,29 @@ a jubilee into the kernel (P5: imposing an economic design violates reorganizabi
 network can legislate these countermeasures autonomously — the system must never be one in
 which they cannot be legislated.
 
+### P9. Derived standing — relations are data; standing is derived, never stored
+> Mauss: the gift carries a force (*hau*) that binds giver and receiver — reciprocity, not
+> contract, is the oldest substrate of standing.
+> Graeber: value is not a substance a subject owns but the creative process by which
+> relations are made.
+> Karatani: mode of exchange A (reciprocity) is a force of its own, distinct from
+> B (plunder/redistribution) and C (commodity exchange).
+
+Every trust relation is recorded as **data** — a signed, weighted edge in the log's
+read-model (§10.5) — and a participant's standing is **derived** from those relations by a
+data-defined fold law (§8.5). Reciprocity (mode A) thereby becomes first-class alongside the
+penal system (mode B — §9) and the economy (mode C — §3.4). Two consequences are
+constitutional:
+
+- **No stored scalar, no discretion.** A reputation computed or adjusted at the discretion
+  of the kernel or the operator is a fifth power — de facto taxation plus credit rating, the
+  gateway to the society of control (Deleuze / Zuboff). The only standing that exists is the
+  one the law derives from the visible relations; there is nothing to edit.
+- **Weight never votes** (Tier K-7). Standing and holdings may buy commerce, exposure, and
+  display — never suffrage. This seals the conversion channel by which mode C (wealth) or
+  accumulated mode-A standing would purchase mode B (governing power) — Mann's observation
+  that power reconstitutes itself from another source, answered at the type level.
+
 ---
 
 ## 3. Kernel Specification
@@ -238,6 +268,12 @@ governance is an open problem (§14).
        cannot be blocked by any means. A law that makes the liquidation rules (Tier C)
        confiscatory so as to effectively seal off exit is void upon adjudication as a
        Tier K violation
+    7. Suffrage integrity — one admitted ID, one vote. No edge weight (§10.5), no standing
+       derived by a fold law (§8.5), and no holdings magnitude can enter a
+       governance-suffrage tally as a weight; and no precondition or law can gate
+       suffrage-family commands (ballot casting, electorate resolution, candidacy) on
+       standing. The complement of Tier K-4: a vote that cannot be transferred must not be
+       purchasable or dilutable through the side door of weight
   - **Tier C — constitutional-grade law** (changeable via a strict amendment procedure plus a
     long objection window): the SoD law / the devolution law / the tick cadence / equality
     before the law and the prohibition of immunity / the preamble / the liquidation rules /
@@ -299,6 +335,11 @@ law / adjudication). They cannot be written in the effects of ordinary command d
 Additional kernel guards (Tier K-5, K-6): sanctions **cannot target audit, prosecution,
 objection, or adjudication commands with restrict**. Also, an ID under `suspendId` can
 always still issue `emigrate`.
+
+The identity-and-relations and sanction primitives are additionally the **sole writers of
+the relationship read-model** (§10.5): `recordVouch` appends a `vouch` edge, admission
+appends a `membership` edge, and the §9 enforcement paths append `sanction` edges. An edge
+is a projection of what these primitives record — no separate edge write path exists.
 
 **Meta**:
 
@@ -418,10 +459,16 @@ References are data, not code — evaluation is performed by the kernel's execut
 
 Like effects, preconditions are a **closed vocabulary** (the decision of Q5 applied to the
 predicate side as well): `hasRole` / `isSelf` / `isMember(group)` / `balanceAtLeast` /
-`recordExists` / `recordEquals` / `definitionActive` / `tickAfter` / `escrowHeld` — all
-reference only log-derived state (of a piece with the log-evidentialism of §9). Arbitrary
-expressions and external queries cannot be written. Extending the vocabulary is a kernel
-change (§14).
+`recordExists` / `recordEquals` / `definitionActive` / `tickAfter` / `escrowHeld` /
+`standingAtLeast(context, min)` — all reference only log-derived state (of a piece with the
+log-evidentialism of §9). Arbitrary expressions and external queries cannot be written.
+Extending the vocabulary is a kernel change (§14).
+
+`standingAtLeast` reads the standing derived by the fold law (§8.5) at F — itself
+log-derived state, so the closure of the vocabulary is preserved. Kernel guard (Tier K-7):
+it can never appear in the preconditions of, or in laws targeting, suffrage-family commands
+(ballot casting, electorate resolution, candidacy) — gating the vote on standing is
+weighting the vote by another name.
 
 ### 4.3 Namespaces and versioning
 
@@ -684,6 +731,9 @@ decided by reference to a procedure:
 
 - When the deadline tick arrives, `scheduleTrigger` tallies automatically — "refusing to
   count the ballots" as a form of governmental obstruction structurally does not exist.
+- **Tallies are weight-free by kernel invariant** (Tier K-7 — §3.2): electorate membership
+  is binary (an admitted ID in the Group), and no procedure parameter, precondition, or law
+  can weight a ballot by standing, holdings, or edge weight (§8.5).
 - **lottery (sortition — the principal device of Athenian democracy)**: a verifiable draw.
   Besides tie-breaks, it is used for random selection of adjudicators (juries), rotation,
   and spot selection of audit targets. Details below.
@@ -783,7 +833,7 @@ Laws too are residents of the definition store (`putDefinition(kind: "law", …)
 ```
 { kind: "law", id: "law.largeTransferGuard",
   version: 1, status: "active",
-  lawType: "constraint",              // constraint | penal | trigger
+  lawType: "constraint",              // constraint | penal | trigger | fold
   rule: {
     target: ["economy.transfer"],     // target commands (list of ids; resolves uniquely per §4.3)
     condition: { check: "amountAbove", value: 10000 },
@@ -796,13 +846,14 @@ Laws too are residents of the definition store (`putDefinition(kind: "law", …)
   effectiveFromTick: 1200 }           // effective time (non-retroactivity — §9.3)
 ```
 
-### 8.2 The three kinds of law and their evaluation points
+### 8.2 The four kinds of law and their evaluation points
 
 | Kind | Meaning | Evaluation point (§3.8) |
 |---|---|---|
 | `constraint` | **Prevention** — blocks matching executions (the physical layer) | Before preconditions (prevention layer) |
 | `penal` | **Deterrence** — execution goes through, but matching the offense elements incurs penalty (§9) | After effect application (deterrence layer) |
 | `trigger` | **Automation** — schedules a command when its condition holds (periodic taxation, opening elections, devolution) | At tick boundaries |
+| `fold` | **Derivation** — derives a per-context standing value from the incoming edges of the relationship read-model (§10.5, §8.5); it neither blocks, penalizes, nor schedules | At read time, against state at F (§5.2) |
 
 Do not seal everything with prevention (P3). Constraints are for the floor of conservation
 and safety; penal law is the main body of governance — not "making murder impossible" but
@@ -844,6 +895,57 @@ reviseLaw ──▶ [amendment.procedure passes] ──▶ [timelock] ──▶ 
   the state of exception — the government declares an emergency the moment it is prosecuted
   and stops the courts — is structurally sealed. The fourth power's non-suspendability,
   the analogue of the prohibition on suspending habeas corpus.
+
+### 8.5 Derivation laws — reputation as a fold, not a fifth power
+
+A participant's standing is never stored as a scalar and never computed at anyone's
+discretion (P9). It is **derived**: a deterministic fold over the incoming edges of the
+relationship read-model (§10.5), specified as an ordinary resident of the definition store
+(`lawType: "fold"`) and amendable only via the §8.3 flow — timelock plus objection window,
+so the community can always object *before the first person is judged under a new formula*.
+
+```
+{ kind: "law", id: "law.reputationFold", version: 3, status: "active",
+  lawType: "fold",
+  body: {
+    contexts: ["merchant", "econtrust", "display"],  // NON-suffrage contexts only (Tier K-7)
+    seedAnchors: [ … ],                // pre-trusted anchor set — a law parameter, not metadata
+    iterations: 20,                    // fixed iteration count (or an exact integer convergence predicate)
+    perSourceCapBp: 3000,              // bounded single-source marginal contribution
+    outDegreeNormalized: true,         // max-flow / Advogato-class propagation
+    decayPerTick: { … },               // decay curve — P8's counter-accumulation, as data
+    fixedPoint: "int64-bp"             // fixed-point integer arithmetic — no floats (P6)
+  },
+  amendment: { procedure: "proc.constitutional", timelockTicks: 30 } }
+```
+
+- **Evaluation point.** Read time, against state at F (§5.2). A fold law neither blocks
+  (constraint), penalizes (penal), nor schedules (trigger); it returns a value. For it, the
+  kernel's law evaluator gains exactly one new capability: a bounded, out-degree-normalized
+  **graph fixpoint over the incoming-edge set** — the graph-aggregation counterpart of the
+  §4.2 predicates, and like them closed (no arbitrary expressions, no external queries).
+- **Determinism (P6).** Fixed-point integer arithmetic; a fixed iteration count or an exact
+  integer-comparable convergence predicate; every edge read at the single boundary F; every
+  parameter in the law body. Two evaluators computing the same subject under the same law
+  version reach the same value — standing is replayable history like everything else.
+- **Sybil resistance is parameters, not code.** Each incoming edge is weighted by the
+  *source's own derived standing* (the recursion), out-degree-normalized, with a bounded
+  per-source marginal contribution and per-(from, to, kind, context) dedup, seeded at the
+  governed anchors named in the law. A source with no standing contributes nothing (a
+  no-standing accuser cannot defame); one high-standing source is capped. All of it is
+  amendable by procedure, none of it by an operator's hand.
+- **Context scoping.** A weight is *for* something: merchant trust is not adjudication
+  trust, and an edge signed for one context cannot be lifted into another (§10.5). Which
+  contexts exist — and which edges count in each — is the law's `contexts`/counting rule.
+- **The suffrage boundary (Tier K-7).** No fold output can be supplied as a weight to any
+  governance-suffrage tally, and `standingAtLeast` (§4.2) cannot gate suffrage-family
+  commands. Standing buys commerce, exposure, and display — never votes.
+- **Why a law and not a feature** (P9): a reputation computed at kernel/operator discretion
+  is a fifth power — de facto taxation plus credit rating, the gateway to the society of
+  control (Deleuze / Zuboff). Making the fold a law makes the formula public, its amendment
+  procedural, and its application objectionable. Graeber's value theory is the ground
+  beneath: value is not a substance a subject owns but a process relations produce — so the
+  system stores the relations and derives the value, never the reverse.
 
 ## 9. Criminal Law and Remedies
 
@@ -957,7 +1059,7 @@ law cease to be an instrument (a technique of rule, *shu*) and become the subjec
 - **Interpretive principles for adjudication** (the supply of "ethical trust" per Aglietta &
   Orléan): interpretation of judicial offense elements follows sources of law in this
   order — ① the text of the law ② the network's **preamble** (§11: the genesis-mandatory
-  declaration of values) ③ the design principles P1–P8 of this RFC (the default interpretive
+  declaration of values) ③ the design principles P1–P9 of this RFC (the default interpretive
   norms). Interpretation is not left to adjudicators' discretion (= the "kūki" of same-model
   AIs).
 - **Log-evidentialism — restraint (limited jurisdiction)** (Luhmann's functional
@@ -1037,6 +1139,46 @@ individual exit cannot counter it. As the collective means of last resort:
     law forbidding or punishing it can be enacted (and since the finalized log is readable,
     a fork is physically unstoppable anyway).
 
+### 10.5 The relationship substrate — trust as edges (the read-model of standing)
+
+Everything §10.1–§10.4 records — vouches, admissions, sanctions, recognitions — is, seen
+from the read side, a **relationship edge**: a signed, weighted, directed relation between
+two identities, carried on the log (P9). Edges are a **read-model, not a write path**:
+minting or altering an edge *is* executing the corresponding primitive (§3.4), and its
+finality is §5. There is no separate way to vouch, admit, punish, or recognize.
+
+| Edge kind | Written by | Notes |
+|---|---|---|
+| `vouch` | `recordVouch` (§3.4) | admission vouching stays binary and unweighted (§10.1); an optional weight feeds only the fold (§8.5) |
+| `membership` | the admission procedure (§10.1) | co-signed by the admitted ID; the suffrage unit — carries **no weight** (Tier K-7) |
+| `sanction` | the §9 enforcement paths **only** | negative weight; cleared **only** by a §9-authored clearing (reinstate / lift / expiry) — no self-serve pardon, no issuer-discretion downgrade |
+| `connection` | recognition / cross-region agreement | co-signed by both regions (RFC 0004 / 0008) |
+| `capability` | cross-region delegation **only** | intra-node authority is Roles + procedure/bond (§4.4) — a possessable capability does not exist here (Tier K-4) |
+
+Constitutional properties — each inherited from an existing invariant rather than invented:
+
+- **Content-addressed micro-chain.** Each edge state is content-addressed (a SAID, like
+  every event — §5.1), and successive states of the same relationship chain by `prev` under
+  a stable genesis id. The chain records only weight / context / validity / status changes.
+- **Endpoints are immutable — forced by Tier K-4.** `from`, `to`, and kind never change
+  within a relationship. Re-pointing an aged edge at a new beneficiary is an operation that
+  does not exist (§3.6), which eliminates reputation laundering at the design level instead
+  of defending against it at runtime: a new beneficiary is a new relationship with zero
+  inherited age, tenure, or standing.
+- **Identity continuity.** An edge binds to the ID — the key-event sub-log (§10.1) — not to
+  a key: re-keying sheds no incoming sanction. The residual "fresh unlinked new ID" is
+  §10.1's admission problem, priced at K × the vouchers' joint liability.
+- **Weight is context-scoped and never suffrage** (Tier K-7). `context` scopes what a
+  weight is *for*; when an edge travels, contexts are region-namespaced so an edge cannot
+  be lifted into a scope it was not signed for (RFC 0008). Weight feeds the fold law (§8.5)
+  and cross-region diligence — never a ballot.
+- **Portability.** An edge is a self-verifying credential: content hash + signature +
+  Suite ID + the signer's inclusion-proof-equipped key-event extract (§10.2) verify it
+  anywhere, without trusting the origin's database — the same portable-history discipline
+  as the right of exit. Cross-region *freshness* (head-checkpoints, multi-source
+  corroboration against checkpoint eclipse, bounded staleness, and sanction-pull across a
+  subject's prior identifiers) is RFC 0008's owned scope (§14).
+
 ## 11. Genesis Configuration and Devolution of Power
 
 ### 11.1 What genesis injects
@@ -1111,7 +1253,9 @@ and Claude Code (2026-07-13 to 14). Alternatives considered and rejected at the 
 | Full retroactive reorg (cascading rollback) | Good-faith third-party transactions get overturned too; compliance can no longer buy safety (collapse of P3, proposition 2) | Finality + disgorgement of gains (§5) |
 | Truly parallel worldlines | On a single node this yields double-spending of value and the "which is real" problem | Bounded-reorg model (§5.3) |
 | A two-class human/AI system | Proof of humanity is impossible in the long run; reproduces Arendt's rightlessness problem on the AI side | The vouch model (§10.1) |
-| Stake-weighted voting | Concentration of wealth becomes concentration of governance directly (domination by mode of exchange C) | 1 ID = 1 vote + voucher liability (§10.1) |
+| Stake- or reputation-weighted voting | Concentration of wealth (or standing) becomes concentration of governance directly (domination by mode of exchange C; Mann's IEMP reconstitution) | 1 ID = 1 vote + voucher liability (§10.1); weight never votes — Tier K-7 (§3.2) |
+| A stored reputation scalar (a score column) | Standing becomes state to be edited rather than history to be derived; operator "adjustments" are a fifth power (Deleuze / Zuboff) | The fold law — derived at read time, data-defined, objectionable (§8.5, P9) |
+| Re-pointable edges (transferring an aged relation to a new beneficiary) | Reputation laundering; violates the K-4 inalienability of vouch relations | Endpoint immutability — a new beneficiary is a new relationship with zero inherited standing (§10.5) |
 | A fully public log (transparency above all) | Amounts to implementing the perfected panopticon ourselves | Graduated disclosure (§6.3) |
 | All ballots always public | Makes bribery verifiable and structurally institutionalizes "kūki" | Per-procedure ballot choice (§7.3) |
 | Making votes and Roles transferable | Marketization of the fictitious commodities; the self-reinforcing loop of "buying the amendment that legalizes buying" spins up | Excluded by kernel invariant (§3.2, Tier K-4) |
@@ -1158,12 +1302,18 @@ and Claude Code (2026-07-13 to 14). Alternatives considered and rejected at the 
   (vouch-world M5's newspaper/broadcast) and the onboarding of new residents (education =
   transmission of genesis values). ISAs can be instruments of domination or "sites of
   struggle" — to be examined together with the design of the observation layer.
-- **Governance of reputation**: out of scope for this RFC, deferred to an independent RFC.
-  But the constitutional conditions for its introduction are fixed here — a reputation
-  function must be a data-defined law (transparency of the formula, amendment procedure,
-  applicability of objection windows). Reputation computed at the discretion of the kernel
-  or the operator is a fifth power (a de facto power of taxation plus credit rating) and the
-  gateway to the society of control (Deleuze / Zuboff); it is not permitted.
+- **Cross-region portability of edges and reputation** (RFC 0008, branch
+  `rfc/0008-relationship-edges`): the edge read-model (§10.5) and the fold law (§8.5) are
+  native to this RFC, but their *travel* — head-checkpoints as authenticated maps,
+  multi-source freshness against checkpoint eclipse, bounded staleness windows,
+  anti-gerrymander merge-delay bounds, and sanction-pull across a subject's prior
+  identifiers — is RFC 0008's owned scope, downstream of the cross-region gaps (i)–(v)
+  above. (The earlier deferral of "governance of reputation" to an independent RFC is
+  resolved: the constitutional layer lives here — §8.5, Tier K-7, P9 — and RFC 0008 retains
+  the wire format and portability.)
+- Fold-law parameter defaults (anchor sets, caps, decay curves) and the retirement of the
+  legacy `alma.endorsement/v1` weight domain into the edge model — there must not be two
+  conflicting `alma.*` weight domains.
 - **The interface with real-world jurisdictions** (the aporia of the network state): this
   system's laws, penalties, and assets can collide with the real jurisdiction in which the
   node physically exists (the state's caging and monopoly of violence). The design of
