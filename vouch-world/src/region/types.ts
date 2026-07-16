@@ -175,30 +175,50 @@ export const EVENT_RESOURCE_REGENERATED = "resource.regenerated"; // P3: the reg
 export const EVENT_RESOURCE_DRAWN = "resource.drawn"; // P3: an agent draws from the pool (pool -> agent)
 
 export type RegionFoundedPayload = {
-  region: RegionDefinition;
-  proposer: Proposer;
-  status: RecognitionStatus;
-  owner: string | null;
+  readonly region: RegionDefinition;
+  readonly proposer: Proposer;
+  readonly status: RecognitionStatus;
+  readonly owner: string | null;
 };
 
 export type InstitutionChangedPayload = {
-  regionId: string;
-  change: InstitutionChange;
-  by: string; // the acting principal (account/ID) that amended — provenance + authorization
+  readonly regionId: string;
+  readonly change: InstitutionChange;
+  readonly by: string; // the acting principal (account/ID) that amended — provenance + authorization
 };
 
 export type RegionRecognizedPayload = {
-  regionId: string;
-  by: string; // the recognizing region
+  readonly regionId: string;
+  readonly by: string; // the recognizing region
 };
 
-export type RegionLifecycleChangedPayload = { regionId: string; lifecycle: RegionLifecycle };
-export type RegionListedPayload = { regionId: string; salePrice: number | null };
-export type RegionOwnershipTransferredPayload = { regionId: string; from: string; to: string; price: number | null };
-export type GovProposalOpenedPayload = { regionId: string; change: InstitutionChange; by: string };
-export type GovVoteCastPayload = { regionId: string; voter: string };
-export type ResourceRegeneratedPayload = { regionId: string; amount: number };
-export type ResourceDrawnPayload = { regionId: string; agentId: string; amount: number };
+export type RegionLifecycleChangedPayload = { readonly regionId: string; readonly lifecycle: RegionLifecycle };
+export type RegionListedPayload = { readonly regionId: string; readonly salePrice: number | null };
+export type RegionOwnershipTransferredPayload = {
+  readonly regionId: string;
+  readonly from: string;
+  readonly to: string;
+  readonly price: number | null;
+};
+export type GovProposalOpenedPayload = { readonly regionId: string; readonly change: InstitutionChange; readonly by: string };
+// `by` = the acting principal (the council member casting the vote), consistent with the other payloads.
+export type GovVoteCastPayload = { readonly regionId: string; readonly by: string };
+export type ResourceRegeneratedPayload = { readonly regionId: string; readonly amount: number };
+export type ResourceDrawnPayload = { readonly regionId: string; readonly agentId: string; readonly amount: number };
+
+/** Maps each region-slice event type to its payload — the typed `commit` helper keys off this. */
+export interface RegionEventMap {
+  [EVENT_REGION_FOUNDED]: RegionFoundedPayload;
+  [EVENT_REGION_INSTITUTION_CHANGED]: InstitutionChangedPayload;
+  [EVENT_REGION_RECOGNIZED]: RegionRecognizedPayload;
+  [EVENT_REGION_LIFECYCLE_CHANGED]: RegionLifecycleChangedPayload;
+  [EVENT_REGION_LISTED]: RegionListedPayload;
+  [EVENT_REGION_OWNERSHIP_TRANSFERRED]: RegionOwnershipTransferredPayload;
+  [EVENT_GOV_PROPOSAL_OPENED]: GovProposalOpenedPayload;
+  [EVENT_GOV_VOTE_CAST]: GovVoteCastPayload;
+  [EVENT_RESOURCE_REGENERATED]: ResourceRegeneratedPayload;
+  [EVENT_RESOURCE_DRAWN]: ResourceDrawnPayload;
+}
 
 // --- builders (convenience; villages are still just data) ----------------
 

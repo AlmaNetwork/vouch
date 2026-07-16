@@ -11,13 +11,41 @@
 // env-authored settlement events — never trusting a raw, self-asserted balance
 // event (World.emit is public, so the REDUCER fold point is the real chokepoint).
 
-import { type AgentSlice, agentReducer } from "../agent";
-import { type Reducer, World } from "../foundation";
-import { type ItemSlice, itemReducer } from "../item";
-import { type RegionSlice, regionReducer } from "../region";
+import { type AgentEventMap, type AgentSlice, agentReducer } from "../agent";
+import { type AlmaEvent, type CommitSink, type Reducer, World, type WorldView } from "../foundation";
+import { type ItemEventMap, type ItemSlice, itemReducer } from "../item";
+import { type RegionEventMap, type RegionSlice, regionReducer } from "../region";
 
 export interface WorldState extends RegionSlice, AgentSlice, ItemSlice {
   // M3 added the agent slice; balances/economy live inside agent state. P3 added the item slice.
+}
+
+/** The env-only WRITE capability over a world (audit G3). Every environment mutator takes this. */
+export type WorldCommit = CommitSink<WorldState>;
+/** The read-only VIEW over a world (audit G11). The observation layer takes this. */
+export type WorldViewOf = WorldView<WorldState>;
+
+/**
+ * Read an entity back after committing the event that creates/updates it. A missing
+ * value here means the reducer didn't fold the just-emitted event — an internal
+ * invariant break, not a user error — so we throw. Centralizes the read-back-or-throw
+ * ritual every env write op shares.
+ */
+export function readBackOrThrow<T>(op: string, value: T | undefined): T {
+  if (value === undefined) throw new Error(`${op}: invariant violated — entity missing after its event`);
+  return value;
+}
+
+/** Every system event the environment authors, mapped to its payload — keys the typed `commit`. */
+export type WorldEventMap = AgentEventMap & RegionEventMap & ItemEventMap;
+
+/**
+ * Author a system event, type-checked. The payload must match the event type's declared
+ * shape (WorldEventMap), so a wrong-shaped or misspelled payload is a compile error at the
+ * call site rather than an `as`-cast in the reducer. A thin wrapper over commitSystem.
+ */
+export function commit<K extends keyof WorldEventMap>(env: WorldCommit, type: K, payload: WorldEventMap[K]): AlmaEvent {
+  return env.commitSystem(type, payload as Record<string, unknown>);
 }
 
 export const INITIAL_WORLD_STATE: WorldState = { regions: {}, agents: {}, items: {} };
@@ -38,4 +66,13 @@ export const rootReducer: Reducer<WorldState> = (state, event) => {
 /** Construct an ALMA world: deterministic engine (M1) + the composed root reducer. */
 export function createAlmaWorld(seed: string | number): World<WorldState> {
   return new World<WorldState>({ seed, initialState: INITIAL_WORLD_STATE, reducer: rootReducer });
+}
+
+/**
+ * Rebuild an ALMA world from a persisted event log — the replay-on-boot path a
+ * durable node (Track B) uses to recover its full state after a restart. Same
+ * composition root as `createAlmaWorld`; see `World.fromLog` for the guarantees.
+ */
+export function rehydrateAlmaWorld(seed: string | number, events: readonly AlmaEvent[]): World<WorldState> {
+  return World.fromLog<WorldState>({ seed, initialState: INITIAL_WORLD_STATE, reducer: rootReducer }, events);
 }

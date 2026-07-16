@@ -7,7 +7,7 @@
 // foundation, alma-core.
 
 export { assessCertificate, type CertAssessment, canTransactAcross, recognizeRegion, stanceToward } from "./diplomacy";
-export { detectEmergence, type EconomyConfig, economyStep, regionStance, runEconomy } from "./driver";
+export { type EconomyConfig, economyStep, runEconomy } from "./driver";
 export {
   assertCurrencyConserved,
   currencyOriginTotal,
@@ -19,18 +19,20 @@ export {
   type TransferMove,
   type TransferResult,
 } from "./economy";
-export {
-  amendInstitution,
-  castVote,
-  emergenceProposal,
-  experimenterProposal,
-  openProposal,
-  proposeFounding,
-  seedGenesis,
-} from "./founding";
+export { detectEmergence, regionStance } from "./emergence";
+export { emergenceProposal, experimenterProposal, proposeFounding, seedGenesis } from "./founding";
+export { amendInstitution, castVote, openProposal, validateInstitutionChange } from "./governance";
 export { type ItemResult, mintItem, transferItem } from "./items";
 export { listRegion, type MarketResult, setRegionLifecycle, transferRegionOwnership } from "./market";
 export { type AdmitSpec, admitAgent, admitTreasury, immigrate } from "./population";
 export { drawResource, type ResourceResult, regenerateResources } from "./resource";
 export { type VouchResult, vouchFor } from "./social";
-export { createAlmaWorld, INITIAL_WORLD_STATE, rootReducer, type WorldState } from "./state";
+export {
+  createAlmaWorld,
+  INITIAL_WORLD_STATE,
+  rehydrateAlmaWorld,
+  rootReducer,
+  type WorldCommit,
+  type WorldState,
+  type WorldViewOf,
+} from "./state";
