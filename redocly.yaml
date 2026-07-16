@@ -1,0 +1,16 @@
+# Redocly lint configuration for the vouch OpenAPI spec. The CI `openapi` job
+# (.github/workflows/ci.yml) runs `redocly lint` against it via openapi/lint.sh.
+extends:
+  - recommended
+rules:
+  # The observation API is a public, READ-ONLY, no-auth surface: the server is handed
+  # only a WorldView (no emit/run/advanceTick). Auth belongs to vouch-node's write
+  # surface, not here — so "every operation must declare security" does not apply.
+  security-defined: off
+  # Read GETs legitimately return only 200; a 404 is documented wherever a path id can miss.
+  operation-4xx-response: off
+  # The default server is a localhost dev address, not a forgotten example.com placeholder.
+  no-server-example.com: off
+apis:
+  read:
+    root: openapi/read.yaml
