@@ -32,6 +32,8 @@ vouch-world/  (this repo, the simulator)
     environment/ ✅ Layer 4 Composition root + founding + economy + diplomacy + driver (M2.5/M3/M4)
     credential/  ✅ Typed, validated certificate types on the universal envelope
     observation/ 🟡 Layer 5 Read-only HTTP (hono) + metrics (M5); broadcast next
+  openapi/       ✅ read.yaml — the observation API's OpenAPI contract (linted in CI,
+                    pinned to the code by test/observation/openapi-parity.test.ts)
   examples/      m0-m1-demo.ts — uses vouch-core + foundation together
 ```
 
