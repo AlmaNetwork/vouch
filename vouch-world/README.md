@@ -56,7 +56,8 @@ bun run typecheck # tsc --noEmit (optional)
 | **M2** | Regions as data-defined governance + dynamic founding | ✅ implemented, tests green |
 | **M2.5** | Separation hardening (audit G1–G5): read-only log, CommitSink, composition root hoisted to environment/, sim-tick detached from protocol state (`foundedAtSeq`) | ✅ implemented, tests green |
 | **M3** | Agents, economy (credit/currency), transactions, migration, emergent founding | ✅ implemented, tests green |
-| **Credentials** | Typed, validated certificate types on the universal envelope (skill/membership/asset/endorsement + custom) | ✅ implemented, tests green |
+| **Credentials** | Typed, validated certificate types on the universal envelope (skill/membership/asset/endorsement/steward + custom) | ✅ implemented, tests green |
+| **Governance intents (A2/C2)** | Proof-of-authority on recognition (`approvedBy` + `canRepresent`), the `alma.gov/steward/v1` office credential, and `propose`/`vote` intents so residents move their own institutions through the journaled brain loop | ✅ implemented, tests green |
 | **M4** | Diplomacy: cert translation (absorb/map/reexamine/reject) + recognition flow + cross-region trade gate | 🟡 in progress — emergent cross-border (scarcity) next |
 | **M5** | Observation: read-only HTTP server (hono) + metrics — external clients connect to watch (§2-6) | 🟡 in progress — broadcast / newspaper next |
 

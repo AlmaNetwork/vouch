@@ -9,6 +9,7 @@ import {
   issueCredential,
   MembershipCredential,
   SkillCredential,
+  StewardCredential,
   standardRegistry,
   verifyCredential,
   verifyCredentialWith,
@@ -58,7 +59,13 @@ describe("typed credentials — varied, validated certificate types", () => {
       const res = verifyCredentialWith(cert, issuer.publicKey, registry);
       expect(res.ok).toBe(true);
     }
-    expect(registry.list().sort()).toEqual(["alma.asset/v1", "alma.endorsement/v1", "alma.membership/v1", "alma.skill/v1"]);
+    expect(registry.list().sort()).toEqual([
+      "alma.asset/v1",
+      "alma.endorsement/v1",
+      "alma.gov/steward/v1",
+      "alma.membership/v1",
+      "alma.skill/v1",
+    ]);
   });
 
   test("invalid elements are rejected at ISSUE time (level out of range)", () => {
@@ -150,6 +157,57 @@ describe("typed credentials — varied, validated certificate types", () => {
     const res = verifyCredentialWith(cert, issuer.publicKey, registry);
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.claims.scope).toBe("trade");
+  });
+
+  test("the steward office credential round-trips with typed claims (C2 representation)", () => {
+    const cert = issueCredential(
+      StewardCredential,
+      {
+        issuer: "founder@nova",
+        subject: "alice@nova",
+        claims: { region: "nova", title: "steward", since: ISSUED_AT },
+        issuedAt: ISSUED_AT,
+      },
+      issuer.privateKey,
+    );
+    expect(cert.schemaId).toBe("alma.gov/steward/v1");
+    const res = verifyCredential(cert, issuer.publicKey, StewardCredential);
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.claims.region).toBe("nova");
+      expect(res.claims.title).toBe("steward");
+    }
+  });
+
+  test("the steward type rejects an invalid region string at issue time", () => {
+    expect(() =>
+      issueCredential(
+        StewardCredential,
+        {
+          issuer: "founder@nova",
+          subject: "alice@nova",
+          claims: { region: "Not A Region", title: "steward", since: ISSUED_AT },
+          issuedAt: ISSUED_AT,
+        },
+        issuer.privateKey,
+      ),
+    ).toThrow();
+  });
+
+  test("a validly-signed steward cert with out-of-schema claims fails 'invalid-claims'", () => {
+    const cert = issueCertificate(
+      {
+        issuer: "founder@nova",
+        subject: "alice@nova",
+        schemaId: "alma.gov/steward/v1",
+        claims: { region: "NOVA!", title: "", since: "" },
+        issuedAt: ISSUED_AT,
+      },
+      issuer.privateKey,
+    );
+    const res = verifyCredential(cert, issuer.publicKey, StewardCredential);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.reason).toBe("invalid-claims");
   });
 
   test("credentials are deterministic under a seeded key + fixed issuedAt", () => {

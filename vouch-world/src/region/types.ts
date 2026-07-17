@@ -190,6 +190,10 @@ export type InstitutionChangedPayload = {
 export type RegionRecognizedPayload = {
   readonly regionId: string;
   readonly by: string; // the recognizing region
+  // The PRINCIPAL that authorized the act in the recognizer's name (auctoritas, A2):
+  // a representative of `by` when it has one; null when `by` is system/unowned and the
+  // world itself spoke for it. Provenance is logged, never silent.
+  readonly approvedBy: string | null;
 };
 
 export type RegionLifecycleChangedPayload = { readonly regionId: string; readonly lifecycle: RegionLifecycle };

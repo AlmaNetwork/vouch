@@ -4,7 +4,7 @@
 // a frozen view and return intents; the environment journals + executes them.
 // Imports only foundation, region (types), and alma-core — never environment.
 
-export { type Brain, defaultBrains, idleBrain, type ReadOnlyView, tradingBrain } from "./brain";
+export { type Brain, defaultBrains, idleBrain, type ReadOnlyView, tradingBrain, voterBrain } from "./brain";
 export { agentReducer } from "./reducer";
 export { agentsInRegion, currencySupply, getAgent, listAgents, treasuryId } from "./selectors";
 export * from "./types";

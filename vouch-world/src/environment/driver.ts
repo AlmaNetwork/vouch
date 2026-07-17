@@ -26,6 +26,7 @@ import type { Rng, World } from "../foundation";
 import { getRegion, listRegions } from "../region";
 import { executeTransfer } from "./economy";
 import { detectEmergence } from "./emergence";
+import { castVote, openProposal } from "./governance";
 import { immigrate } from "./population";
 import { regenerateResources } from "./resource";
 import type { WorldState } from "./state";
@@ -44,10 +45,21 @@ function dispatchIntent(env: World<WorldState>, agentId: string, intent: Intent,
       executeTransfer(env, { from: agentId, to: intent.to, amount: intent.amount }, { tick, notary });
     } else if (intent.kind === "emigrate") {
       immigrate(env, agentId, intent.to);
+    } else if (intent.kind === "propose" || intent.kind === "vote") {
+      // Governance intents (A2): the agent REQUESTS; openProposal/castVote hold the
+      // authority gate (canGovern), so an unentitled voice fails quietly like any other
+      // invalid intent — journaled in agent.decided, but never applied. The intent may
+      // name the region (a seat is id-bound, not residency-bound — an emigrated council
+      // member keeps voting); it defaults to the agent's current region.
+      const region = intent.regionId ?? getAgent(env.getState(), agentId)?.region;
+      if (region !== undefined) {
+        if (intent.kind === "propose") openProposal(env, region, intent.change, agentId);
+        else castVote(env, region, agentId);
+      }
     }
     // idle: nothing
   } catch {
-    // An invalid action (e.g. a cross-region transfer = M4) is simply skipped by the driver.
+    // An invalid action (e.g. a cross-region transfer = M4, a non-member's vote) is simply skipped.
   }
 }
 

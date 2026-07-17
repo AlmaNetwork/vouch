@@ -115,8 +115,15 @@ through `environment`**. `region` exports only types/reducer/slice/selectors and
   `trust`. Sybil-resistance of the vouch graph is P3.
 - **A `Brain` is pure: `(ReadOnlyView) => Intent`.** No `emit`, no rng, no clock.
   Stochasticity arrives only as `view.roll` (a single deterministic draw the driver
-  supplies). `Intent` is `idle | transfer | emigrate`; `transfer` moves currency
-  only.
+  supplies). `Intent` is `idle | transfer | emigrate | propose | vote`; `transfer`
+  moves currency only. `propose`/`vote` are the GOVERNANCE intents (A2): the driver
+  routes them to `openProposal`/`castVote` in `intent.regionId` (defaulting to the
+  HOME region), whose `canGovern` gate decides whether the voice is binding — a
+  non-member's governance intent is journaled but fails quietly. A council seat is
+  id-bound, not residency-bound, so an emigrated member names its region to keep
+  voting (else an open proposal would wedge). `voterBrain` (opt-in, NOT in
+  `defaultBrains`) backs an open council proposal wherever the agent's vote is
+  binding (home region first, then the others), else trades.
 - **Actor-gate (defence in depth):** BOTH the agent and region reducers gate at the top —
   `if (event.actor !== SYSTEM_ACTOR) return state;` — so **every** state-changing event
   (admit/migrate/settle/mint, found/recognize/institution.changed) is honored only when
@@ -159,7 +166,12 @@ through `environment`**. `region` exports only types/reducer/slice/selectors and
   one `SYSTEM_ACTOR` event and reading the folded result back. Take a `CommitSink`.
 - **Founding status:** born `recognized` **only** when `proposer.kind ===
   "genesis"`; experimenter/emergence start `unrecognized`. `recognizeRegion` requires
-  the recognizer to itself be recognized; idempotent for an already-recognized target.
+  the recognizer to itself be recognized AND (A2 proof of authority) an acting
+  principal `approvedBy` satisfying `canRepresent` when the recognizer has
+  representation — a system/unowned recognizer is spoken for by the world
+  (`approvedBy: null` in the payload). The authority gate runs FIRST, so an
+  unentitled caller always throws; only then is it idempotent for an
+  already-recognized target.
 - **Diplomacy (M4):** `assessCertificate` verifies **form via the core first**, then
   applies **meaning** (domestic → local verification policy; foreign → diplomacy
   stance `absorb/map/reexamine/reject`). `canTransactAcross` allows a cross-region
@@ -177,7 +189,9 @@ through `environment`**. `region` exports only types/reducer/slice/selectors and
 
 - **Declare a kind only via `defineCredentialType(schemaId, zodSchema, label?)`** —
   never hand-build the object. Standard kinds: `alma.skill/v1`, `alma.membership/v1`,
-  `alma.asset/v1`, `alma.endorsement/v1`.
+  `alma.asset/v1`, `alma.endorsement/v1`, `alma.gov/steward/v1` (the C2 office
+  attestation — portable EVIDENCE of a region's stewardship; the office-of-record
+  stays the region's `owner` pointer).
 - `issueCredential` validates claims with `schema.parse` (**throws** on bad claims)
   **before** signing, and sets the cert `schemaId` from `type.schemaId` (never caller
   input).
