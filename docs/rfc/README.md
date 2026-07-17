@@ -19,6 +19,9 @@ Three buckets keep the design legible:
 |-----|-------|--------|
 | [0001](0001-region-governance-and-decision-sot.md) | Region governance & decision source-of-truth | Draft |
 | [0002](0002-observation-of-emergent-regime.md) | Observation of the emergent regime | Draft stub |
+| [0003](0003-region-assets.md) | Region Assets: countable, region-issued holdings as first-class value | Draft |
 | [0004](0004-cross-region-dd-transfer.md) | Cross-region due diligence & value transfer | Draft |
 | [0005](0005-signature-suites.md) | Signature suites & negotiation | Draft |
 | [0006](0006-region-authorization.md) | Region authorization & capability delegation | Draft |
+| [0007](0007-command-system.md) | Command System v2: data-defined commands under separation of powers | Draft |
+| [0008](0008-relationship-edges.md) | Relationship edges: wire format & cross-region portability (constitutional layer absorbed into RFC 0007) | Draft |

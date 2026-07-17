@@ -18,6 +18,7 @@ import {
   EVENT_RESOURCE_DRAWN,
   EVENT_RESOURCE_REGENERATED,
   type GovProposalOpenedPayload,
+  type GovRollEntry,
   type GovVoteCastPayload,
   type InstitutionChange,
   type InstitutionChangedPayload,
@@ -53,16 +54,34 @@ function applyInstitutionChange(institutions: Institutions, change: InstitutionC
 }
 
 /**
- * Resolve a region's open council proposal: if its votes have reached the council's
- * `threshold`, APPLY the (already-validated-at-propose-time) change and clear the proposal.
- * Otherwise leave it open. A no-op when there is no proposal.
+ * Resolve a region's open council proposal: if its approving WEIGHT has reached the
+ * council's `threshold` AND (when a quorum is set) enough BALLOTS were cast, APPLY the
+ * (already-validated-at-propose-time) change and clear the proposal. Otherwise leave it
+ * open. A no-op when there is no proposal.
+ *
+ * RFC 0001 §5: resolution reads ONLY the snapshot roll taken when the proposal opened —
+ * weights were evaluated at open and the roll never changes afterwards, so admission /
+ * migration / transfer timing cannot game an in-flight vote. A ballot from an ID that is
+ * not on the roll (e.g. a proposer outside a "citizens" electorate) carries no weight and
+ * does not count toward quorum. With the defaults (equal weight, no quorum) this is
+ * numerically identical to the historic `votes.length >= threshold`.
  */
 function resolveIfPassed(region: RegionState): RegionState {
   const p = region.openProposal;
   if (!p) return region;
   const g = region.institutions.governance;
   const threshold = g.kind === "council" ? g.threshold : 1;
-  if (p.votes.length < threshold) return region;
+  const quorum = g.kind === "council" ? g.quorum : undefined;
+  let weight = 0;
+  let ballots = 0;
+  for (const vote of p.votes) {
+    const entry = p.roll.find((e) => e.voter === vote);
+    if (!entry) continue; // off-roll ballot: weightless, quorum-invisible
+    weight += entry.weight;
+    ballots += 1;
+  }
+  if (weight < threshold) return region;
+  if (quorum !== undefined && ballots < quorum) return region;
   return { ...region, institutions: applyInstitutionChange(region.institutions, p.change), openProposal: null };
 }
 
@@ -139,10 +158,26 @@ export const regionReducer: Reducer<RegionSlice> = (state, event) => {
       const p = event.payload as GovProposalOpenedPayload;
       const existing = state.regions[p.regionId];
       if (!existing) return state;
-      if (existing.institutions.governance.kind !== "council") return state; // only councils vote
+      const g = existing.institutions.governance;
+      if (g.kind !== "council") return state; // only councils vote
       if (existing.openProposal) return state; // one open proposal at a time
-      // the proposer's open counts as their vote; resolve immediately if threshold is 1
-      const opened: RegionState = { ...existing, openProposal: { change: p.change, votes: [p.by], proposedBy: p.by } };
+      // RFC 0001 §5 — THE SNAPSHOT. The env evaluated electorate x tenure + per-voter
+      // weight at open (it knows the open seq pre-commit via CommitSink.nextSeq; this
+      // reducer may never read the agent slice — layering) and shipped the FINAL roll in
+      // the payload; it folds verbatim. openedAtSeq is stamped from event.seq (the
+      // foundedAtSeq idiom, audit G5) and the roll closes for this proposal's lifetime
+      // (§5 voter-roll cutoff). Forged rolls cannot reach here: this reducer folds only
+      // SYSTEM_ACTOR-authored events, and commitSystem is env-only.
+      const roll: readonly GovRollEntry[] = p.roll
+        ? p.roll.map((c) => ({ voter: c.voter, weight: c.weight }))
+        : // Legacy events predate the snapshot field: derive the historic electorate — the
+          // listed members, weight 1 each — so old logs fold to exactly the old semantics.
+          g.members.map((m) => ({ voter: m, weight: 1 }));
+      // the proposer's open counts as their vote; resolve immediately if threshold is met
+      const opened: RegionState = {
+        ...existing,
+        openProposal: { change: p.change, votes: [p.by], proposedBy: p.by, openedAtSeq: event.seq, roll },
+      };
       return { ...state, regions: { ...state.regions, [p.regionId]: resolveIfPassed(opened) } };
     }
     case EVENT_GOV_VOTE_CAST: {
