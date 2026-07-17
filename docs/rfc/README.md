@@ -24,3 +24,4 @@ Three buckets keep the design legible:
 | [0005](0005-signature-suites.md) | Signature suites & negotiation | Draft |
 | [0006](0006-region-authorization.md) | Region authorization & capability delegation | Draft |
 | [0007](0007-command-system.md) | Command System v2: data-defined commands under separation of powers | Draft |
+| [0008](0008-relationship-edges.md) | Relationship edges: wire format & cross-region portability (constitutional layer absorbed into RFC 0007) | Draft |
