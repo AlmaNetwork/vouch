@@ -27,7 +27,7 @@ time — **taken part in**.
 
 | Package | What it is | Tests |
 |---------|-----------|-------|
-| [`vouch-world`](./vouch-world) | The **simulator** — the deterministic world engine, the villages, the agents, the economy, typed credentials, diplomacy, a region market, digital items, a resource/scarcity model, and a read-only observation server. This is the world. | 104 |
+| [`vouch-world`](./vouch-world) | The **simulator** — the deterministic world engine, the villages, the agents, the economy, typed credentials, diplomacy, a region market, digital items, a resource/scarcity model, and a read-only observation server. This is the world. | 106 |
 | [`vouch-core`](./vouch-core) | The **trust engine** it runs on — a standalone, dependency-free\* factory that mints ids/keys/certificates and **formally verifies** signatures. It knows nothing of villages or economies; meaning lives outside it, and it's reusable on its own. | 35 |
 | [`vouch-node`](./vouch-node) | The **participate node** — a durable, authenticated write path *onto* the engine: Ed25519-signed commands (found / admit / transfer / vouch), a replay-on-boot journal, and the read-only observation surface. This is how you take part over the network. | 44 |
 | [`vouch-mcp`](./vouch-mcp) | The **MCP participation server** — an OAuth 2.1–protected MCP server so an **AI participates through its own MCP client**. It custodially signs engine commands on the authenticated subject's behalf; supports dynamic client registration so Claude Code can connect. | 61 |

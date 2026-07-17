@@ -71,3 +71,16 @@ jobs:
       - name: vouch-web — typecheck + test
         run: bun run typecheck && bun test
         working-directory: vouch-web
+
+  # Lint the read-only observation OpenAPI spec (vouch-world/openapi/read.yaml)
+  # against the Redocly ruleset in vouch-world/redocly.yaml. Additive job; does
+  # not touch `test`.
+  openapi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.2"
+      - name: redocly lint
+        run: sh vouch-world/openapi/lint.sh
