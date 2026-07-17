@@ -28,6 +28,15 @@ export interface CommitSink<S> {
    * system-authored / conserved event. Keep CommitSink out of untrusted hands.
    */
   commitSystem(type: string, payload?: Record<string, unknown>): AlmaEvent;
+  /**
+   * The seq the NEXT committed event will carry. Read-only and deterministic in this
+   * synchronous single-writer engine (seq = log length; no other writer can interleave).
+   * It exists so a write op can evaluate seq-based rules — e.g. the RFC 0001 §5
+   * voter-tenure cut — against the seq its OWN event is about to get, and reject
+   * BEFORE committing (the house throw-before-commit guard style) instead of
+   * discovering at fold time that it opened something unresolvable.
+   */
+  nextSeq(): number;
 }
 
 /**
@@ -137,6 +146,11 @@ export class World<S> implements CommitSink<S>, WorldView<S> {
    */
   commitSystem(type: string, payload: Record<string, unknown> = {}): AlmaEvent {
     return this.author(type, SYSTEM_ACTOR, payload);
+  }
+
+  /** The seq the next committed event will carry (see CommitSink.nextSeq). */
+  nextSeq(): number {
+    return this.log.length;
   }
 
   /** Advance discrete time by one tick, recording the advance as a system event. */

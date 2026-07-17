@@ -44,10 +44,42 @@ export interface DiplomacyPolicy {
  *   dictatorship — the region's `owner` is the sole authority.
  *   council      — any listed member may act (P2). `threshold` is reserved for the
  *                  P3 proposal/vote mechanism; in P2 a single member may amend.
+ *
+ * RFC 0001 §4 hardens the collective path with OPTIONAL per-region tunable guards.
+ * Every new field defaults to EXACTLY the historic behavior when absent (additive,
+ * backward-compatible), so old logs and old presets are untouched. They are presets /
+ * affordances a founder sets and sweeps as experiment parameters — the regime that
+ * results is measured (RFC 0002), never configured.
  */
 export type Governance =
   | { readonly kind: "dictatorship" }
-  | { readonly kind: "council"; readonly members: readonly string[]; readonly threshold: number };
+  | {
+      readonly kind: "council";
+      readonly members: readonly string[];
+      // Minimum APPROVING WEIGHT for a proposal to resolve. Under the defaults
+      // (electorate "members", weighting "equal") every ballot weighs 1, so this is
+      // numerically the historic vote COUNT threshold.
+      readonly threshold: number;
+      // WHO may vote (RFC 0001 §4 eligibility): "members" (default) = the listed council
+      // members, today's behavior. "citizens" = every agent whose CITIZENSHIP — the home
+      // region encoded in its id (name@region) — is this region; residence is irrelevant
+      // (migration never changes citizenship) and the treasury account is excluded.
+      readonly electorate?: "members" | "citizens";
+      // Minimum BALLOT COUNT cast for a resolution to bind (participation floor, §4
+      // quorum) — distinct from `threshold`, which bounds weight, not turnout.
+      readonly quorum?: number;
+      // Voter tenure (§4): an ID is on a proposal's roll only if
+      // openSeq - admittedAtSeq >= tenureSeq. Measured in log seq, never wall-clock
+      // (audit G5). NOT a Sybil tool — it is the incumbent-vs-insurgent axis.
+      readonly tenureSeq?: number;
+      // Founding maturity (§4): a governance-kind (constitutional) proposal may not even
+      // OPEN until the electorate holds >= maturity eligible IDs.
+      readonly maturity?: number;
+      // Ballot weight source (§4, the legitimacy axis: democracy / meritocracy /
+      // plutocracy). Weight per voter = 1 (equal, default) | 1 + reputation | 1 +
+      // balances.currency, evaluated AT proposal open (§5 snapshot).
+      readonly weighting?: "equal" | "reputation" | "stake";
+    };
 
 /**
  * A village's own economic policy — the trust-cost (fee/tax) schedule + credit accrual.
@@ -133,12 +165,25 @@ export type InstitutionChange =
   | { readonly policy: "economy"; readonly value: EconomyPolicy } // fee/tax policy (P2)
   | { readonly policy: "resource"; readonly value: ResourcePolicy }; // resource pool config (P3)
 
+/** One eligible voter on a proposal's SNAPSHOT roll, with its weight evaluated AT OPEN (RFC 0001 §5). */
+export type GovRollEntry = { readonly voter: string; readonly weight: number };
+
 /**
  * An OPEN council amendment proposal (P3 voting): the proposed change plus who has voted
  * for it so far. A region has at most one open proposal; it resolves (applies + clears)
- * when `votes.length` reaches the council's `threshold`.
+ * once the APPROVING WEIGHT summed over `roll` reaches the council's `threshold` AND, if
+ * a quorum is set, enough ballots were cast (RFC 0001 §4/§5). A ballot is approval-only:
+ * casting one IS approving. `roll` is the §5 snapshot taken when the proposal opened —
+ * immutable for this proposal's lifetime: joining / leaving / migrating / transferring
+ * value after `openedAtSeq` changes NOTHING for it (voter-roll cutoff).
  */
-export type GovProposal = { change: InstitutionChange; votes: readonly string[]; proposedBy: string };
+export type GovProposal = {
+  change: InstitutionChange;
+  votes: readonly string[];
+  proposedBy: string;
+  openedAtSeq: number; // the log seq at which the roll closed (stamped from event.seq, audit G5)
+  roll: readonly GovRollEntry[]; // eligible voters (electorate x tenure) with weights AT OPEN
+};
 
 // --- runtime state (derived from events) ---------------------------------
 
@@ -200,7 +245,18 @@ export type RegionOwnershipTransferredPayload = {
   readonly to: string;
   readonly price: number | null;
 };
-export type GovProposalOpenedPayload = { readonly regionId: string; readonly change: InstitutionChange; readonly by: string };
+export type GovProposalOpenedPayload = {
+  readonly regionId: string;
+  readonly change: InstitutionChange;
+  readonly by: string;
+  // RFC 0001 §5 snapshot: the FINAL voter roll — electorate x tenure, weights evaluated
+  // AT OPEN — computed by the env write path (which knows the open seq pre-commit via
+  // CommitSink.nextSeq) and folded verbatim by the reducer. OPTIONAL for backward
+  // compatibility — events logged before this field existed fold to the historic
+  // members / weight-1 roll. Forged rolls cannot enter: the region reducer folds only
+  // SYSTEM_ACTOR-authored events, and commitSystem is env-only (defence in depth).
+  readonly roll?: readonly GovRollEntry[];
+};
 // `by` = the acting principal (the council member casting the vote), consistent with the other payloads.
 export type GovVoteCastPayload = { readonly regionId: string; readonly by: string };
 export type ResourceRegeneratedPayload = { readonly regionId: string; readonly amount: number };
@@ -226,14 +282,49 @@ export interface RegionEventMap {
  * Reject incoherent governance. An empty (or all-self-excluding) council can NEVER be
  * amended again — `canGovern` would return false for everyone, permanently bricking the
  * region — so an empty member set is forbidden. The threshold must be a sane integer.
+ * The RFC 0001 §4 tunables are bounds-checked here too, in the same brick-guard spirit,
+ * so an incoherent preset is rejected at found/amend time before it can land.
  */
 export function validateGovernance(g: Governance): void {
   if (g.kind === "council") {
     if (g.members.length === 0) {
       throw new Error("governance: a council must have at least one member (an empty council can never be amended)");
     }
-    if (!Number.isInteger(g.threshold) || g.threshold < 1 || g.threshold > g.members.length) {
-      throw new Error(`governance: council threshold must be an integer in [1, ${g.members.length}]`);
+    const electorate = g.electorate ?? "members";
+    const weighting = g.weighting ?? "equal";
+    if (electorate !== "members" && electorate !== "citizens") {
+      throw new Error(`governance: electorate must be "members" or "citizens"`);
+    }
+    if (weighting !== "equal" && weighting !== "reputation" && weighting !== "stake") {
+      throw new Error(`governance: weighting must be "equal", "reputation" or "stake"`);
+    }
+    // `threshold` bounds WEIGHT. Under the defaults (members electorate, equal weighting)
+    // the maximum attainable approving weight is exactly members.length, so the historic
+    // cap stays — a threshold above it could never resolve (brick). Under "citizens" or a
+    // non-equal weighting the attainable weight is dynamic (evaluated at proposal open),
+    // so only the integer >= 1 part is statically checkable.
+    if (electorate === "members" && weighting === "equal") {
+      if (!Number.isInteger(g.threshold) || g.threshold < 1 || g.threshold > g.members.length) {
+        throw new Error(`governance: council threshold must be an integer in [1, ${g.members.length}]`);
+      }
+    } else if (!Number.isInteger(g.threshold) || g.threshold < 1) {
+      throw new Error("governance: council threshold must be an integer >= 1");
+    }
+    if (g.quorum !== undefined) {
+      if (!Number.isInteger(g.quorum) || g.quorum < 1) {
+        throw new Error("governance: quorum must be an integer >= 1");
+      }
+      // With a fixed members electorate the ballot ceiling is members.length — a quorum
+      // above it could never bind (unresolvable, same brick shape as the threshold cap).
+      if (electorate === "members" && g.quorum > g.members.length) {
+        throw new Error(`governance: quorum must not exceed the ${g.members.length} council members (a resolution could never bind)`);
+      }
+    }
+    if (g.tenureSeq !== undefined && (!Number.isInteger(g.tenureSeq) || g.tenureSeq < 0)) {
+      throw new Error("governance: tenureSeq must be an integer >= 0");
+    }
+    if (g.maturity !== undefined && (!Number.isInteger(g.maturity) || g.maturity < 0)) {
+      throw new Error("governance: maturity must be an integer >= 0");
     }
   }
 }

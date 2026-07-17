@@ -26,6 +26,12 @@ export interface AgentState {
   readonly trust: number; // accumulated social capital from being VOUCHED for (§ the brand verb)
   readonly resources: number; // amount DRAWN from region resource pools (P3 scarcity)
   readonly valueProfile: ValueProfile;
+  // The log seq at which this agent was ADMITTED (RFC 0001 §4: voter tenure is measured in
+  // log seq, never wall-clock — audit G5). Stamped by the agent reducer from event.seq when
+  // it folds agent.admitted, so it is identical live and on replay. Citizenship itself is
+  // NOT stored: it is the home region encoded in the id (name@region); migration changes
+  // `region` (residence) but never citizenship nor this seq.
+  readonly admittedAtSeq: number;
 }
 
 /** The agent read-model slice of world state; the environment composes it in. */
@@ -58,7 +64,10 @@ export type SettlementPayload = {
   readonly memo: { readonly from: string; readonly to: string; readonly amount: number; readonly fee: number };
 };
 
-export type AgentAdmittedPayload = { readonly agent: AgentState };
+// The payload deliberately OMITS admittedAtSeq: the reducer is the single stamp point
+// (it writes event.seq at fold), so the log can never carry a wrong/placeholder value
+// for a field that is derived from the event's own position (RFC 0001 §4).
+export type AgentAdmittedPayload = { readonly agent: Omit<AgentState, "admittedAtSeq"> };
 export type AgentMigratedPayload = { readonly agentId: string; readonly toRegion: string };
 export type AgentDecidedPayload = { readonly agentId: string; readonly intent: Intent };
 /** An explicit currency mint — the ONLY sanctioned way new currency enters after genesis. */

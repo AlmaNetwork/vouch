@@ -30,7 +30,11 @@ export const agentReducer: Reducer<AgentSlice> = (state, event) => {
   switch (event.type) {
     case EVENT_AGENT_ADMITTED: {
       const { agent } = event.payload as AgentAdmittedPayload;
-      return { agents: { ...state.agents, [agent.id]: agent } };
+      // RFC 0001 §4: tenure is seq-based. The REDUCER stamps admittedAtSeq from event.seq
+      // (the foundedAtSeq idiom, audit G5) — deterministic live AND on replay, and it
+      // overrides whatever the payload carried, so legacy payloads without the field (and
+      // the write path's placeholder 0) both fold to the true admission seq.
+      return { agents: { ...state.agents, [agent.id]: { ...agent, admittedAtSeq: event.seq } } };
     }
     case EVENT_AGENT_MIGRATED: {
       const { agentId, toRegion } = event.payload as AgentMigratedPayload;
