@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { generateKeyPair } from "../src/keys";
-import { ED25519_SUITE, getSuite, listSuites } from "../src/suite";
+import {
+  activeSuiteIds,
+  ED25519_SUITE,
+  getSuite,
+  getSuiteMeta,
+  isValidSuiteId,
+  listSuiteMeta,
+  listSuites,
+  MTI_SUITE_ID,
+} from "../src/suite";
 
 describe("signature-suite registry", () => {
   test("ed25519 is registered out of the box", () => {
@@ -23,5 +32,61 @@ describe("signature-suite registry", () => {
     const { publicKey } = generateKeyPair();
     const msg = new TextEncoder().encode("hello alma");
     expect(ED25519_SUITE.verify(msg, new Uint8Array([1, 2, 3]), publicKey)).toBe(false);
+  });
+});
+
+describe("RFC 0005 §4 suite registry (metadata)", () => {
+  test("MTI is ed25519 and is active", () => {
+    expect(MTI_SUITE_ID).toBe("ed25519");
+    const mti = getSuiteMeta(MTI_SUITE_ID);
+    expect(mti?.status).toBe("active");
+    expect(activeSuiteIds()).toContain("ed25519");
+  });
+
+  test("every seed entry has a valid, unique suite id (RFC 0005 §3 grammar)", () => {
+    const all = listSuiteMeta();
+    expect(all.length).toBe(13);
+    for (const m of all) {
+      expect(isValidSuiteId(m.id)).toBe(true);
+    }
+    expect(new Set(all.map((m) => m.id)).size).toBe(all.length); // no duplicates
+  });
+
+  test("ed25519 metadata", () => {
+    expect(getSuiteMeta("ed25519")).toEqual({
+      id: "ed25519",
+      name: "EdDSA over Curve25519",
+      reference: "RFC 8032",
+      class: "single",
+      securityBits: 128,
+      pq: false,
+      status: "active",
+    });
+  });
+
+  test("post-quantum + threshold + strength are captured", () => {
+    expect(getSuiteMeta("ml-dsa-65")?.pq).toBe(true);
+    expect(getSuiteMeta("ml-dsa-65")?.securityBits).toBe(192);
+    expect(getSuiteMeta("ecdsa-p384")?.securityBits).toBe(192);
+    expect(getSuiteMeta("ed448")?.securityBits).toBe(224);
+    expect(getSuiteMeta("frost-ed25519")?.class).toBe("threshold");
+    expect(getSuiteMeta("ed25519")?.pq).toBe(false);
+  });
+
+  test("an unregistered suite has no metadata", () => {
+    expect(getSuiteMeta("rsa-pkcs1")).toBeUndefined();
+  });
+
+  test("isValidSuiteId enforces the §3 grammar", () => {
+    expect(isValidSuiteId("ed25519")).toBe(true);
+    expect(isValidSuiteId("ecdsa-p256")).toBe(true);
+    expect(isValidSuiteId("Ed25519")).toBe(false); // uppercase
+    expect(isValidSuiteId("1abc")).toBe(false); // must start with a lowercase letter
+    expect(isValidSuiteId("a_b")).toBe(false); // underscore not allowed
+    expect(isValidSuiteId("")).toBe(false);
+  });
+
+  test("the seed registry is all-active (nothing deprecated yet)", () => {
+    expect(activeSuiteIds().length).toBe(listSuiteMeta().length);
   });
 });
