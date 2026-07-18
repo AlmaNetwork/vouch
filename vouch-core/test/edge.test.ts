@@ -9,8 +9,12 @@ import {
   isGenesisState,
   issueEdge,
   isValidEndpoint,
+  requiredCosigners,
+  requiresCosign,
   verifyChain,
+  verifyCosign,
   verifyEdge,
+  verifyEdgeFull,
   verifyTransition,
 } from "../src/edge";
 import { decodeBase64, encodeBase64 } from "../src/encoding";
@@ -345,5 +349,79 @@ describe("RFC 0008 §5 micro-chain", () => {
     const r = verifyChain([e0, e1, e2, e1]);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toBe("counter-not-incremented");
+  });
+});
+
+describe("RFC 0008 §4.6 co-signatures", () => {
+  // V4: a co-signed membership nova → bob@nova. `from`=nova signs; `to`=bob co-signs the
+  // identical core bytes.
+  const unsigned = issueEdge(v4.input, nova.privateKey); // nova-signed, no cosign yet
+  const bobCosign = encodeBase64(ED25519_SUITE.sign(edgeSigningBytes(unsigned), bob.privateKey));
+  const membership: Edge = { ...unsigned, cosign: { "bob@nova": bobCosign } };
+  const vouchEdge = issueEdge(v0.input, alice.privateKey); // unilateral kind
+
+  test("only membership/connection require a co-signature", () => {
+    expect(requiresCosign("membership")).toBe(true);
+    expect(requiresCosign("connection")).toBe(true);
+    expect(requiresCosign("vouch")).toBe(false);
+    expect(requiresCosign("sanction")).toBe(false);
+    expect(requiredCosigners(membership)).toEqual(["bob@nova"]); // the `to` party
+    expect(requiredCosigners(vouchEdge)).toEqual([]);
+  });
+
+  test("a valid counterparty co-signature verifies", () => {
+    expect(verifyCosign(membership, { "bob@nova": bob.publicKey })).toEqual({ ok: true });
+  });
+
+  test("unilateral kinds need no co-signature (trivially pass)", () => {
+    expect(verifyCosign(vouchEdge, {})).toEqual({ ok: true });
+  });
+
+  test("a missing co-signature is rejected", () => {
+    const r = verifyCosign(unsigned, { "bob@nova": bob.publicKey });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.reason).toBe("missing-cosign");
+      expect(r.cosigner).toBe("bob@nova");
+    }
+  });
+
+  test("a co-signature under the wrong key is rejected", () => {
+    const r = verifyCosign(membership, { "bob@nova": alice.publicKey });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("bad-cosign");
+  });
+
+  test("malformed co-signature base64 is rejected", () => {
+    const bad: Edge = { ...membership, cosign: { "bob@nova": "not-valid-base64!!" } };
+    const r = verifyCosign(bad, { "bob@nova": bob.publicKey });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("invalid-cosign-encoding");
+  });
+
+  test("verifyEdgeFull: from-signature AND cosign both pass", () => {
+    expect(verifyEdgeFull(membership, nova.publicKey, { "bob@nova": bob.publicKey })).toEqual({ ok: true });
+  });
+
+  test("verifyEdgeFull: a consent-bearing kind lacking cosign fails at the cosign stage", () => {
+    const r = verifyEdgeFull(unsigned, nova.publicKey, { "bob@nova": bob.publicKey });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.stage).toBe("cosign");
+      expect(r.reason).toBe("missing-cosign");
+    }
+  });
+
+  test("verifyEdgeFull: a bad from-signature fails at the signature stage", () => {
+    const r = verifyEdgeFull(membership, generateKeyPair().publicKey, { "bob@nova": bob.publicKey });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.stage).toBe("signature");
+      expect(r.reason).toBe("bad-signature");
+    }
+  });
+
+  test("verifyEdgeFull: a unilateral edge needs no co-signers", () => {
+    expect(verifyEdgeFull(vouchEdge, alice.publicKey)).toEqual({ ok: true });
   });
 });
