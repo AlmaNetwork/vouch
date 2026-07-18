@@ -175,3 +175,60 @@ export function listSuiteMeta(): SuiteMeta[] {
 export function activeSuiteIds(): string[] {
   return SUITE_META.filter((m) => m.status === "active").map((m) => m.id);
 }
+
+// --- RFC 0005 §6: minimum-strength policy + negotiation -------------------
+
+export interface SuitePolicy {
+  /** Advertised, verify-capable suites, most-preferred first (RFC 0005 §5). */
+  readonly signatureSuites: readonly string[];
+  /** Minimum-strength floor in classical-equivalent bits (RFC 0005 §6). */
+  readonly minSecurityBits: number;
+  /** RFC 0005 §8: require post-quantum resistance — excludes every non-PQ suite. */
+  readonly requirePq?: boolean;
+}
+
+export type NegotiationResult =
+  | { readonly ok: true; readonly agreedSuites: string[] }
+  | { readonly ok: false; readonly reason: "no-acceptable-suite"; readonly detail: string };
+
+/** Whether `meta` satisfies `policy`: active, meets the strength floor, and PQ if required. */
+function acceptableTo(policy: SuitePolicy, meta: SuiteMeta): boolean {
+  return meta.status === "active" && meta.securityBits >= policy.minSecurityBits && (!policy.requirePq || meta.pq);
+}
+
+/**
+ * RFC 0005 §6 negotiation. The RESPONDER binds `agreedSuites`: the intersection of both
+ * regions' advertised suites, in responder-preference order, excluding deprecated suites and
+ * any below either region's minimum-strength policy (and, per §8, non-PQ suites if either
+ * region requires post-quantum). If that candidate set is empty, the parties fall back to the
+ * MTI suite (`ed25519`) — unless a region's policy excludes the MTI, in which case negotiation
+ * fails and no Connection forms. Unregistered advertised ids cannot be assessed and are skipped.
+ */
+export function negotiate(initiator: SuitePolicy, responder: SuitePolicy): NegotiationResult {
+  const advertisedByInitiator = new Set(initiator.signatureSuites);
+  const candidate = responder.signatureSuites.filter((id) => {
+    if (!advertisedByInitiator.has(id)) return false;
+    const meta = getSuiteMeta(id);
+    return meta !== undefined && acceptableTo(initiator, meta) && acceptableTo(responder, meta);
+  });
+  if (candidate.length > 0) {
+    return { ok: true, agreedSuites: candidate };
+  }
+
+  // §6.1 fallback: the MTI suite, unless a region's policy excludes it.
+  const mti = getSuiteMeta(MTI_SUITE_ID);
+  const mtiAcceptable =
+    mti !== undefined &&
+    advertisedByInitiator.has(MTI_SUITE_ID) &&
+    responder.signatureSuites.includes(MTI_SUITE_ID) &&
+    acceptableTo(initiator, mti) &&
+    acceptableTo(responder, mti);
+  if (mtiAcceptable) {
+    return { ok: true, agreedSuites: [MTI_SUITE_ID] };
+  }
+  return {
+    ok: false,
+    reason: "no-acceptable-suite",
+    detail: "no common suite meets both regions' minimum-strength policy, and the MTI fallback is excluded",
+  };
+}

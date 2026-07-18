@@ -9,6 +9,8 @@ import {
   listSuiteMeta,
   listSuites,
   MTI_SUITE_ID,
+  negotiate,
+  type SuitePolicy,
 } from "../src/suite";
 
 describe("signature-suite registry", () => {
@@ -88,5 +90,50 @@ describe("RFC 0005 §4 suite registry (metadata)", () => {
 
   test("the seed registry is all-active (nothing deprecated yet)", () => {
     expect(activeSuiteIds().length).toBe(listSuiteMeta().length);
+  });
+});
+
+describe("RFC 0005 §6 negotiation", () => {
+  const policy = (signatureSuites: string[], minSecurityBits = 128, requirePq = false): SuitePolicy => ({
+    signatureSuites,
+    minSecurityBits,
+    requirePq,
+  });
+
+  test("two MTI-only regions agree on ed25519", () => {
+    expect(negotiate(policy(["ed25519"]), policy(["ed25519"]))).toEqual({ ok: true, agreedSuites: ["ed25519"] });
+  });
+
+  test("agreedSuites follow the responder's preference order", () => {
+    const r = negotiate(policy(["ed25519", "ecdsa-p384"]), policy(["ecdsa-p384", "ed25519"]));
+    expect(r).toEqual({ ok: true, agreedSuites: ["ecdsa-p384", "ed25519"] });
+  });
+
+  test("a suite below either region's minimum strength is excluded", () => {
+    // initiator floor is 192-bit, so ed25519 (128) drops out; p384 (192) survives.
+    const r = negotiate(policy(["ed25519", "ecdsa-p384"], 192), policy(["ed25519", "ecdsa-p384"]));
+    expect(r).toEqual({ ok: true, agreedSuites: ["ecdsa-p384"] });
+  });
+
+  test("unregistered advertised ids are skipped", () => {
+    const r = negotiate(policy(["ed25519", "made-up-suite"]), policy(["ed25519", "made-up-suite"]));
+    expect(r).toEqual({ ok: true, agreedSuites: ["ed25519"] });
+  });
+
+  test("negotiation fails when the MTI is excluded by strength", () => {
+    const r = negotiate(policy(["ed25519"], 256), policy(["ed25519"]));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("no-acceptable-suite");
+  });
+
+  test("a PQ-requiring region excludes all non-PQ suites (§8)", () => {
+    const r = negotiate(policy(["ed25519", "ml-dsa-65"]), policy(["ed25519", "ml-dsa-65"], 128, true));
+    expect(r).toEqual({ ok: true, agreedSuites: ["ml-dsa-65"] });
+  });
+
+  test("PQ required with no common PQ suite fails (MTI is non-PQ)", () => {
+    const r = negotiate(policy(["ed25519"]), policy(["ed25519"], 128, true));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("no-acceptable-suite");
   });
 });
