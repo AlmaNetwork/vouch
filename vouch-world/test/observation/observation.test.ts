@@ -41,6 +41,30 @@ describe("observation — read-only metrics (§5)", () => {
     expect(m.log.eventTypes["economy.settled"]).toBe(1);
   });
 
+  test("RFC 0002 dependent variables: lifecycle, per-region, mobility, trust", () => {
+    const m = metrics(world());
+
+    // lifecycle (orthogonal to recognition): both regions are born active.
+    expect(m.regions.active).toBe(2);
+    expect(m.regions.dormant).toBe(0);
+
+    // per-region breakdown: residency is derived from the agent slice.
+    const umi = m.perRegion.find((r) => r.id === "umi");
+    const nova = m.perRegion.find((r) => r.id === "nova");
+    expect(umi?.residents).toBe(2);
+    expect(umi?.lifecycle).toBe("active");
+    expect(umi?.currencyGini).toBeGreaterThan(0); // 60 vs 40 after the transfer
+    expect(nova?.residents).toBe(0);
+    expect(nova?.currencyGini).toBe(0); // no residents
+
+    // mobility: nothing migrated, seceded, or changed hands in this fixture.
+    expect(m.mobility).toEqual({ migrations: 0, secessions: 0, ownershipTransfers: 0 });
+
+    // reputation + trust aggregates exist and are numeric.
+    expect(typeof m.agents.avgReputation).toBe("number");
+    expect(typeof m.trust.vouches).toBe("number");
+  });
+
   test("gini is 0 when equal and rises with concentration", () => {
     expect(gini([10, 10, 10])).toBe(0);
     expect(gini([])).toBe(0);
