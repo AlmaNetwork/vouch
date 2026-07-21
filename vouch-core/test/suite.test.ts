@@ -91,6 +91,21 @@ describe("RFC 0005 §4 suite registry (metadata)", () => {
   test("the seed registry is all-active (nothing deprecated yet)", () => {
     expect(activeSuiteIds().length).toBe(listSuiteMeta().length);
   });
+
+  test("the two registries stay consistent: executable ⊆ metadata, and the MTI is executable", () => {
+    for (const id of listSuites()) {
+      expect(getSuiteMeta(id)).toBeDefined();
+    }
+    expect(getSuite(MTI_SUITE_ID)).toBeDefined(); // else §6.1's MTI fallback would be a lie
+  });
+
+  test("the metadata table is deep-frozen — runtime mutation is impossible", () => {
+    const meta = getSuiteMeta("ed25519");
+    expect(() => {
+      (meta as { status: string }).status = "deprecated";
+    }).toThrow(TypeError);
+    expect(getSuiteMeta("ed25519")?.status).toBe("active");
+  });
 });
 
 describe("RFC 0005 §6 negotiation", () => {
