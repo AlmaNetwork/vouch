@@ -7,9 +7,9 @@
 // secession / ownership-turnover counts, trust activity, reputation) — it exposes NO
 // control knobs. Configuring an outcome would defeat the point of observing it.
 
-import { EVENT_AGENT_MIGRATED, EVENT_AGENT_VOUCHED, listAgents } from "../agent";
+import { agentsInRegion, EVENT_AGENT_MIGRATED, EVENT_AGENT_VOUCHED, listAgents } from "../agent";
 import type { WorldState } from "../environment";
-import type { WorldView } from "../foundation";
+import { SYSTEM_ACTOR, type WorldView } from "../foundation";
 import { EVENT_REGION_OWNERSHIP_TRANSFERRED, listRegions, type RecognitionStatus, type RegionLifecycle } from "../region";
 
 /** Gini coefficient of a list of non-negative values (0 = equal, ~1 = concentrated). */
@@ -62,11 +62,24 @@ export function metrics(view: WorldView<WorldState>): Metrics {
   const agents = listAgents(state);
   const residents = agents.filter((a) => a.role !== "treasury");
 
+  // `eventTypes` is the RAW log distribution (forged events included). The behavioral counters
+  // below (mobility/trust) count only SYSTEM-authored events: the actor-gate lets forged
+  // (non-`"world"`) events sit in the log while the reducers ignore them, so a forged
+  // agent.migrated / agent.vouched must not inflate a behavioral RFC 0002 measurement.
   const eventTypes: Record<string, number> = {};
-  for (const e of view.log.all()) eventTypes[e.type] = (eventTypes[e.type] ?? 0) + 1;
+  let migrations = 0;
+  let ownershipTransfers = 0;
+  let vouches = 0;
+  for (const e of view.log.all()) {
+    eventTypes[e.type] = (eventTypes[e.type] ?? 0) + 1;
+    if (e.actor !== SYSTEM_ACTOR) continue;
+    if (e.type === EVENT_AGENT_MIGRATED) migrations += 1;
+    else if (e.type === EVENT_REGION_OWNERSHIP_TRANSFERRED) ownershipTransfers += 1;
+    else if (e.type === EVENT_AGENT_VOUCHED) vouches += 1;
+  }
 
   const perRegion: RegionMetrics[] = regions.map((r) => {
-    const inRegion = agents.filter((a) => a.region === r.id && a.role !== "treasury");
+    const inRegion = agentsInRegion(state, r.id); // canonical residency (excludes the treasury)
     const treasuryAgent = agents.find((a) => a.region === r.id && a.role === "treasury");
     return {
       id: r.id,
@@ -103,11 +116,11 @@ export function metrics(view: WorldView<WorldState>): Metrics {
     // emergence proposer (§3-D); regions are never deleted, so the current region set is the
     // full founding history. Migrations and ownership transfers are counted from the log.
     mobility: {
-      migrations: eventTypes[EVENT_AGENT_MIGRATED] ?? 0,
+      migrations,
       secessions: regions.filter((r) => r.proposer.kind === "emergence").length,
-      ownershipTransfers: eventTypes[EVENT_REGION_OWNERSHIP_TRANSFERRED] ?? 0,
+      ownershipTransfers,
     },
-    trust: { vouches: eventTypes[EVENT_AGENT_VOUCHED] ?? 0 },
+    trust: { vouches },
     log: { length: view.log.length, digest: view.log.digest(), eventTypes },
   };
 }

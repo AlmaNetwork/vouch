@@ -112,7 +112,7 @@ paths:
               schema: { $ref: "#/components/schemas/Metrics" }
               example:
                 tick: 8
-                regions: { total: 1, recognized: 1, unrecognized: 0 }
+                regions: { total: 1, recognized: 1, unrecognized: 0, active: 1, dormant: 0 }
                 agents:
                   total: 4
                   residents: 3
@@ -120,6 +120,16 @@ paths:
                   totalCurrency: 300
                   totalCredit: 48
                   currencyGini: 0.08564814814814814
+                  avgReputation: 1.5
+                perRegion:
+                  - id: umi
+                    status: recognized
+                    lifecycle: active
+                    residents: 3
+                    treasury: 60
+                    currencyGini: 0.08564814814814814
+                mobility: { migrations: 0, secessions: 0, ownershipTransfers: 0 }
+                trust: { vouches: 2 }
                 log:
                   length: 61
                   digest: "91a22c60"
@@ -275,19 +285,21 @@ components:
     # --- derived metrics (Layer 5) ------------------------------------------
     Metrics:
       type: object
-      required: [tick, regions, agents, log]
+      required: [tick, regions, agents, perRegion, mobility, trust, log]
       properties:
         tick: { $ref: "#/components/schemas/Tick" }
         regions:
           type: object
-          required: [total, recognized, unrecognized]
+          required: [total, recognized, unrecognized, active, dormant]
           properties:
             total: { type: integer, minimum: 0 }
             recognized: { type: integer, minimum: 0 }
             unrecognized: { type: integer, minimum: 0 }
+            active: { type: integer, minimum: 0 }
+            dormant: { type: integer, minimum: 0 }
         agents:
           type: object
-          required: [total, residents, treasuries, totalCurrency, totalCredit, currencyGini]
+          required: [total, residents, treasuries, totalCurrency, totalCredit, currencyGini, avgReputation]
           properties:
             total: { type: integer, minimum: 0 }
             residents: { type: integer, minimum: 0 }
@@ -297,6 +309,27 @@ components:
             currencyGini:
               type: number
               description: Gini coefficient of resident currency (0 = equal, ~1 = concentrated).
+            avgReputation:
+              type: number
+              description: Mean economy-derived reputation across residents (0 if none).
+        perRegion:
+          type: array
+          description: Per-region dependent variables (RFC 0002).
+          items: { $ref: "#/components/schemas/RegionMetrics" }
+        mobility:
+          type: object
+          required: [migrations, secessions, ownershipTransfers]
+          description: Exit/mobility signals — SYSTEM-authored events only (forged events excluded).
+          properties:
+            migrations: { type: integer, minimum: 0 }
+            secessions: { type: integer, minimum: 0 }
+            ownershipTransfers: { type: integer, minimum: 0 }
+        trust:
+          type: object
+          required: [vouches]
+          description: Trust activity — SYSTEM-authored events only.
+          properties:
+            vouches: { type: integer, minimum: 0 }
         log:
           type: object
           required: [length, digest, eventTypes]
@@ -305,8 +338,19 @@ components:
             digest: { type: string }
             eventTypes:
               type: object
-              description: Count of events by `type`.
+              description: Raw count of events by `type` (forged events included).
               additionalProperties: { type: integer, minimum: 0 }
+
+    RegionMetrics:
+      type: object
+      required: [id, status, lifecycle, residents, treasury, currencyGini]
+      properties:
+        id: { type: string }
+        status: { $ref: "#/components/schemas/RecognitionStatus" }
+        lifecycle: { $ref: "#/components/schemas/RegionLifecycle" }
+        residents: { type: integer, minimum: 0 }
+        treasury: { type: number }
+        currencyGini: { type: number }
 
     # --- enums (mirror the real TS unions) ----------------------------------
     AgentRole:
