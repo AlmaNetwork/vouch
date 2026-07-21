@@ -107,6 +107,39 @@ const hashRefSchema = z.string().min(1).nullable(); // genesis / prev / parent /
 const weightBpSchema = z.number().int().min(-10000).max(10000);
 const seqSchema = z.number().int().min(0);
 
+// RFC 0008 §4.3 per-kind endpoint legality: an `agent` endpoint is `name@region`; a `region`
+// endpoint is a bare region id; `any` accepts either. Plus the no-self-edge rule: `from` MUST
+// NOT equal `to` — a self-edge names no relationship, and for the consent-bearing kinds it would
+// collapse consent into self-signature (the `from` signature doubling as its own `cosign`, §4.6).
+type EndpointType = "agent" | "region" | "any";
+
+const KIND_ENDPOINT_RULES: Readonly<Record<EdgeKind, { readonly from: EndpointType; readonly to: EndpointType }>> = {
+  vouch: { from: "any", to: "any" },
+  sanction: { from: "region", to: "any" },
+  membership: { from: "region", to: "agent" },
+  connection: { from: "region", to: "region" },
+  capability: { from: "any", to: "any" },
+};
+
+function endpointTypeOk(value: string, want: EndpointType): boolean {
+  if (want === "agent") return isValidIdentifier(value);
+  if (want === "region") return isValidRegion(value);
+  return isValidEndpoint(value);
+}
+
+function refineEndpoints(data: { kind: EdgeKind; from: string; to: string }, ctx: z.RefinementCtx): void {
+  const rule = KIND_ENDPOINT_RULES[data.kind];
+  if (!endpointTypeOk(data.from, rule.from)) {
+    ctx.addIssue({ code: "custom", path: ["from"], message: `${data.kind} 'from' must be a ${rule.from} endpoint (§4.3)` });
+  }
+  if (!endpointTypeOk(data.to, rule.to)) {
+    ctx.addIssue({ code: "custom", path: ["to"], message: `${data.kind} 'to' must be a ${rule.to} endpoint (§4.3)` });
+  }
+  if (data.from === data.to) {
+    ctx.addIssue({ code: "custom", path: ["to"], message: "from and to MUST differ — a self-edge names no relationship (§4.3)" });
+  }
+}
+
 const coreShape = {
   version: z.literal(EDGE_VERSION),
   suite: z.string().min(1),
@@ -126,29 +159,33 @@ const coreShape = {
   status: z.enum(["active", "revoked"]),
 } as const;
 
-const edgeSchema = z.object({
-  ...coreShape,
-  signature: z.string(),
-  cosign: z.record(z.string(), z.string()).optional(),
-});
+const edgeSchema = z
+  .object({
+    ...coreShape,
+    signature: z.string(),
+    cosign: z.record(z.string(), z.string()).optional(),
+  })
+  .superRefine(refineEndpoints);
 
-const issueInputSchema = z.object({
-  schemaId: z.string().min(1),
-  kind: z.enum(EDGE_KINDS),
-  from: endpointSchema,
-  to: endpointSchema,
-  context: z.string().min(1),
-  weightBp: weightBpSchema,
-  validFrom: seqSchema,
-  suite: z.string().min(1).optional(),
-  genesis: hashRefSchema.optional(),
-  command: hashRefSchema.optional(),
-  expiry: seqSchema.nullable().optional(),
-  prev: hashRefSchema.optional(),
-  counter: seqSchema.optional(),
-  parent: hashRefSchema.optional(),
-  status: z.enum(["active", "revoked"]).optional(),
-});
+const issueInputSchema = z
+  .object({
+    schemaId: z.string().min(1),
+    kind: z.enum(EDGE_KINDS),
+    from: endpointSchema,
+    to: endpointSchema,
+    context: z.string().min(1),
+    weightBp: weightBpSchema,
+    validFrom: seqSchema,
+    suite: z.string().min(1).optional(),
+    genesis: hashRefSchema.optional(),
+    command: hashRefSchema.optional(),
+    expiry: seqSchema.nullable().optional(),
+    prev: hashRefSchema.optional(),
+    counter: seqSchema.optional(),
+    parent: hashRefSchema.optional(),
+    status: z.enum(["active", "revoked"]).optional(),
+  })
+  .superRefine(refineEndpoints);
 
 function fail(reason: EdgeVerificationFailureReason, detail: string): EdgeVerificationResult {
   return { ok: false, reason, detail };
@@ -401,7 +438,7 @@ export function requiredCosigners(edge: EdgeCore): string[] {
   return requiresCosign(edge.kind) ? [edge.to] : [];
 }
 
-export type EdgeCosignFailureReason = "missing-cosign" | "invalid-cosign-encoding" | "bad-cosign";
+export type EdgeCosignFailureReason = "unknown-suite" | "missing-cosign" | "invalid-cosign-encoding" | "bad-cosign";
 
 export type EdgeCosignResult =
   | { readonly ok: true }
@@ -418,6 +455,10 @@ export function verifyCosign(edge: Edge, cosignerPublicKeys: Readonly<Record<str
   const suite = getSuite(edge.suite);
   const bytes = edgeSigningBytes(edge);
   for (const id of requiredCosigners(edge)) {
+    if (suite === undefined) {
+      // Unknown suite is an explicit failure, never collapsed into "bad-cosign" (repo discipline).
+      return { ok: false, reason: "unknown-suite", detail: `signature suite "${edge.suite}" is not registered`, cosigner: id };
+    }
     const sigB64 = edge.cosign?.[id];
     if (sigB64 === undefined) {
       return { ok: false, reason: "missing-cosign", detail: `no co-signature from required co-signer "${id}"`, cosigner: id };
@@ -432,14 +473,14 @@ export function verifyCosign(edge: Edge, cosignerPublicKeys: Readonly<Record<str
     } catch (err) {
       return { ok: false, reason: "invalid-cosign-encoding", detail: err instanceof Error ? err.message : String(err), cosigner: id };
     }
-    if (!suite?.verify(bytes, sig, pub)) {
+    if (!suite.verify(bytes, sig, pub)) {
       return { ok: false, reason: "bad-cosign", detail: `co-signature from "${id}" does not verify`, cosigner: id };
     }
   }
   return { ok: true };
 }
 
-export type FullVerificationResult =
+export type EdgeFullVerificationResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly stage: "signature"; readonly reason: EdgeVerificationFailureReason; readonly detail: string }
   | {
@@ -460,7 +501,7 @@ export function verifyEdgeFull(
   edge: unknown,
   fromPublicKey: Uint8Array,
   cosignerPublicKeys: Readonly<Record<string, Uint8Array>> = {},
-): FullVerificationResult {
+): EdgeFullVerificationResult {
   const base = verifyEdge(edge, fromPublicKey);
   if (!base.ok) return { ok: false, stage: "signature", reason: base.reason, detail: base.detail };
   const co = verifyCosign(edge as Edge, cosignerPublicKeys);
