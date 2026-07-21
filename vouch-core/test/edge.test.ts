@@ -454,4 +454,70 @@ describe("RFC 0008 §4.6 co-signatures", () => {
   test("verifyEdgeFull: a unilateral edge needs no co-signers", () => {
     expect(verifyEdgeFull(vouchEdge, alice.publicKey)).toEqual({ ok: true });
   });
+
+  test("verifyCosign reports an unknown suite explicitly, not as bad-cosign", () => {
+    const r = verifyCosign({ ...membership, suite: "no-such-suite" }, { "bob@nova": bob.publicKey });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("unknown-suite");
+  });
+
+  test("§4.3 per-kind endpoint legality is enforced at issue time", () => {
+    // membership `to` MUST be an agent, not a region
+    expect(() =>
+      issueEdge(
+        {
+          schemaId: "alma.membership/v1",
+          kind: "membership",
+          from: "nova",
+          to: "delta",
+          context: "nova:citizen",
+          weightBp: 0,
+          validFrom: 1,
+        },
+        nova.privateKey,
+      ),
+    ).toThrow();
+    // sanction `from` MUST be a region, not an agent
+    expect(() =>
+      issueEdge(
+        {
+          schemaId: "alma.sanction/v1",
+          kind: "sanction",
+          from: "alice@nova",
+          to: "bob@nova",
+          context: "nova:x",
+          weightBp: -1,
+          validFrom: 1,
+        },
+        alice.privateKey,
+      ),
+    ).toThrow();
+    // no self-edge for any kind
+    expect(() =>
+      issueEdge(
+        { schemaId: "alma.vouch/v1", kind: "vouch", from: "alice@nova", to: "alice@nova", context: "nova:x", weightBp: 1, validFrom: 1 },
+        alice.privateKey,
+      ),
+    ).toThrow();
+  });
+
+  test("a connection region→region co-signature verifies; the self-consent attack is rejected", () => {
+    const delta = keyPairFromSeed(seed(4));
+    const conn = issueEdge(
+      { schemaId: "alma.connection/v1", kind: "connection", from: "nova", to: "delta", context: "nova:treaty", weightBp: 0, validFrom: 5 },
+      nova.privateKey,
+    );
+    const connCosign = encodeBase64(ED25519_SUITE.sign(edgeSigningBytes(conn), delta.privateKey));
+    const connEdge: Edge = { ...conn, cosign: { delta: connCosign } };
+    expect(verifyEdgeFull(connEdge, nova.publicKey, { delta: delta.publicKey })).toEqual({ ok: true });
+
+    // self-consent attack: a nova → nova "connection" copying `from`'s signature as its own cosign.
+    const selfEdge = { ...connEdge, to: "nova", cosign: { nova: conn.signature } };
+    const r = verifyEdgeFull(selfEdge, nova.publicKey, { nova: nova.publicKey });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.stage).toBe("signature");
+      expect(r.reason).toBe("invalid-to");
+    }
+  });
 });
