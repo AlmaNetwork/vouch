@@ -151,4 +151,21 @@ describe("RFC 0005 §6 negotiation", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toBe("no-acceptable-suite");
   });
+
+  test("disjoint advertisements fail cleanly — there is no MTI rescue", () => {
+    // both policies admit the MTI (min 128), but neither advertises a common suite
+    const r = negotiate(policy(["ecdsa-p256"]), policy(["ecdsa-p384"]));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("no-acceptable-suite");
+  });
+
+  test("a duplicated advertisement is deduplicated (agreedSuites is an ordered set)", () => {
+    expect(negotiate(policy(["ed25519"]), policy(["ed25519", "ed25519"]))).toEqual({ ok: true, agreedSuites: ["ed25519"] });
+  });
+
+  test("an empty advertisement fails cleanly", () => {
+    const r = negotiate(policy([]), policy(["ed25519"]));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("no-acceptable-suite");
+  });
 });

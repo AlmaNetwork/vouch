@@ -192,7 +192,7 @@ export interface SuitePolicy {
 }
 
 export type NegotiationResult =
-  | { readonly ok: true; readonly agreedSuites: string[] }
+  | { readonly ok: true; readonly agreedSuites: readonly string[] }
   | { readonly ok: false; readonly reason: "no-acceptable-suite"; readonly detail: string };
 
 /** Whether `meta` satisfies `policy`: active, meets the strength floor, and PQ if required. */
@@ -201,38 +201,32 @@ function acceptableTo(policy: SuitePolicy, meta: SuiteMeta): boolean {
 }
 
 /**
- * RFC 0005 §6 negotiation. The RESPONDER binds `agreedSuites`: the intersection of both
- * regions' advertised suites, in responder-preference order, excluding deprecated suites and
- * any below either region's minimum-strength policy (and, per §8, non-PQ suites if either
- * region requires post-quantum). If that candidate set is empty, the parties fall back to the
- * MTI suite (`ed25519`) — unless a region's policy excludes the MTI, in which case negotiation
- * fails and no Connection forms. Unregistered advertised ids cannot be assessed and are skipped.
+ * RFC 0005 §6 negotiation. The RESPONDER binds `agreedSuites`: the intersection of both regions'
+ * advertised suites — an ordered SET in responder-preference order (duplicates dropped, first
+ * occurrence wins) — excluding deprecated suites, anything below either region's minimum-strength
+ * policy, and (per §8) non-PQ suites if either region requires post-quantum. If that candidate set
+ * is empty, negotiation FAILS and no Connection forms. There is deliberately **no separate MTI
+ * fallback**: §5 obliges every region to advertise the MTI, so between conformant regions whose
+ * policies admit the MTI it is always already in the candidate set; a fallback that rescued a
+ * negotiation with a counterparty whose advertisement omits the MTI would legitimize that §5
+ * violation. Unregistered advertised ids cannot be assessed and are skipped.
  */
 export function negotiate(initiator: SuitePolicy, responder: SuitePolicy): NegotiationResult {
   const advertisedByInitiator = new Set(initiator.signatureSuites);
-  const candidate = responder.signatureSuites.filter((id) => {
-    if (!advertisedByInitiator.has(id)) return false;
+  const seen = new Set<string>();
+  const agreedSuites = responder.signatureSuites.filter((id) => {
+    if (seen.has(id) || !advertisedByInitiator.has(id)) return false;
     const meta = getSuiteMeta(id);
-    return meta !== undefined && acceptableTo(initiator, meta) && acceptableTo(responder, meta);
+    if (meta === undefined || !acceptableTo(initiator, meta) || !acceptableTo(responder, meta)) return false;
+    seen.add(id); // ordered set: first occurrence wins
+    return true;
   });
-  if (candidate.length > 0) {
-    return { ok: true, agreedSuites: candidate };
-  }
-
-  // §6.1 fallback: the MTI suite, unless a region's policy excludes it.
-  const mti = getSuiteMeta(MTI_SUITE_ID);
-  const mtiAcceptable =
-    mti !== undefined &&
-    advertisedByInitiator.has(MTI_SUITE_ID) &&
-    responder.signatureSuites.includes(MTI_SUITE_ID) &&
-    acceptableTo(initiator, mti) &&
-    acceptableTo(responder, mti);
-  if (mtiAcceptable) {
-    return { ok: true, agreedSuites: [MTI_SUITE_ID] };
+  if (agreedSuites.length > 0) {
+    return { ok: true, agreedSuites };
   }
   return {
     ok: false,
     reason: "no-acceptable-suite",
-    detail: "no common suite meets both regions' minimum-strength policy, and the MTI fallback is excluded",
+    detail: "no suite advertised by both regions is registered, active, and acceptable to both regions' policies",
   };
 }
