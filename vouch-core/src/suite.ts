@@ -55,7 +55,7 @@ registerSuite(ED25519_SUITE);
 // their classical-equivalent floors (L1 -> 128, L3 -> 192, L5 -> 256).
 
 /** The Mandatory-To-Implement suite every conforming region MUST verify (RFC 0005 §4/§6). */
-export const MTI_SUITE_ID = "ed25519";
+export const MTI_SUITE_ID = ED25519_SUITE.id;
 
 export type SuiteClass = "single" | "threshold";
 export type SuiteStatus = "active" | "deprecated";
@@ -79,7 +79,7 @@ export function isValidSuiteId(id: unknown): id is string {
 
 // Seed registry (RFC 0005 §4). Append-only: an `active` entry is never modified or removed,
 // only moved to `deprecated`; new suites are appended.
-const SUITE_META: readonly SuiteMeta[] = [
+const SUITE_META_ENTRIES: SuiteMeta[] = [
   { id: "ed25519", name: "EdDSA over Curve25519", reference: "RFC 8032", class: "single", securityBits: 128, pq: false, status: "active" },
   {
     id: "ecdsa-secp256k1",
@@ -158,6 +158,10 @@ const SUITE_META: readonly SuiteMeta[] = [
     status: "active",
   },
 ];
+
+// Append-only AND immutable at runtime: RFC 0005 §4 "an active entry MUST NOT be modified" made a
+// runtime fact (deep-frozen, like the events/state elsewhere) so a consumer cannot corrupt the table.
+const SUITE_META: readonly SuiteMeta[] = Object.freeze(SUITE_META_ENTRIES.map((m) => Object.freeze(m)));
 
 const suiteMetaById = new Map<string, SuiteMeta>(SUITE_META.map((m) => [m.id, m]));
 
