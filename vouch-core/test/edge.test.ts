@@ -346,4 +346,34 @@ describe("RFC 0008 §5 micro-chain", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toBe("counter-not-incremented");
   });
+
+  test("fields outside the §5.1 mutable set are immutable — no re-pointing of meaning", () => {
+    const patches = [
+      { schemaId: "alma.sanction/v1" }, // change the meaning type
+      { suite: "ecdsa-p256" }, // change the signature suite mid-chain
+      { command: "trade.execute" }, // grow a capability command out of nothing
+      { parent: edgeId(e0) }, // graft an attenuation parent mid-chain
+    ] as const;
+    for (const patch of patches) {
+      const r = verifyTransition(e0, { ...e1, ...patch });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.reason).toBe("immutable-field-changed");
+    }
+  });
+
+  test("a sparse chain fails closed — an unverifiable tail must not verify", () => {
+    const sparse: Edge[] = [e0];
+    sparse[2] = e2; // hole at index 1: the e1 link is missing, but e2 is present
+    const r = verifyChain(sparse);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("not-a-transition");
+  });
+
+  test("an internally inconsistent prev cannot anchor a transition — genesisId masking (§5.1)", () => {
+    const malformed = { ...e0, counter: 5 }; // counter 5 but null prev/genesis — impossible
+    const next = { ...e1, counter: 6, prev: edgeId(malformed), genesis: edgeId(malformed) };
+    const r = verifyTransition(malformed, next);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("not-a-transition");
+  });
 });
