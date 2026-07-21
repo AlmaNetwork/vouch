@@ -127,6 +127,8 @@ Per-kind legality:
 | `connection` | region | region | RFC 0004 Connection Agreement, co-signed (§4.6) |
 | `capability` | agent or region | agent or region | **cross-region only** (§10.6; RFC 0007 §4.4 excludes it intra-node) |
 
+For every kind, `from` MUST NOT equal `to`. A self-edge names no relationship, and for the consent-bearing kinds (§4.6) it would collapse consent into self-signature — the `from` signature doubling as its own `cosign`. Per-kind endpoint legality and the no-self-edge rule are **form** (verifiable from the envelope alone) and MUST be enforced by any conformant verifier alongside the §4.1 shape checks.
+
 ### 4.4 Weight (`weightBp`), context, and the suffrage boundary
 
 `weightBp` is a **signed integer** in basis points; effective weight is `weightBp / 10000`, constrained to `[−10000, 10000]` per edge. A positive `weightBp` is supporting standing; a negative `weightBp` represents a §9 sanction (§11). The fold law, not the edge, decides how weight composes (RFC 0007 §8.5).

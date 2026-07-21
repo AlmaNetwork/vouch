@@ -10,12 +10,11 @@
 // canonicalized (RFC 8785). `edgeId = sha256_hex(canonicalBytes(core))` is a SAID-class
 // content address; the `from` signature is Ed25519 over the same bytes.
 //
-// Scope of this module = RFC 0008 §4 (wire format) + §5 (per-edge micro-chain). The §5
-// transition-continuity rules (prev/genesis/counter, endpoint immutability) are checked by
-// verifyTransition / verifyChain — structure only; each state's own signature is verifyEdge's
-// job. It does NOT yet verify §4.6 per-kind co-signatures (membership/connection): a `cosign`
-// map is carried on the wire as a detached attachment, but verifyEdge checks only the `from`
-// signature. §4.6 cosign is a separate follow-up. See RFC 0008 §5 / §4.6.
+// Scope of this module = RFC 0008 §4 (wire format) + §5 (per-edge micro-chain) + §4.6 (per-kind
+// co-signatures). verifyEdge checks the envelope shape and the `from` signature; verifyTransition
+// / verifyChain check §5 micro-chain continuity (structure only); verifyCosign / verifyEdgeFull
+// check the §4.6 counterparty co-signature required for consent-bearing kinds (membership,
+// connection). The core keeps no key directory — the caller supplies every public key.
 
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -61,8 +60,8 @@ export interface EdgeCore {
 export interface Edge extends EdgeCore {
   readonly signature: string; // base64 Ed25519 by `from` over canonicalBytes(core)
   // §4.6 co-signatures (membership/connection), keyed by co-signer identifier. Carried on the
-  // wire as a detached attachment; NOT covered by `from`'s signature or `edgeId`, and NOT yet
-  // verified here — that check lands with §4.6.
+  // wire as a detached attachment; NOT covered by `from`'s signature or `edgeId`. Verified by
+  // verifyCosign / verifyEdgeFull (§4.6).
   readonly cosign?: Readonly<Record<string, string>>;
 }
 
@@ -108,6 +107,39 @@ const hashRefSchema = z.string().min(1).nullable(); // genesis / prev / parent /
 const weightBpSchema = z.number().int().min(-10000).max(10000);
 const seqSchema = z.number().int().min(0);
 
+// RFC 0008 §4.3 per-kind endpoint legality: an `agent` endpoint is `name@region`; a `region`
+// endpoint is a bare region id; `any` accepts either. Plus the no-self-edge rule: `from` MUST
+// NOT equal `to` — a self-edge names no relationship, and for the consent-bearing kinds it would
+// collapse consent into self-signature (the `from` signature doubling as its own `cosign`, §4.6).
+type EndpointType = "agent" | "region" | "any";
+
+const KIND_ENDPOINT_RULES: Readonly<Record<EdgeKind, { readonly from: EndpointType; readonly to: EndpointType }>> = {
+  vouch: { from: "any", to: "any" },
+  sanction: { from: "region", to: "any" },
+  membership: { from: "region", to: "agent" },
+  connection: { from: "region", to: "region" },
+  capability: { from: "any", to: "any" },
+};
+
+function endpointTypeOk(value: string, want: EndpointType): boolean {
+  if (want === "agent") return isValidIdentifier(value);
+  if (want === "region") return isValidRegion(value);
+  return isValidEndpoint(value);
+}
+
+function refineEndpoints(data: { kind: EdgeKind; from: string; to: string }, ctx: z.RefinementCtx): void {
+  const rule = KIND_ENDPOINT_RULES[data.kind];
+  if (!endpointTypeOk(data.from, rule.from)) {
+    ctx.addIssue({ code: "custom", path: ["from"], message: `${data.kind} 'from' must be a ${rule.from} endpoint (§4.3)` });
+  }
+  if (!endpointTypeOk(data.to, rule.to)) {
+    ctx.addIssue({ code: "custom", path: ["to"], message: `${data.kind} 'to' must be a ${rule.to} endpoint (§4.3)` });
+  }
+  if (data.from === data.to) {
+    ctx.addIssue({ code: "custom", path: ["to"], message: "from and to MUST differ — a self-edge names no relationship (§4.3)" });
+  }
+}
+
 const coreShape = {
   version: z.literal(EDGE_VERSION),
   suite: z.string().min(1),
@@ -127,29 +159,33 @@ const coreShape = {
   status: z.enum(["active", "revoked"]),
 } as const;
 
-const edgeSchema = z.object({
-  ...coreShape,
-  signature: z.string(),
-  cosign: z.record(z.string(), z.string()).optional(),
-});
+const edgeSchema = z
+  .object({
+    ...coreShape,
+    signature: z.string(),
+    cosign: z.record(z.string(), z.string()).optional(),
+  })
+  .superRefine(refineEndpoints);
 
-const issueInputSchema = z.object({
-  schemaId: z.string().min(1),
-  kind: z.enum(EDGE_KINDS),
-  from: endpointSchema,
-  to: endpointSchema,
-  context: z.string().min(1),
-  weightBp: weightBpSchema,
-  validFrom: seqSchema,
-  suite: z.string().min(1).optional(),
-  genesis: hashRefSchema.optional(),
-  command: hashRefSchema.optional(),
-  expiry: seqSchema.nullable().optional(),
-  prev: hashRefSchema.optional(),
-  counter: seqSchema.optional(),
-  parent: hashRefSchema.optional(),
-  status: z.enum(["active", "revoked"]).optional(),
-});
+const issueInputSchema = z
+  .object({
+    schemaId: z.string().min(1),
+    kind: z.enum(EDGE_KINDS),
+    from: endpointSchema,
+    to: endpointSchema,
+    context: z.string().min(1),
+    weightBp: weightBpSchema,
+    validFrom: seqSchema,
+    suite: z.string().min(1).optional(),
+    genesis: hashRefSchema.optional(),
+    command: hashRefSchema.optional(),
+    expiry: seqSchema.nullable().optional(),
+    prev: hashRefSchema.optional(),
+    counter: seqSchema.optional(),
+    parent: hashRefSchema.optional(),
+    status: z.enum(["active", "revoked"]).optional(),
+  })
+  .superRefine(refineEndpoints);
 
 function fail(reason: EdgeVerificationFailureReason, detail: string): EdgeVerificationResult {
   return { ok: false, reason, detail };
@@ -231,8 +267,8 @@ export function issueEdge(input: IssueEdgeInput, fromPrivateKey: Uint8Array): Ed
 /**
  * Verify the envelope SHAPE and the `from` SIGNATURE over the core (§4.1). The §5 micro-chain
  * transition rules are checked separately by verifyTransition / verifyChain. Per RFC 0008 §4.6,
- * `membership`/`connection` additionally require a valid counterparty co-signature; that check
- * is a separate follow-up and is NOT performed here.
+ * `membership`/`connection` additionally require a valid counterparty co-signature — check it
+ * with verifyCosign, or use verifyEdgeFull to do both in one call.
  */
 export function verifyEdge(edge: unknown, fromPublicKey: Uint8Array): EdgeVerificationResult {
   const parsed = edgeSchema.safeParse(edge);
@@ -383,5 +419,92 @@ export function verifyChain(states: readonly EdgeCore[]): EdgeTransitionResult {
     if (!res.ok) return res;
     prev = next;
   }
+  return { ok: true };
+}
+
+// --- §4.6 co-signatures --------------------------------------------------
+
+/** True iff `kind` is consent-bearing and MUST carry a §4.6 co-signature. */
+export function requiresCosign(kind: EdgeKind): boolean {
+  return kind === "membership" || kind === "connection";
+}
+
+/**
+ * The identifiers whose co-signature §4.6 requires (empty for the unilateral kinds `vouch` /
+ * `sanction`). For the consent-bearing kinds the co-signer is the `to` party — the admitted
+ * agent for `membership`, the `to` region for `connection`.
+ */
+export function requiredCosigners(edge: EdgeCore): string[] {
+  return requiresCosign(edge.kind) ? [edge.to] : [];
+}
+
+export type EdgeCosignFailureReason = "unknown-suite" | "missing-cosign" | "invalid-cosign-encoding" | "bad-cosign";
+
+export type EdgeCosignResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: EdgeCosignFailureReason; readonly detail: string; readonly cosigner: string };
+
+/**
+ * Verify the §4.6 co-signatures: every required co-signer (requiredCosigners) MUST have an entry
+ * in `edge.cosign` that is a valid signature over the SAME `edgeSigningBytes(core)` as the `from`
+ * signature, under the public key the caller supplies for that co-signer. Unilateral kinds have
+ * no required co-signers and trivially pass. The core keeps no key directory — the caller passes
+ * the co-signer public keys keyed by identifier.
+ */
+export function verifyCosign(edge: Edge, cosignerPublicKeys: Readonly<Record<string, Uint8Array>>): EdgeCosignResult {
+  const suite = getSuite(edge.suite);
+  const bytes = edgeSigningBytes(edge);
+  for (const id of requiredCosigners(edge)) {
+    if (suite === undefined) {
+      // Unknown suite is an explicit failure, never collapsed into "bad-cosign" (repo discipline).
+      return { ok: false, reason: "unknown-suite", detail: `signature suite "${edge.suite}" is not registered`, cosigner: id };
+    }
+    const sigB64 = edge.cosign?.[id];
+    if (sigB64 === undefined) {
+      return { ok: false, reason: "missing-cosign", detail: `no co-signature from required co-signer "${id}"`, cosigner: id };
+    }
+    const pub = cosignerPublicKeys[id];
+    if (pub === undefined) {
+      return { ok: false, reason: "missing-cosign", detail: `no public key supplied for co-signer "${id}"`, cosigner: id };
+    }
+    let sig: Uint8Array;
+    try {
+      sig = decodeBase64(sigB64);
+    } catch (err) {
+      return { ok: false, reason: "invalid-cosign-encoding", detail: err instanceof Error ? err.message : String(err), cosigner: id };
+    }
+    if (!suite.verify(bytes, sig, pub)) {
+      return { ok: false, reason: "bad-cosign", detail: `co-signature from "${id}" does not verify`, cosigner: id };
+    }
+  }
+  return { ok: true };
+}
+
+export type EdgeFullVerificationResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly stage: "signature"; readonly reason: EdgeVerificationFailureReason; readonly detail: string }
+  | {
+      readonly ok: false;
+      readonly stage: "cosign";
+      readonly reason: EdgeCosignFailureReason;
+      readonly detail: string;
+      readonly cosigner: string;
+    };
+
+/**
+ * Full RFC 0008 §4 + §4.6 verification: the `from` signature (verifyEdge) AND every required
+ * §4.6 co-signature (verifyCosign). This is the conformant check for consent-bearing kinds — a
+ * `membership`/`connection` lacking a valid counterparty co-signature is rejected. For unilateral
+ * kinds it is equivalent to verifyEdge. The caller supplies `from`'s key plus each co-signer's.
+ */
+export function verifyEdgeFull(
+  edge: unknown,
+  fromPublicKey: Uint8Array,
+  cosignerPublicKeys: Readonly<Record<string, Uint8Array>> = {},
+): EdgeFullVerificationResult {
+  const base = verifyEdge(edge, fromPublicKey);
+  if (!base.ok) return { ok: false, stage: "signature", reason: base.reason, detail: base.detail };
+  const co = verifyCosign(edge as Edge, cosignerPublicKeys);
+  if (!co.ok) return { ok: false, stage: "cosign", reason: co.reason, detail: co.detail, cosigner: co.cosigner };
   return { ok: true };
 }
