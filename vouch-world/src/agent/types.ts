@@ -16,6 +16,15 @@ export interface Balances {
   readonly currency: number; // transferable medium of exchange (§3-B)
 }
 
+/**
+ * RFC 0007 §9 / §3.4 — active suspension on an agent. null = not suspended.
+ * A suspended agent cannot transact (economy.settled) until `untilTick` has passed
+ * or `agent.reinstated` is folded. Suspension never blocks emigration (Tier K-5).
+ */
+export interface AgentSuspension {
+  readonly untilTick: number;
+}
+
 export interface AgentState {
   readonly id: string; // name@region (identity; stable across migration)
   readonly region: string; // current residence (changes on migration)
@@ -32,6 +41,10 @@ export interface AgentState {
   // NOT stored: it is the home region encoded in the id (name@region); migration changes
   // `region` (residence) but never citizenship nor this seq.
   readonly admittedAtSeq: number;
+  // RFC 0007 §9 / §3.4: null = not suspended; non-null = suspended until untilTick.
+  readonly suspension: AgentSuspension | null;
+  // RFC 0007 §10.1: IDs that co-vouched at admission (voucher-liability chain).
+  readonly sponsors: readonly string[];
 }
 
 /** The agent read-model slice of world state; the environment composes it in. */
@@ -49,6 +62,9 @@ export const EVENT_AGENT_DECIDED = "agent.decided"; // the JOURNALED brain decis
 export const EVENT_ECONOMY_SETTLED = "economy.settled"; // env-authored value move (audit G7/G8)
 export const EVENT_ECONOMY_MINTED = "economy.minted"; // env-authored EXPLICIT currency origin (conservation baseline)
 export const EVENT_AGENT_VOUCHED = "agent.vouched"; // one agent VOUCHES for another -> trust (the brand verb)
+// RFC 0007 §9 / §3.4 sanctions — env-authored, SYSTEM_ACTOR only (Tier K guard).
+export const EVENT_AGENT_SUSPENDED = "agent.suspended"; // suspendId: block economy until untilTick
+export const EVENT_AGENT_REINSTATED = "agent.reinstated"; // reinstateId: lift suspension early
 
 /** One agent's signed balance delta within a settlement. */
 export type SettlementEntry = {
@@ -74,6 +90,10 @@ export type AgentDecidedPayload = { readonly agentId: string; readonly intent: I
 export type MintPayload = { readonly agentId: string; readonly amount: number; readonly reason: string };
 /** One agent vouches for another (weight 1..5), raising the subject's trust. */
 export type VouchedPayload = { readonly from: string; readonly to: string; readonly weight: number };
+/** RFC 0007 §9 suspendId: block the agent's economy participation until untilTick (inclusive). */
+export type AgentSuspendedPayload = { readonly agentId: string; readonly untilTick: number };
+/** RFC 0007 §9 reinstateId: lift an active suspension early (no-op if not suspended). */
+export type AgentReinstatedPayload = { readonly agentId: string };
 
 /** Maps each agent-slice event type to its payload — the typed `commit` helper keys off this. */
 export interface AgentEventMap {
@@ -83,4 +103,6 @@ export interface AgentEventMap {
   [EVENT_ECONOMY_SETTLED]: SettlementPayload;
   [EVENT_ECONOMY_MINTED]: MintPayload;
   [EVENT_AGENT_VOUCHED]: VouchedPayload;
+  [EVENT_AGENT_SUSPENDED]: AgentSuspendedPayload;
+  [EVENT_AGENT_REINSTATED]: AgentReinstatedPayload;
 }

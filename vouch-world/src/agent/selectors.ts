@@ -30,3 +30,26 @@ export function treasuryId(region: string): string {
 export function currencySupply(state: AgentSlice): number {
   return listAgents(state).reduce((sum, a) => sum + a.balances.currency, 0);
 }
+
+/**
+ * RFC 0007 §9: true iff the agent is currently under an active suspension at `atTick`.
+ * A suspension expires once the tick advances PAST `untilTick` (i.e. atTick > untilTick).
+ * Suspension never prevents emigration (Tier K-5).
+ */
+export function isAgentSuspended(agent: AgentState, atTick: number): boolean {
+  return agent.suspension !== null && atTick <= agent.suspension.untilTick;
+}
+
+/**
+ * RFC 0007 §8.5 — derived standing for an agent in the current state.
+ *
+ * In the full RFC the fold is a graph-fixpoint (source-weighted recursion, out-degree
+ * normalization, per-source caps, dedup by (from, to, context)). For the PoC simulator
+ * we use the simpler closed form: standing = trust, where `trust` is the accumulated
+ * sum of all vouch weights received (already folded into AgentState by the reducer).
+ * This satisfies the RFC's core requirement — standing is DERIVED, never stored
+ * discretionarily — and provides a stable abstraction point for the full fold upgrade.
+ */
+export function computeStanding(state: AgentSlice, agentId: string): number {
+  return getAgent(state, agentId)?.trust ?? 0;
+}

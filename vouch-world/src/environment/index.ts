@@ -25,6 +25,7 @@ export { amendInstitution, castVote, openProposal, validateInstitutionChange } f
 export { type ItemResult, mintItem, transferItem } from "./items";
 export { listRegion, type MarketResult, setRegionLifecycle, transferRegionOwnership } from "./market";
 export { type AdmitSpec, admitAgent, admitTreasury, immigrate } from "./population";
+export { reinstateAgent, type ReinstateResult, suspendAgent, type SuspendResult } from "./sanctions";
 export { drawResource, type ResourceResult, regenerateResources } from "./resource";
 export { type VouchResult, vouchFor } from "./social";
 export {

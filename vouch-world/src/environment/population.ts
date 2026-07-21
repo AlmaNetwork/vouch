@@ -24,6 +24,7 @@ export interface AdmitSpec {
   publicKey: string;
   currency?: number;
   credit?: number;
+  sponsors?: readonly string[]; // RFC 0007 §10.1: agents that co-vouched at admission
 }
 
 export function admitAgent(env: WorldCommit, spec: AdmitSpec): AgentState {
@@ -47,6 +48,8 @@ export function admitAgent(env: WorldCommit, spec: AdmitSpec): AgentState {
     trust: 0,
     resources: 0,
     valueProfile: spec.valueProfile,
+    suspension: null,
+    sponsors: spec.sponsors ?? [],
   };
   commit(env, EVENT_AGENT_ADMITTED, { agent });
 
