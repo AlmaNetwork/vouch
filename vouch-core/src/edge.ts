@@ -268,9 +268,17 @@ export function verifyEdge(edge: unknown, fromPublicKey: Uint8Array): EdgeVerifi
 export type EdgeTransitionFailureReason =
   | "not-a-transition"
   | "endpoint-changed"
+  | "immutable-field-changed"
   | "counter-not-incremented"
   | "prev-mismatch"
   | "genesis-mismatch";
+
+// Fields outside the §5.1 mutable set (weight / context / validity / expiry / status) and the
+// chain machinery (prev / genesis / counter): they carry the relationship's MEANING and MUST NOT
+// change mid-chain — the same RFC 0007 Tier K-4 exclusion as §5.3 endpoints (a changed meaning is
+// a new relationship, not a mutation of this one; capability attenuation is a `parent` chain of
+// separate edges, §10.6, never a mid-chain change).
+const IMMUTABLE_FIELDS = ["version", "suite", "schemaId", "command", "parent"] as const;
 
 export type EdgeTransitionResult =
   | { readonly ok: true }
@@ -279,6 +287,17 @@ export type EdgeTransitionResult =
 /** True iff `core` is a genesis state: `counter` 0, no `prev`, no `genesis` pointer (§5.1). */
 export function isGenesisState(core: EdgeCore): boolean {
   return core.counter === 0 && core.prev === null && core.genesis === null;
+}
+
+/**
+ * True iff `core` is internally consistent as a §5.1 chain state: either a genesis state
+ * (`counter` 0, null `prev`/`genesis`) or a successor state (`counter` >= 1, non-null `prev`
+ * and `genesis`). A mixed state (e.g. `counter` 5 with null `prev`) is structurally impossible
+ * under §5.1 and must never anchor a transition — `genesisId` would otherwise mask it as a
+ * genesis and let a successor chain onto it.
+ */
+function isChainState(core: EdgeCore): boolean {
+  return isGenesisState(core) || (core.counter >= 1 && core.prev !== null && core.genesis !== null);
 }
 
 /**
@@ -292,19 +311,36 @@ export function genesisId(core: EdgeCore): string {
 
 /**
  * Verify a single §5 micro-chain transition `prev -> next` — STRUCTURAL continuity only; each
- * state's own signature is verifyEdge's job. Enforces (§5.1–§5.3): the endpoints
- * `(from, to, kind)` stay fixed (§5.3 endpoint immutability), `counter` increments by exactly
- * 1, `next.prev == edgeId(prev)`, and `next.genesis` is the relationship's genesisId. The
- * §5.4 rule that only an RFC 0007 §9-authored head may clear/lower a `sanction` is a penal-
- * authority policy, not a structural edge rule, and is out of scope here.
+ * state's own signature is verifyEdge's job. Enforces (§5.1–§5.3): `prev` is a well-formed chain
+ * state; the endpoints `(from, to, kind)` stay fixed (§5.3 endpoint immutability); every field
+ * outside the §5.1 mutable set stays fixed (`version`/`suite`/`schemaId`/`command`/`parent`);
+ * `counter` increments by exactly 1; `next.prev == edgeId(prev)`; and `next.genesis` is the
+ * relationship's genesisId. The §5.4 rule that only an RFC 0007 §9-authored head may clear/lower
+ * a `sanction` is a penal-authority policy, not a structural edge rule, and is out of scope here.
  */
 export function verifyTransition(prev: EdgeCore, next: EdgeCore): EdgeTransitionResult {
+  if (!isChainState(prev)) {
+    return {
+      ok: false,
+      reason: "not-a-transition",
+      detail: "prev is not a well-formed chain state (§5.1: counter/prev/genesis must be all-genesis or all-successor)",
+    };
+  }
   if (next.from !== prev.from || next.to !== prev.to || next.kind !== prev.kind) {
     return {
       ok: false,
       reason: "endpoint-changed",
       detail: "(from, to, kind) MUST stay fixed within a micro-chain (§5.3)",
     };
+  }
+  for (const field of IMMUTABLE_FIELDS) {
+    if (next[field] !== prev[field]) {
+      return {
+        ok: false,
+        reason: "immutable-field-changed",
+        detail: `"${field}" MUST stay fixed within a micro-chain (§5.1: only weight/context/validity/status may change)`,
+      };
+    }
   }
   if (isGenesisState(next)) {
     return { ok: false, reason: "not-a-transition", detail: "next is a genesis state (counter 0 / null prev / null genesis)" };
@@ -338,7 +374,10 @@ export function verifyChain(states: readonly EdgeCore[]): EdgeTransitionResult {
   let prev = first;
   for (let i = 1; i < states.length; i++) {
     const next = states[i];
-    if (!next) break;
+    if (!next) {
+      // A hole in the array (sparse chain) — fail closed: an unverifiable tail must not verify.
+      return { ok: false, reason: "not-a-transition", detail: `sparse chain: missing state at index ${i}` };
+    }
     const res = verifyTransition(prev, next);
     if (!res.ok) return res;
     prev = next;
