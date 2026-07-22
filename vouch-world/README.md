@@ -59,7 +59,7 @@ bun run typecheck # tsc --noEmit (optional)
 | **M2.5** | Separation hardening (audit G1–G5): read-only log, CommitSink, composition root hoisted to environment/, sim-tick detached from protocol state (`foundedAtSeq`) | ✅ implemented, tests green |
 | **M3** | Agents, economy (credit/currency), transactions, migration, emergent founding | ✅ implemented, tests green |
 | **Credentials** | Typed, validated certificate types on the universal envelope (skill/membership/asset/endorsement + custom) | ✅ implemented, tests green |
-| **RFC 0007 §9/§10.1** | Sanctions (`suspendId`/`reinstateId`) + sponsor tracking at admission + `computeStanding` derivation | ✅ implemented, tests green |
+| **RFC 0007 §6/§9/§10.1** | Sanctions (`suspendId`/`reinstateId`) with dual-authority authorization (§6 checkpoint + §3.4 effect-primitive seam) + sponsor tracking at admission + `computeStanding` derivation | ✅ implemented, tests green |
 | **M4** | Diplomacy: cert translation (absorb/map/reexamine/reject) + recognition flow + cross-region trade gate | 🟡 in progress — emergent cross-border (scarcity) next |
 | **M5** | Observation: read-only HTTP server (hono) + metrics — external clients connect to watch (§2-6) | 🟡 in progress — broadcast / newspaper next |
 

@@ -80,10 +80,27 @@ export type SettlementPayload = {
   readonly memo: { readonly from: string; readonly to: string; readonly amount: number; readonly fee: number };
 };
 
-// The payload deliberately OMITS admittedAtSeq: the reducer is the single stamp point
-// (it writes event.seq at fold), so the log can never carry a wrong/placeholder value
-// for a field that is derived from the event's own position (RFC 0001 §4).
-export type AgentAdmittedPayload = { readonly agent: Omit<AgentState, "admittedAtSeq"> };
+/**
+ * The wire form of an admission — the "birth certificate" fields the environment sets when
+ * an agent joins. Deliberately DECOUPLED from AgentState (not an `Omit<>`): the reducer
+ * MATERIALIZES the full AgentState from this, defaulting the derived fields
+ * (reputation/trust/resources) and the lifecycle field (suspension), and stamping
+ * admittedAtSeq from the event's own seq (RFC 0001 §4). Consequence — a schema-evolution
+ * invariant: adding a DERIVED field to AgentState never changes this payload (the reducer
+ * supplies its default); adding an ADMISSION field is a deliberate edit HERE. This is what
+ * keeps a persisted log (Track B) replayable across AgentState growth.
+ */
+export interface AgentAdmission {
+  readonly id: string; // name@region
+  readonly region: string;
+  readonly role: AgentRole;
+  readonly publicKey: string;
+  readonly credit: number;
+  readonly currency: number;
+  readonly valueProfile: ValueProfile;
+  readonly sponsors: readonly string[]; // §10.1 co-vouchers at admission
+}
+export type AgentAdmittedPayload = { readonly admission: AgentAdmission };
 export type AgentMigratedPayload = { readonly agentId: string; readonly toRegion: string };
 export type AgentDecidedPayload = { readonly agentId: string; readonly intent: Intent };
 /** An explicit currency mint — the ONLY sanctioned way new currency enters after genesis. */

@@ -134,7 +134,7 @@ export function currencyOriginTotal(events: readonly AlmaEvent[]): number {
   let total = 0;
   for (const e of events) {
     if (e.actor !== SYSTEM_ACTOR) continue;
-    if (e.type === EVENT_AGENT_ADMITTED) total += (e.payload as AgentAdmittedPayload).agent.balances.currency;
+    if (e.type === EVENT_AGENT_ADMITTED) total += (e.payload as AgentAdmittedPayload).admission.currency;
     else if (e.type === EVENT_ECONOMY_MINTED) total += (e.payload as MintPayload).amount;
   }
   return total;

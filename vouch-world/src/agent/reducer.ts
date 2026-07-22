@@ -33,12 +33,28 @@ export const agentReducer: Reducer<AgentSlice> = (state, event) => {
   if (event.actor !== SYSTEM_ACTOR) return state;
   switch (event.type) {
     case EVENT_AGENT_ADMITTED: {
-      const { agent } = event.payload as AgentAdmittedPayload;
-      // RFC 0001 §4: tenure is seq-based. The REDUCER stamps admittedAtSeq from event.seq
-      // (the foundedAtSeq idiom, audit G5) — deterministic live AND on replay, and it
-      // overrides whatever the payload carried, so legacy payloads without the field (and
-      // the write path's placeholder 0) both fold to the true admission seq.
-      return { agents: { ...state.agents, [agent.id]: { ...agent, admittedAtSeq: event.seq } } };
+      const { admission } = event.payload as AgentAdmittedPayload;
+      // The reducer MATERIALIZES the full AgentState from the wire admission (§10.1). Derived
+      // fields (reputation/trust/resources) and the lifecycle field (suspension) are
+      // reducer-owned DEFAULTS, never on the wire — so adding a derived field to AgentState
+      // never changes the admitted payload (schema-evolution invariant, see AgentAdmission).
+      // RFC 0001 §4: admittedAtSeq is stamped from THIS event's seq (the foundedAtSeq idiom,
+      // audit G5) — deterministic live AND on replay.
+      const agent: AgentState = {
+        id: admission.id,
+        region: admission.region,
+        role: admission.role,
+        publicKey: admission.publicKey,
+        balances: { credit: admission.credit, currency: admission.currency },
+        valueProfile: admission.valueProfile,
+        sponsors: admission.sponsors,
+        reputation: 0,
+        trust: 0,
+        resources: 0,
+        suspension: null,
+        admittedAtSeq: event.seq,
+      };
+      return { agents: { ...state.agents, [admission.id]: agent } };
     }
     case EVENT_AGENT_MIGRATED: {
       const { agentId, toRegion } = event.payload as AgentMigratedPayload;

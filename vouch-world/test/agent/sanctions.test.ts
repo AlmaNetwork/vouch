@@ -1,4 +1,4 @@
-// RFC 0007 §9 — sanction primitives: suspendId / reinstateId
+// RFC 0007 §9 — sanction primitives: suspendId / reinstateId (+ §6 authorization, §10.1 sponsors)
 //
 // Property invariants verified here:
 //   K1: suspension blocks executeTransfer
@@ -10,34 +10,34 @@
 //   K7: replay determinism — replayState(log) == live state after sanctions
 //   K8: computeStanding returns correct standing
 //   K9: sponsor list stored at admission
+//   A1-A4: §6 authorization — dual-authority (citizenship OR residence region)
 
 import { describe, expect, test } from "bun:test";
 import { encodeBase64, keyPairFromSeed } from "vouch-core";
-import {
-  computeStanding,
-  currencySupply,
-  EVENT_AGENT_SUSPENDED,
-  getAgent,
-  isAgentSuspended,
-} from "../../src/agent";
+import { computeStanding, currencySupply, EVENT_AGENT_SUSPENDED, getAgent, isAgentSuspended } from "../../src/agent";
 import {
   admitAgent,
   admitTreasury,
   createAlmaWorld,
   executeTransfer,
+  experimenterProposal,
   INITIAL_WORLD_STATE,
   immigrate,
+  proposeFounding,
   reinstateAgent,
   rootReducer,
-  seedGenesis,
   suspendAgent,
   vouchFor,
 } from "../../src/environment";
-import { replayState, SYSTEM_ACTOR } from "../../src/foundation";
+import { replayState } from "../../src/foundation";
 import { defineRegion, makeInstitutions } from "../../src/region";
 
 const NOTARY = keyPairFromSeed(new Uint8Array(32).fill(7));
 const pub = (n: number) => encodeBase64(keyPairFromSeed(new Uint8Array(32).fill(n)).publicKey);
+
+// the region governors (owners) — the authorities that may sanction their members.
+const UMI_MAYOR = "mayor@umi";
+const NOVA_MAYOR = "mayor@nova";
 
 const lenient = () =>
   makeInstitutions({
@@ -45,9 +45,12 @@ const lenient = () =>
     diplomacyPolicy: { defaultStance: "absorb", overrides: {} },
   });
 
+// Founded via experimenterProposal with an explicit OWNER so canGovern has a subject
+// (genesis regions are system-owned / owner-null → no one can govern them).
 function twoRegionWorld() {
   const world = createAlmaWorld("sanctions");
-  seedGenesis(world, [defineRegion("umi", "Umi", lenient()), defineRegion("nova", "Nova", lenient())]);
+  proposeFounding(world, experimenterProposal(defineRegion("umi", "Umi", lenient()), undefined, UMI_MAYOR));
+  proposeFounding(world, experimenterProposal(defineRegion("nova", "Nova", lenient()), undefined, NOVA_MAYOR));
   admitTreasury(world, "umi");
   admitTreasury(world, "nova");
   admitAgent(world, { id: "alice@umi", region: "umi", role: "merchant", valueProfile: "lenient", publicKey: pub(1), currency: 100 });
@@ -59,7 +62,7 @@ describe("RFC 0007 §9 — sanctions", () => {
   // K1 -----------------------------------------------------------------------
   test("suspension blocks executeTransfer (K1)", () => {
     const world = twoRegionWorld();
-    suspendAgent(world, "alice@umi", 10);
+    suspendAgent(world, "alice@umi", 10, UMI_MAYOR);
 
     const res = executeTransfer(world, { from: "alice@umi", to: "bob@umi", amount: 10 }, { tick: 5, notary: NOTARY });
     expect(res).toEqual({ ok: false, reason: "suspended" });
@@ -67,7 +70,7 @@ describe("RFC 0007 §9 — sanctions", () => {
 
   test("suspension blocks transfer even at tick == untilTick (inclusive, K1)", () => {
     const world = twoRegionWorld();
-    suspendAgent(world, "alice@umi", 5);
+    suspendAgent(world, "alice@umi", 5, UMI_MAYOR);
 
     const res = executeTransfer(world, { from: "alice@umi", to: "bob@umi", amount: 10 }, { tick: 5, notary: NOTARY });
     expect(res).toEqual({ ok: false, reason: "suspended" });
@@ -76,7 +79,7 @@ describe("RFC 0007 §9 — sanctions", () => {
   // K2 -----------------------------------------------------------------------
   test("suspension does NOT block emigration (Tier K-5, K2)", () => {
     const world = twoRegionWorld();
-    suspendAgent(world, "alice@umi", 100);
+    suspendAgent(world, "alice@umi", 100, UMI_MAYOR);
 
     // immigrate() in population.ts is independent of executeTransfer — no suspension check there
     expect(() => immigrate(world, "alice@umi", "nova")).not.toThrow();
@@ -86,39 +89,35 @@ describe("RFC 0007 §9 — sanctions", () => {
   // K3 -----------------------------------------------------------------------
   test("reinstateAgent lifts suspension early (K3)", () => {
     const world = twoRegionWorld();
-    suspendAgent(world, "alice@umi", 100);
-    reinstateAgent(world, "alice@umi");
+    suspendAgent(world, "alice@umi", 100, UMI_MAYOR);
+    reinstateAgent(world, "alice@umi", UMI_MAYOR);
 
-    // transfer should now succeed
     const res = executeTransfer(world, { from: "alice@umi", to: "bob@umi", amount: 10 }, { tick: 5, notary: NOTARY });
     expect(res.ok).toBe(true);
   });
 
   test("reinstateAgent on a non-suspended agent is ok / idempotent (K3)", () => {
     const world = twoRegionWorld();
-    const res = reinstateAgent(world, "alice@umi");
+    const res = reinstateAgent(world, "alice@umi", UMI_MAYOR);
     expect(res).toEqual({ ok: true });
-    // agent is not suspended — state unchanged
     expect(getAgent(world.getState(), "alice@umi")?.suspension).toBeNull();
   });
 
   // K4 -----------------------------------------------------------------------
   test("suspension auto-expires after untilTick (K4)", () => {
     const world = twoRegionWorld();
-    suspendAgent(world, "alice@umi", 3);
+    suspendAgent(world, "alice@umi", 3, UMI_MAYOR);
 
-    // at tick 3 still blocked (inclusive)
     const stillBlocked = executeTransfer(world, { from: "alice@umi", to: "bob@umi", amount: 10 }, { tick: 3, notary: NOTARY });
     expect(stillBlocked.ok).toBe(false);
 
-    // at tick 4 the suspension has expired
     const expired = executeTransfer(world, { from: "alice@umi", to: "bob@umi", amount: 10 }, { tick: 4, notary: NOTARY });
     expect(expired.ok).toBe(true);
   });
 
   test("isAgentSuspended helper matches the same boundary (K4)", () => {
     const world = twoRegionWorld();
-    suspendAgent(world, "alice@umi", 3);
+    suspendAgent(world, "alice@umi", 3, UMI_MAYOR);
     const alice = getAgent(world.getState(), "alice@umi")!;
     expect(isAgentSuspended(alice, 3)).toBe(true);
     expect(isAgentSuspended(alice, 4)).toBe(false);
@@ -129,8 +128,8 @@ describe("RFC 0007 §9 — sanctions", () => {
     const world = twoRegionWorld();
     const before = currencySupply(world.getState());
 
-    suspendAgent(world, "alice@umi", 10);
-    reinstateAgent(world, "alice@umi");
+    suspendAgent(world, "alice@umi", 10, UMI_MAYOR);
+    reinstateAgent(world, "alice@umi", UMI_MAYOR);
 
     expect(currencySupply(world.getState())).toBe(before);
   });
@@ -139,7 +138,7 @@ describe("RFC 0007 §9 — sanctions", () => {
     const world = twoRegionWorld();
     const balanceBefore = getAgent(world.getState(), "alice@umi")!.balances.currency;
 
-    suspendAgent(world, "alice@umi", 10);
+    suspendAgent(world, "alice@umi", 10, UMI_MAYOR);
 
     expect(getAgent(world.getState(), "alice@umi")?.balances.currency).toBe(balanceBefore);
   });
@@ -151,11 +150,9 @@ describe("RFC 0007 §9 — sanctions", () => {
     // emit as the agent itself — not SYSTEM_ACTOR — the reducer's actor-gate must drop this
     world.emit(EVENT_AGENT_SUSPENDED, "alice@umi", { agentId: "alice@umi", untilTick: 999 });
 
-    // suspension must NOT have been applied
     const alice = getAgent(world.getState(), "alice@umi");
     expect(alice?.suspension).toBeNull();
 
-    // transfer still succeeds
     const res = executeTransfer(world, { from: "alice@umi", to: "bob@umi", amount: 10 }, { tick: 5, notary: NOTARY });
     expect(res.ok).toBe(true);
   });
@@ -163,9 +160,9 @@ describe("RFC 0007 §9 — sanctions", () => {
   // K7 -----------------------------------------------------------------------
   test("replayState equals live state after sanctions (K7)", () => {
     const world = twoRegionWorld();
-    suspendAgent(world, "alice@umi", 5);
+    suspendAgent(world, "alice@umi", 5, UMI_MAYOR);
     executeTransfer(world, { from: "bob@umi", to: "alice@umi", amount: 10 }, { tick: 1, notary: NOTARY }); // bob can still transact
-    reinstateAgent(world, "alice@umi");
+    reinstateAgent(world, "alice@umi", UMI_MAYOR);
     executeTransfer(world, { from: "alice@umi", to: "bob@umi", amount: 20 }, { tick: 2, notary: NOTARY });
 
     const replayed = replayState(world.log.all(), INITIAL_WORLD_STATE, rootReducer);
@@ -214,33 +211,78 @@ describe("RFC 0007 §9 — sanctions", () => {
   // validation ---------------------------------------------------------------
   test("suspendAgent rejects unknown agent", () => {
     const world = twoRegionWorld();
-    const res = suspendAgent(world, "ghost@umi", 10);
+    const res = suspendAgent(world, "ghost@umi", 10, UMI_MAYOR);
     expect(res).toEqual({ ok: false, reason: "unknown-agent" });
   });
 
   test("suspendAgent rejects negative untilTick", () => {
     const world = twoRegionWorld();
-    const res = suspendAgent(world, "alice@umi", -1);
+    const res = suspendAgent(world, "alice@umi", -1, UMI_MAYOR);
     expect(res).toEqual({ ok: false, reason: "bad-until-tick" });
   });
 
   test("suspendAgent rejects non-integer untilTick", () => {
     const world = twoRegionWorld();
-    const res = suspendAgent(world, "alice@umi", 1.5);
+    const res = suspendAgent(world, "alice@umi", 1.5, UMI_MAYOR);
     expect(res).toEqual({ ok: false, reason: "bad-until-tick" });
   });
 
   test("reinstateAgent rejects unknown agent", () => {
     const world = twoRegionWorld();
-    const res = reinstateAgent(world, "ghost@umi");
+    const res = reinstateAgent(world, "ghost@umi", UMI_MAYOR);
     expect(res).toEqual({ ok: false, reason: "unknown-agent" });
   });
 
   test("second suspend REPLACES the first (later sentence wins)", () => {
     const world = twoRegionWorld();
-    suspendAgent(world, "alice@umi", 5);
-    suspendAgent(world, "alice@umi", 20);
+    suspendAgent(world, "alice@umi", 5, UMI_MAYOR);
+    suspendAgent(world, "alice@umi", 20, UMI_MAYOR);
     const alice = getAgent(world.getState(), "alice@umi");
     expect(alice?.suspension?.untilTick).toBe(20);
+  });
+});
+
+describe("RFC 0007 §6 — sanction authorization (dual-authority)", () => {
+  // A1 -----------------------------------------------------------------------
+  test("a non-authority cannot suspend (A1)", () => {
+    const world = twoRegionWorld();
+    const res = suspendAgent(world, "alice@umi", 10, "bob@umi"); // bob is a resident, not the owner
+    expect(res).toEqual({ ok: false, reason: "not-authorized" });
+    expect(getAgent(world.getState(), "alice@umi")?.suspension).toBeNull();
+  });
+
+  // A2 -----------------------------------------------------------------------
+  test("an authority of an UNRELATED region cannot suspend (A2)", () => {
+    const world = twoRegionWorld();
+    // nova's mayor governs neither alice's citizenship (umi) nor her residence (umi).
+    const res = suspendAgent(world, "alice@umi", 10, NOVA_MAYOR);
+    expect(res).toEqual({ ok: false, reason: "not-authorized" });
+  });
+
+  // A3 -----------------------------------------------------------------------
+  test("the CITIZENSHIP-region authority can suspend even after migration (A3)", () => {
+    const world = twoRegionWorld();
+    immigrate(world, "alice@umi", "nova"); // residence now nova, citizenship still umi
+    const res = suspendAgent(world, "alice@umi", 10, UMI_MAYOR);
+    expect(res.ok).toBe(true);
+    expect(getAgent(world.getState(), "alice@umi")?.suspension?.untilTick).toBe(10);
+  });
+
+  // A4 -----------------------------------------------------------------------
+  test("the RESIDENCE-region authority can suspend after migration (A4)", () => {
+    const world = twoRegionWorld();
+    immigrate(world, "alice@umi", "nova"); // residence now nova
+    const res = suspendAgent(world, "alice@umi", 10, NOVA_MAYOR);
+    expect(res.ok).toBe(true);
+    expect(getAgent(world.getState(), "alice@umi")?.suspension?.untilTick).toBe(10);
+  });
+
+  test("reinstate is subject to the same authorization (A1 mirror)", () => {
+    const world = twoRegionWorld();
+    suspendAgent(world, "alice@umi", 10, UMI_MAYOR);
+    const res = reinstateAgent(world, "alice@umi", "bob@umi");
+    expect(res).toEqual({ ok: false, reason: "not-authorized" });
+    // still suspended
+    expect(getAgent(world.getState(), "alice@umi")?.suspension?.untilTick).toBe(10);
   });
 });
