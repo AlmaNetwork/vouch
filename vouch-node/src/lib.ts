@@ -16,8 +16,11 @@ export {
   registerBytes,
   type SignedRequest,
 } from "./accounts";
+export { type CommandBody, commandBodySchema, type Effect, type Precondition } from "./command-model";
 export { type Command, type CommandResult, commandSchema, dispatch } from "./commands";
 export { loadConfig, type NodeConfig, type RawEnv, resolveNotary } from "./config";
 export { createNodeApp } from "./http";
+export { type CommandPacket, type ExecContext, type ExecResult, executeCommand } from "./interpreter";
 export { FileJournal, type Journal, MemoryJournal } from "./journal";
 export { type NodeDeps, type SubmitResult, VouchNode } from "./node";
+export { CORE_DEFINITIONS, CORE_TRANSFER, CORE_VOUCH, seedCoreDefinitions } from "./seed-definitions";
