@@ -9,10 +9,14 @@ import { EVENT_RESOURCE_DRAWN, type ResourceDrawnPayload } from "../region";
 import {
   type AgentAdmittedPayload,
   type AgentMigratedPayload,
+  type AgentReinstatedPayload,
   type AgentSlice,
   type AgentState,
+  type AgentSuspendedPayload,
   EVENT_AGENT_ADMITTED,
   EVENT_AGENT_MIGRATED,
+  EVENT_AGENT_REINSTATED,
+  EVENT_AGENT_SUSPENDED,
   EVENT_AGENT_VOUCHED,
   EVENT_ECONOMY_MINTED,
   EVENT_ECONOMY_SETTLED,
@@ -29,12 +33,28 @@ export const agentReducer: Reducer<AgentSlice> = (state, event) => {
   if (event.actor !== SYSTEM_ACTOR) return state;
   switch (event.type) {
     case EVENT_AGENT_ADMITTED: {
-      const { agent } = event.payload as AgentAdmittedPayload;
-      // RFC 0001 §4: tenure is seq-based. The REDUCER stamps admittedAtSeq from event.seq
-      // (the foundedAtSeq idiom, audit G5) — deterministic live AND on replay, and it
-      // overrides whatever the payload carried, so legacy payloads without the field (and
-      // the write path's placeholder 0) both fold to the true admission seq.
-      return { agents: { ...state.agents, [agent.id]: { ...agent, admittedAtSeq: event.seq } } };
+      const { admission } = event.payload as AgentAdmittedPayload;
+      // The reducer MATERIALIZES the full AgentState from the wire admission (§10.1). Derived
+      // fields (reputation/trust/resources) and the lifecycle field (suspension) are
+      // reducer-owned DEFAULTS, never on the wire — so adding a derived field to AgentState
+      // never changes the admitted payload (schema-evolution invariant, see AgentAdmission).
+      // RFC 0001 §4: admittedAtSeq is stamped from THIS event's seq (the foundedAtSeq idiom,
+      // audit G5) — deterministic live AND on replay.
+      const agent: AgentState = {
+        id: admission.id,
+        region: admission.region,
+        role: admission.role,
+        publicKey: admission.publicKey,
+        balances: { credit: admission.credit, currency: admission.currency },
+        valueProfile: admission.valueProfile,
+        sponsors: admission.sponsors,
+        reputation: 0,
+        trust: 0,
+        resources: 0,
+        suspension: null,
+        admittedAtSeq: event.seq,
+      };
+      return { agents: { ...state.agents, [admission.id]: agent } };
     }
     case EVENT_AGENT_MIGRATED: {
       const { agentId, toRegion } = event.payload as AgentMigratedPayload;
@@ -84,6 +104,21 @@ export const agentReducer: Reducer<AgentSlice> = (state, event) => {
       const a = state.agents[agentId];
       if (!a) return state;
       return { agents: { ...state.agents, [agentId]: { ...a, resources: a.resources + amount } } };
+    }
+    case EVENT_AGENT_SUSPENDED: {
+      // RFC 0007 §9 suspendId: set the suspension window. Idempotent — a second suspend
+      // REPLACES the previous untilTick (the later suspension wins, like a sentence revision).
+      const { agentId, untilTick } = event.payload as AgentSuspendedPayload;
+      const a = state.agents[agentId];
+      if (!a) return state;
+      return { agents: { ...state.agents, [agentId]: { ...a, suspension: { untilTick } } } };
+    }
+    case EVENT_AGENT_REINSTATED: {
+      // RFC 0007 §9 reinstateId: clear the suspension. No-op if not suspended.
+      const { agentId } = event.payload as AgentReinstatedPayload;
+      const a = state.agents[agentId];
+      if (!a) return state;
+      return { agents: { ...state.agents, [agentId]: { ...a, suspension: null } } };
     }
     // agent.decided is a journaled record only — it changes no protected state.
     default:

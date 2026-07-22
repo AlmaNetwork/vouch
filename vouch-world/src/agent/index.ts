@@ -6,5 +6,5 @@
 
 export { type Brain, defaultBrains, idleBrain, type ReadOnlyView, tradingBrain } from "./brain";
 export { agentReducer } from "./reducer";
-export { agentsInRegion, currencySupply, getAgent, listAgents, treasuryId } from "./selectors";
+export { agentsInRegion, computeStanding, currencySupply, getAgent, isAgentSuspended, listAgents, treasuryId } from "./selectors";
 export * from "./types";
