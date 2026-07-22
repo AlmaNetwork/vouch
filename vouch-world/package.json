@@ -10,6 +10,7 @@
     "./region": "./src/region/index.ts",
     "./agent": "./src/agent/index.ts",
     "./item": "./src/item/index.ts",
+    "./definition": "./src/definition/index.ts",
     "./credential": "./src/credential/index.ts",
     "./environment": "./src/environment/index.ts",
     "./observation": "./src/observation/index.ts"
