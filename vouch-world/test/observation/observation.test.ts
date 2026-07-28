@@ -1,13 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { keyPairFromSeed } from "vouch-core";
+import { EVENT_AGENT_MIGRATED, EVENT_AGENT_VOUCHED } from "../../src/agent";
 import {
   admitAgent,
   admitTreasury,
   createAlmaWorld,
   executeTransfer,
   experimenterProposal,
+  immigrate,
   proposeFounding,
   seedGenesis,
+  vouchFor,
 } from "../../src/environment";
 import { createObservationApp, gini, metrics, type ObservationServer } from "../../src/observation";
 import { defineRegion } from "../../src/region";
@@ -39,6 +42,55 @@ describe("observation — read-only metrics (§5)", () => {
     expect(m.agents.treasuries).toBe(1);
     expect(m.agents.totalCurrency).toBe(100); // conserved across the transfer
     expect(m.log.eventTypes["economy.settled"]).toBe(1);
+  });
+
+  test("RFC 0002 dependent variables: lifecycle, per-region, mobility, trust", () => {
+    const m = metrics(world());
+
+    // lifecycle (orthogonal to recognition): both regions are born active.
+    expect(m.regions.active).toBe(2);
+    expect(m.regions.dormant).toBe(0);
+
+    // per-region breakdown: residency is derived from the agent slice.
+    const umi = m.perRegion.find((r) => r.id === "umi");
+    const nova = m.perRegion.find((r) => r.id === "nova");
+    expect(umi?.residents).toBe(2);
+    expect(umi?.lifecycle).toBe("active");
+    expect(umi?.currencyGini).toBeGreaterThan(0); // 60 vs 40 after the transfer
+    expect(nova?.residents).toBe(0);
+    expect(nova?.currencyGini).toBe(0); // no residents
+
+    // mobility: nothing migrated, seceded, or changed hands in this fixture.
+    expect(m.mobility).toEqual({ migrations: 0, secessions: 0, ownershipTransfers: 0 });
+
+    // reputation + trust aggregates exist and are numeric.
+    expect(typeof m.agents.avgReputation).toBe("number");
+    expect(typeof m.trust.vouches).toBe("number");
+  });
+
+  test("mobility + trust count system-authored behavior (migration, vouch)", () => {
+    const w = world();
+    immigrate(w, "alice@umi", "nova"); // residence umi -> nova (citizenship stays umi)
+    vouchFor(w, "alice@umi", "bob@umi", 3);
+    const m = metrics(w);
+    expect(m.mobility.migrations).toBe(1);
+    expect(m.trust.vouches).toBe(1);
+    // residency follows the move: nova gains alice, umi is down to bob
+    expect(m.perRegion.find((r) => r.id === "nova")?.residents).toBe(1);
+    expect(m.perRegion.find((r) => r.id === "umi")?.residents).toBe(1);
+  });
+
+  test("forged (non-world) events show in the raw log but never in behavioral counters", () => {
+    const w = world();
+    // principal-authored events (actor != SYSTEM_ACTOR) — the reducers ignore them, but they sit in the log
+    w.emit(EVENT_AGENT_VOUCHED, "acct:mallory", { from: "acct:mallory", to: "bob@umi", weight: 5 });
+    w.emit(EVENT_AGENT_MIGRATED, "acct:mallory", { agentId: "bob@umi", toRegion: "nova" });
+    const m = metrics(w);
+    expect(m.log.eventTypes["agent.vouched"]).toBe(1); // raw distribution includes the forgery
+    expect(m.log.eventTypes["agent.migrated"]).toBe(1);
+    expect(m.trust.vouches).toBe(0); // behavioral counters ignore non-world actors
+    expect(m.mobility.migrations).toBe(0);
+    expect(m.perRegion.find((r) => r.id === "umi")?.residents).toBe(2); // bob did not actually move
   });
 
   test("gini is 0 when equal and rises with concentration", () => {
