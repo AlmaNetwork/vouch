@@ -113,10 +113,18 @@ const seqSchema = z.number().int().min(0);
 // collapse consent into self-signature (the `from` signature doubling as its own `cosign`, §4.6).
 type EndpointType = "agent" | "region" | "any";
 
-const KIND_ENDPOINT_RULES: Readonly<Record<EdgeKind, { readonly from: EndpointType; readonly to: EndpointType }>> = {
+// `sentinelWeight: true` marks a PURE-SUFFRAGE kind (§4.4): its `weightBp` MUST be the sentinel 0.
+// The field stays structurally required for §4.1 determinism but carries no meaning, and the fold
+// ignores it. This is the wire-format half of RFC 0007 Tier K-7 (weight never weighs a suffrage
+// vote): a `membership` — the binary admission/citizenship unit — must not be able to arrive
+// carrying weight at all. The constitutional rule itself is RFC 0007's; this only refuses to
+// serialize a violation.
+const KIND_ENDPOINT_RULES: Readonly<
+  Record<EdgeKind, { readonly from: EndpointType; readonly to: EndpointType; readonly sentinelWeight?: true }>
+> = {
   vouch: { from: "any", to: "any" },
   sanction: { from: "region", to: "any" },
-  membership: { from: "region", to: "agent" },
+  membership: { from: "region", to: "agent", sentinelWeight: true },
   connection: { from: "region", to: "region" },
   capability: { from: "any", to: "any" },
 };
@@ -127,7 +135,7 @@ function endpointTypeOk(value: string, want: EndpointType): boolean {
   return isValidEndpoint(value);
 }
 
-function refineEndpoints(data: { kind: EdgeKind; from: string; to: string }, ctx: z.RefinementCtx): void {
+function refinePerKind(data: { kind: EdgeKind; from: string; to: string; weightBp: number }, ctx: z.RefinementCtx): void {
   const rule = KIND_ENDPOINT_RULES[data.kind];
   if (!endpointTypeOk(data.from, rule.from)) {
     ctx.addIssue({ code: "custom", path: ["from"], message: `${data.kind} 'from' must be a ${rule.from} endpoint (§4.3)` });
@@ -137,6 +145,13 @@ function refineEndpoints(data: { kind: EdgeKind; from: string; to: string }, ctx
   }
   if (data.from === data.to) {
     ctx.addIssue({ code: "custom", path: ["to"], message: "from and to MUST differ — a self-edge names no relationship (§4.3)" });
+  }
+  if (rule.sentinelWeight && data.weightBp !== 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["weightBp"],
+      message: `${data.kind} is a pure-suffrage kind — weightBp MUST be the sentinel 0 (§4.4; RFC 0007 Tier K-7)`,
+    });
   }
 }
 
@@ -165,7 +180,7 @@ const edgeSchema = z
     signature: z.string(),
     cosign: z.record(z.string(), z.string()).optional(),
   })
-  .superRefine(refineEndpoints);
+  .superRefine(refinePerKind);
 
 const issueInputSchema = z
   .object({
@@ -185,7 +200,7 @@ const issueInputSchema = z
     parent: hashRefSchema.optional(),
     status: z.enum(["active", "revoked"]).optional(),
   })
-  .superRefine(refineEndpoints);
+  .superRefine(refinePerKind);
 
 function fail(reason: EdgeVerificationFailureReason, detail: string): EdgeVerificationResult {
   return { ok: false, reason, detail };

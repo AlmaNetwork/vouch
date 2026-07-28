@@ -501,6 +501,29 @@ describe("RFC 0008 §4.6 co-signatures", () => {
     ).toThrow();
   });
 
+  test("§4.4 sentinel: a pure-suffrage membership MUST carry weightBp 0 (Tier K-7 wire guard)", () => {
+    const weighted = {
+      schemaId: "alma.membership/v1",
+      kind: "membership" as const,
+      from: "nova",
+      to: "bob@nova",
+      context: "nova:citizen",
+      weightBp: 7000, // a citizenship unit must not be able to carry weight at all
+      validFrom: 1,
+    };
+    expect(() => issueEdge(weighted, nova.privateKey)).toThrow();
+
+    // and it cannot arrive over the wire either: verify rejects a weighted membership
+    const ok = issueEdge({ ...weighted, weightBp: 0 }, nova.privateKey);
+    const r = verifyEdge({ ...ok, weightBp: 7000 }, nova.publicKey);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("malformed-envelope");
+
+    // the sentinel itself stays legal, and the other kinds keep their weight
+    expect(verifyEdge(ok, nova.publicKey)).toEqual({ ok: true });
+    expect(verifyEdge(issueEdge(v0.input, alice.privateKey), alice.publicKey)).toEqual({ ok: true });
+  });
+
   test("a connection region→region co-signature verifies; the self-consent attack is rejected", () => {
     const delta = keyPairFromSeed(seed(4));
     const conn = issueEdge(
