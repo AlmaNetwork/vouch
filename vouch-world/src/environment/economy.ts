@@ -15,6 +15,7 @@ import {
   EVENT_ECONOMY_MINTED,
   EVENT_ECONOMY_SETTLED,
   getAgent,
+  isAgentSuspended,
   type MintPayload,
   type SettlementEntry,
   type SettlementPayload,
@@ -53,6 +54,7 @@ export function executeTransfer(env: WorldCommit, move: TransferMove, opts: { ti
   const from = getAgent(state, move.from);
   const to = getAgent(state, move.to);
   if (!from || !to) return { ok: false, reason: "unknown-agent" };
+  if (isAgentSuspended(from, opts.tick)) return { ok: false, reason: "suspended" };
   if (from.id === to.id) return { ok: false, reason: "self-transfer" };
   if (!isTransferable("currency")) return { ok: false, reason: "not-transferable" };
   if (!Number.isInteger(move.amount) || move.amount <= 0) return { ok: false, reason: "bad-amount" };
@@ -132,7 +134,7 @@ export function currencyOriginTotal(events: readonly AlmaEvent[]): number {
   let total = 0;
   for (const e of events) {
     if (e.actor !== SYSTEM_ACTOR) continue;
-    if (e.type === EVENT_AGENT_ADMITTED) total += (e.payload as AgentAdmittedPayload).agent.balances.currency;
+    if (e.type === EVENT_AGENT_ADMITTED) total += (e.payload as AgentAdmittedPayload).admission.currency;
     else if (e.type === EVENT_ECONOMY_MINTED) total += (e.payload as MintPayload).amount;
   }
   return total;

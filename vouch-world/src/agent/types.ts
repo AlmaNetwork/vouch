@@ -16,6 +16,22 @@ export interface Balances {
   readonly currency: number; // transferable medium of exchange (§3-B)
 }
 
+/**
+ * RFC 0007 §9 / §3.4 — active suspension on an agent. null = not suspended.
+ * A suspended agent cannot transact (economy.settled) until `untilTick` has passed
+ * or `agent.reinstated` is folded. Suspension never blocks emigration (Tier K-5).
+ *
+ * `issuedBy` records the authority that imposed the sanction. It is load-bearing, not
+ * decorative: RFC 0008 §4.3 fixes a sanction edge's `from` to the issuer, so a §10.5
+ * sanction edge can only be projected from a suspension that remembers who issued it;
+ * §5.4 ("only a §9-authored head may clear a sanction") and §9.8 log-evidentialism both
+ * need a subject to check against.
+ */
+export interface AgentSuspension {
+  readonly untilTick: number;
+  readonly issuedBy: string;
+}
+
 export interface AgentState {
   readonly id: string; // name@region (identity; stable across migration)
   readonly region: string; // current residence (changes on migration)
@@ -32,6 +48,10 @@ export interface AgentState {
   // NOT stored: it is the home region encoded in the id (name@region); migration changes
   // `region` (residence) but never citizenship nor this seq.
   readonly admittedAtSeq: number;
+  // RFC 0007 §9 / §3.4: null = not suspended; non-null = suspended until untilTick.
+  readonly suspension: AgentSuspension | null;
+  // RFC 0007 §10.1: IDs that co-vouched at admission (voucher-liability chain).
+  readonly sponsors: readonly string[];
 }
 
 /** The agent read-model slice of world state; the environment composes it in. */
@@ -49,6 +69,9 @@ export const EVENT_AGENT_DECIDED = "agent.decided"; // the JOURNALED brain decis
 export const EVENT_ECONOMY_SETTLED = "economy.settled"; // env-authored value move (audit G7/G8)
 export const EVENT_ECONOMY_MINTED = "economy.minted"; // env-authored EXPLICIT currency origin (conservation baseline)
 export const EVENT_AGENT_VOUCHED = "agent.vouched"; // one agent VOUCHES for another -> trust (the brand verb)
+// RFC 0007 §9 / §3.4 sanctions — env-authored, SYSTEM_ACTOR only (Tier K guard).
+export const EVENT_AGENT_SUSPENDED = "agent.suspended"; // suspendId: block economy until untilTick
+export const EVENT_AGENT_REINSTATED = "agent.reinstated"; // reinstateId: lift suspension early
 
 /** One agent's signed balance delta within a settlement. */
 export type SettlementEntry = {
@@ -64,16 +87,43 @@ export type SettlementPayload = {
   readonly memo: { readonly from: string; readonly to: string; readonly amount: number; readonly fee: number };
 };
 
-// The payload deliberately OMITS admittedAtSeq: the reducer is the single stamp point
-// (it writes event.seq at fold), so the log can never carry a wrong/placeholder value
-// for a field that is derived from the event's own position (RFC 0001 §4).
-export type AgentAdmittedPayload = { readonly agent: Omit<AgentState, "admittedAtSeq"> };
+/**
+ * The wire form of an admission — the "birth certificate" fields the environment sets when
+ * an agent joins. Deliberately DECOUPLED from AgentState (not an `Omit<>`): the reducer
+ * MATERIALIZES the full AgentState from this, defaulting the derived fields
+ * (reputation/trust/resources) and the lifecycle field (suspension), and stamping
+ * admittedAtSeq from the event's own seq (RFC 0001 §4). Consequence — a schema-evolution
+ * invariant: adding a DERIVED field to AgentState never changes this payload (the reducer
+ * supplies its default); adding an ADMISSION field is a deliberate edit HERE. This is what
+ * keeps a persisted log (Track B) replayable across AgentState growth.
+ */
+export interface AgentAdmission {
+  readonly id: string; // name@region
+  readonly region: string;
+  readonly role: AgentRole;
+  readonly publicKey: string;
+  readonly credit: number;
+  readonly currency: number;
+  readonly valueProfile: ValueProfile;
+  readonly sponsors: readonly string[]; // §10.1 co-vouchers at admission
+}
+export type AgentAdmittedPayload = { readonly admission: AgentAdmission };
 export type AgentMigratedPayload = { readonly agentId: string; readonly toRegion: string };
 export type AgentDecidedPayload = { readonly agentId: string; readonly intent: Intent };
 /** An explicit currency mint — the ONLY sanctioned way new currency enters after genesis. */
 export type MintPayload = { readonly agentId: string; readonly amount: number; readonly reason: string };
 /** One agent vouches for another (weight 1..5), raising the subject's trust. */
 export type VouchedPayload = { readonly from: string; readonly to: string; readonly weight: number };
+/**
+ * RFC 0007 §9 suspendId: block the agent's economy participation until untilTick (inclusive).
+ * `by` is the issuing authority — the PERMANENT record. The issuer is dropped after the
+ * `canSanction` check unless it is written here, and the event (not the transient state) is
+ * what a §10.5 sanction edge (RFC 0008 §4.3), a §5.4 clear-authority check, and §9.8 audit
+ * project from — so it must live on the payload, not only pass through the write path.
+ */
+export type AgentSuspendedPayload = { readonly agentId: string; readonly untilTick: number; readonly by: string };
+/** RFC 0007 §9 reinstateId: lift an active suspension early (no-op if not suspended). `by` = the clearing authority (§9.8 audit subject). */
+export type AgentReinstatedPayload = { readonly agentId: string; readonly by: string };
 
 /** Maps each agent-slice event type to its payload — the typed `commit` helper keys off this. */
 export interface AgentEventMap {
@@ -83,4 +133,6 @@ export interface AgentEventMap {
   [EVENT_ECONOMY_SETTLED]: SettlementPayload;
   [EVENT_ECONOMY_MINTED]: MintPayload;
   [EVENT_AGENT_VOUCHED]: VouchedPayload;
+  [EVENT_AGENT_SUSPENDED]: AgentSuspendedPayload;
+  [EVENT_AGENT_REINSTATED]: AgentReinstatedPayload;
 }

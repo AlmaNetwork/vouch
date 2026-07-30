@@ -5,6 +5,7 @@
 
 import { isValidIdentifier } from "vouch-core";
 import {
+  type AgentAdmission,
   type AgentRole,
   type AgentState,
   EVENT_AGENT_ADMITTED,
@@ -24,6 +25,7 @@ export interface AdmitSpec {
   publicKey: string;
   currency?: number;
   credit?: number;
+  sponsors?: readonly string[]; // RFC 0007 §10.1: agents that co-vouched at admission
 }
 
 export function admitAgent(env: WorldCommit, spec: AdmitSpec): AgentState {
@@ -34,21 +36,22 @@ export function admitAgent(env: WorldCommit, spec: AdmitSpec): AgentState {
   if (!getRegion(env.getState(), spec.region)) throw new Error(`admitAgent: region "${spec.region}" does not exist`);
   if (getAgent(env.getState(), spec.id)) throw new Error(`admitAgent: agent "${spec.id}" already exists`);
 
-  // admittedAtSeq is NOT part of the payload: it derives from the event's own log
-  // position, so the reducer stamps it at fold (RFC 0001 §4) and the log never carries
-  // a placeholder that could mislead a raw-payload consumer.
-  const agent: Omit<AgentState, "admittedAtSeq"> = {
+  // The wire payload carries ONLY the admission ("birth certificate") fields; the reducer
+  // materializes the full AgentState, defaulting derived/lifecycle fields and stamping
+  // admittedAtSeq from the event's own seq (RFC 0001 §4) — so the log never carries a
+  // placeholder that could mislead a raw-payload consumer, and AgentState can grow derived
+  // fields without changing this wire shape (see AgentAdmission).
+  const admission: AgentAdmission = {
     id: spec.id,
     region: spec.region,
     role: spec.role,
     publicKey: spec.publicKey,
-    balances: { credit: spec.credit ?? 0, currency: spec.currency ?? 0 },
-    reputation: 0,
-    trust: 0,
-    resources: 0,
+    credit: spec.credit ?? 0,
+    currency: spec.currency ?? 0,
     valueProfile: spec.valueProfile,
+    sponsors: spec.sponsors ?? [],
   };
-  commit(env, EVENT_AGENT_ADMITTED, { agent });
+  commit(env, EVENT_AGENT_ADMITTED, { admission });
 
   return readBackOrThrow("admitAgent", getAgent(env.getState(), spec.id));
 }
