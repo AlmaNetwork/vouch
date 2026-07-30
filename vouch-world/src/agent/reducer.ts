@@ -108,10 +108,10 @@ export const agentReducer: Reducer<AgentSlice> = (state, event) => {
     case EVENT_AGENT_SUSPENDED: {
       // RFC 0007 §9 suspendId: set the suspension window. Idempotent — a second suspend
       // REPLACES the previous untilTick (the later suspension wins, like a sentence revision).
-      const { agentId, untilTick } = event.payload as AgentSuspendedPayload;
+      const { agentId, untilTick, by } = event.payload as AgentSuspendedPayload;
       const a = state.agents[agentId];
       if (!a) return state;
-      return { agents: { ...state.agents, [agentId]: { ...a, suspension: { untilTick } } } };
+      return { agents: { ...state.agents, [agentId]: { ...a, suspension: { untilTick, issuedBy: by } } } };
     }
     case EVENT_AGENT_REINSTATED: {
       // RFC 0007 §9 reinstateId: clear the suspension. No-op if not suspended.

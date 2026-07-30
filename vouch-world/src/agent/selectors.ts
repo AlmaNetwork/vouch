@@ -41,15 +41,26 @@ export function isAgentSuspended(agent: AgentState, atTick: number): boolean {
 }
 
 /**
- * RFC 0007 §8.5 — derived standing for an agent in the current state.
+ * RFC 0007 §8.5 — standing for an agent in a given `context`.
  *
- * In the full RFC the fold is a graph-fixpoint (source-weighted recursion, out-degree
- * normalization, per-source caps, dedup by (from, to, context)). For the PoC simulator
- * we use the simpler closed form: standing = trust, where `trust` is the accumulated
- * sum of all vouch weights received (already folded into AgentState by the reducer).
- * This satisfies the RFC's core requirement — standing is DERIVED, never stored
- * discretionarily — and provides a stable abstraction point for the full fold upgrade.
+ * PLACEHOLDER, not the real fold — and deliberately labelled as such. This reads the
+ * write-time-folded `trust` SCALAR (`reducer.ts` folds `trust: a.trust + weight` on every
+ * `agent.vouched`), so `trust` is a stored, unbounded plain sum. It is NOT yet a derived
+ * standing: the RFC form is a graph-fixpoint (source-weighted recursion, out-degree
+ * normalization, per-source caps, dedup by `(from, to, kind, context)`, decay), and none of
+ * that relation set lives in state — `AgentSlice` is only `{ agents: Record<id, AgentState> }`.
+ * The upgrade is therefore a NEW STATE SLICE (the §10.5 incoming-edge read-model the fold ranges
+ * over), not a new body for this function. `context` is threaded now (RFC 0007 §8.5 puts
+ * contexts in the law parameters; RFC 0008 §4.4 keeps `context` in the signed edge core so an
+ * edge can't be lifted into a scope it wasn't signed for) but is IGNORED by the placeholder —
+ * a single global `trust` scalar has no per-context dimension yet.
+ *
+ * Tier K-7 (suffrage boundary): this is the NON-SUFFRAGE fold. It must NEVER feed `voteWeight`
+ * or the RFC 0001 §5 roll — gating the vote on standing is weighting the vote by another name
+ * (RFC 0007 §4.2 / RFC 0008 §15). `governance.ts` keeps `voteWeight` on `reputation`/`stake`,
+ * never on `trust`/standing; see the K-7 test in `sanctions.test.ts`.
  */
-export function computeStanding(state: AgentSlice, agentId: string): number {
+export function computeStanding(state: AgentSlice, agentId: string, context: string): number {
+  void context; // reserved for the per-context fold (see above); the placeholder is context-agnostic
   return getAgent(state, agentId)?.trust ?? 0;
 }

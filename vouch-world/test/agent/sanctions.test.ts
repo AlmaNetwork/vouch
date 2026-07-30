@@ -14,7 +14,14 @@
 
 import { describe, expect, test } from "bun:test";
 import { encodeBase64, keyPairFromSeed } from "vouch-core";
-import { computeStanding, currencySupply, EVENT_AGENT_SUSPENDED, getAgent, isAgentSuspended } from "../../src/agent";
+import {
+  computeStanding,
+  currencySupply,
+  EVENT_AGENT_REINSTATED,
+  EVENT_AGENT_SUSPENDED,
+  getAgent,
+  isAgentSuspended,
+} from "../../src/agent";
 import {
   admitAgent,
   admitTreasury,
@@ -23,6 +30,7 @@ import {
   experimenterProposal,
   INITIAL_WORLD_STATE,
   immigrate,
+  openProposal,
   proposeFounding,
   reinstateAgent,
   rootReducer,
@@ -173,18 +181,18 @@ describe("RFC 0007 §9 — sanctions", () => {
   // K8 -----------------------------------------------------------------------
   test("computeStanding returns trust accumulated from vouches (K8)", () => {
     const world = twoRegionWorld();
-    expect(computeStanding(world.getState(), "alice@umi")).toBe(0);
+    expect(computeStanding(world.getState(), "alice@umi", "merchant")).toBe(0);
 
     vouchFor(world, "bob@umi", "alice@umi", 3);
-    expect(computeStanding(world.getState(), "alice@umi")).toBe(3);
+    expect(computeStanding(world.getState(), "alice@umi", "merchant")).toBe(3);
 
     vouchFor(world, "bob@umi", "alice@umi", 2);
-    expect(computeStanding(world.getState(), "alice@umi")).toBe(5);
+    expect(computeStanding(world.getState(), "alice@umi", "merchant")).toBe(5);
   });
 
   test("computeStanding returns 0 for unknown agent (K8)", () => {
     const world = twoRegionWorld();
-    expect(computeStanding(world.getState(), "unknown@umi")).toBe(0);
+    expect(computeStanding(world.getState(), "unknown@umi", "merchant")).toBe(0);
   });
 
   // K9 -----------------------------------------------------------------------
@@ -239,6 +247,48 @@ describe("RFC 0007 §9 — sanctions", () => {
     suspendAgent(world, "alice@umi", 20, UMI_MAYOR);
     const alice = getAgent(world.getState(), "alice@umi");
     expect(alice?.suspension?.untilTick).toBe(20);
+  });
+
+  // K10: the issuer is a permanent record on both the event AND the state (RFC 0008 §4.3/§5.4/§9.8)
+  test("suspend/reinstate record the issuing authority `by` on the event and state (K10)", () => {
+    const world = twoRegionWorld();
+    suspendAgent(world, "alice@umi", 10, UMI_MAYOR);
+    // state carries the issuer
+    expect(getAgent(world.getState(), "alice@umi")?.suspension?.issuedBy).toBe(UMI_MAYOR);
+    // the event — the permanent record a §10.5 sanction edge projects from — carries it too
+    const suspended = world.log.all().find((e) => e.type === EVENT_AGENT_SUSPENDED);
+    expect(suspended?.payload).toMatchObject({ agentId: "alice@umi", untilTick: 10, by: UMI_MAYOR });
+
+    reinstateAgent(world, "alice@umi", UMI_MAYOR);
+    const reinstated = world.log.all().find((e) => e.type === EVENT_AGENT_REINSTATED);
+    expect(reinstated?.payload).toMatchObject({ agentId: "alice@umi", by: UMI_MAYOR });
+  });
+});
+
+// Tier K-7 (suffrage boundary): the non-suffrage standing fold must never leak into the vote.
+describe("RFC 0007 Tier K-7 — computeStanding is walled off from suffrage", () => {
+  test("vouch-driven standing does NOT change a council voter's weight", () => {
+    // A council whose weighting is `reputation` (never `trust`/standing). Vouch heavily for a
+    // voter, then confirm the §5 roll weight is unmoved — standing cannot buy suffrage weight.
+    const world = createAlmaWorld("k7");
+    const council = makeInstitutions({
+      verificationPolicy: { acceptedSchemaIds: [], rejectUnknownSchemas: false },
+      diplomacyPolicy: { defaultStance: "absorb", overrides: {} },
+      governance: { kind: "council", members: ["a@k", "b@k"], threshold: 2, weighting: "reputation" },
+    });
+    proposeFounding(world, experimenterProposal(defineRegion("k", "K", council), undefined, "a@k"));
+    admitTreasury(world, "k");
+    admitAgent(world, { id: "a@k", region: "k", role: "merchant", valueProfile: "lenient", publicKey: pub(3) });
+    admitAgent(world, { id: "b@k", region: "k", role: "artisan", valueProfile: "lenient", publicKey: pub(4) });
+
+    // pour trust into b@k — computeStanding would rise, reputation would not
+    vouchFor(world, "a@k", "b@k", 5);
+    expect(computeStanding(world.getState(), "b@k", "k")).toBe(5);
+
+    // the §5 roll weight (reputation-based, +1 floor) is unaffected by that trust
+    const proposal = openProposal(world, "k", { policy: "resource", value: { capacity: 10, regenPerTick: 1 } }, "a@k");
+    const weights = Object.fromEntries(proposal.openProposal?.roll.map((r) => [r.voter, r.weight]) ?? []);
+    expect(weights["b@k"]).toBe(1); // reputation 0 + floor 1 — trust 5 did NOT leak in
   });
 });
 

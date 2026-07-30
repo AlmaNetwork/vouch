@@ -51,13 +51,15 @@ function canSanction(state: WorldState, target: AgentState, by: string): boolean
 // --- §3.4 effect primitives (auth-free; the future command catalog) ------
 
 /** §3.4 effect `suspend`: set the suspension window. Authorization is the caller's concern. */
-function applySuspension(env: WorldCommit, agentId: string, untilTick: number): void {
-  commit(env, EVENT_AGENT_SUSPENDED, { agentId, untilTick });
+function applySuspension(env: WorldCommit, agentId: string, untilTick: number, by: string): void {
+  // `by` is recorded on the event, not dropped after authorization: the event is the PERMANENT
+  // record a §10.5 sanction edge (RFC 0008 §4.3) / §5.4 clear-authority / §9.8 audit project from.
+  commit(env, EVENT_AGENT_SUSPENDED, { agentId, untilTick, by });
 }
 
-/** §3.4 effect `reinstate`: clear the suspension. Authorization is the caller's concern. */
-function applyReinstatement(env: WorldCommit, agentId: string): void {
-  commit(env, EVENT_AGENT_REINSTATED, { agentId });
+/** §3.4 effect `reinstate`: clear the suspension. Authorization is the caller's concern; `by` is recorded (§9.8 audit). */
+function applyReinstatement(env: WorldCommit, agentId: string, by: string): void {
+  commit(env, EVENT_AGENT_REINSTATED, { agentId, by });
 }
 
 // --- public write ops = authorize + effect -------------------------------
@@ -66,13 +68,17 @@ function applyReinstatement(env: WorldCommit, agentId: string): void {
  * RFC 0007 §9 suspendId: suspend `agentId`'s economy participation until `untilTick`
  * (inclusive), on the authority of `by`. A second suspend REPLACES the window (the later
  * sentence wins). Reasons: `bad-until-tick`, `unknown-agent`, `not-authorized`.
+ *
+ * DEFERRED (PoC): the §9.1 `maxSanction` ceiling (no cap on `untilTick`) and the §9.3
+ * non-retroactivity check are not enforced here — they belong with the penal-law layer the
+ * §4 definition store (#40) is being built to hold.
  */
 export function suspendAgent(env: WorldCommit, agentId: string, untilTick: number, by: string): SuspendResult {
   if (!Number.isInteger(untilTick) || untilTick < 0) return { ok: false, reason: "bad-until-tick" };
   const target = getAgent(env.getState(), agentId);
   if (!target) return { ok: false, reason: "unknown-agent" };
   if (!canSanction(env.getState(), target, by)) return { ok: false, reason: "not-authorized" };
-  applySuspension(env, agentId, untilTick);
+  applySuspension(env, agentId, untilTick, by);
   return { ok: true, untilTick };
 }
 
@@ -80,11 +86,17 @@ export function suspendAgent(env: WorldCommit, agentId: string, untilTick: numbe
  * RFC 0007 §9 reinstateId: lift `agentId`'s suspension early, on the authority of `by`.
  * Idempotent (returns ok even if not currently suspended — the reducer no-ops).
  * Reasons: `unknown-agent`, `not-authorized`.
+ *
+ * DEFERRED (PoC): this is an ISSUER-DISCRETION clearing path — anyone who passes `canSanction`
+ * (including a dictatorship's sole owner, the party that imposed the sanction) may clear it with
+ * no adjudication and no objection window. RFC 0008 §5.4 / §10.5 delete exactly that path ("who
+ * may clear a sanction is RFC 0007 §9, full stop — no self-serve pardon, no issuer-discretion
+ * downgrade"). Gating clears on §9-authored penal law is deferred to the definition store (#40).
  */
 export function reinstateAgent(env: WorldCommit, agentId: string, by: string): ReinstateResult {
   const target = getAgent(env.getState(), agentId);
   if (!target) return { ok: false, reason: "unknown-agent" };
   if (!canSanction(env.getState(), target, by)) return { ok: false, reason: "not-authorized" };
-  applyReinstatement(env, agentId);
+  applyReinstatement(env, agentId, by);
   return { ok: true };
 }

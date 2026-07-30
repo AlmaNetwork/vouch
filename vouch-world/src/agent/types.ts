@@ -20,9 +20,16 @@ export interface Balances {
  * RFC 0007 §9 / §3.4 — active suspension on an agent. null = not suspended.
  * A suspended agent cannot transact (economy.settled) until `untilTick` has passed
  * or `agent.reinstated` is folded. Suspension never blocks emigration (Tier K-5).
+ *
+ * `issuedBy` records the authority that imposed the sanction. It is load-bearing, not
+ * decorative: RFC 0008 §4.3 fixes a sanction edge's `from` to the issuer, so a §10.5
+ * sanction edge can only be projected from a suspension that remembers who issued it;
+ * §5.4 ("only a §9-authored head may clear a sanction") and §9.8 log-evidentialism both
+ * need a subject to check against.
  */
 export interface AgentSuspension {
   readonly untilTick: number;
+  readonly issuedBy: string;
 }
 
 export interface AgentState {
@@ -107,10 +114,16 @@ export type AgentDecidedPayload = { readonly agentId: string; readonly intent: I
 export type MintPayload = { readonly agentId: string; readonly amount: number; readonly reason: string };
 /** One agent vouches for another (weight 1..5), raising the subject's trust. */
 export type VouchedPayload = { readonly from: string; readonly to: string; readonly weight: number };
-/** RFC 0007 §9 suspendId: block the agent's economy participation until untilTick (inclusive). */
-export type AgentSuspendedPayload = { readonly agentId: string; readonly untilTick: number };
-/** RFC 0007 §9 reinstateId: lift an active suspension early (no-op if not suspended). */
-export type AgentReinstatedPayload = { readonly agentId: string };
+/**
+ * RFC 0007 §9 suspendId: block the agent's economy participation until untilTick (inclusive).
+ * `by` is the issuing authority — the PERMANENT record. The issuer is dropped after the
+ * `canSanction` check unless it is written here, and the event (not the transient state) is
+ * what a §10.5 sanction edge (RFC 0008 §4.3), a §5.4 clear-authority check, and §9.8 audit
+ * project from — so it must live on the payload, not only pass through the write path.
+ */
+export type AgentSuspendedPayload = { readonly agentId: string; readonly untilTick: number; readonly by: string };
+/** RFC 0007 §9 reinstateId: lift an active suspension early (no-op if not suspended). `by` = the clearing authority (§9.8 audit subject). */
+export type AgentReinstatedPayload = { readonly agentId: string; readonly by: string };
 
 /** Maps each agent-slice event type to its payload — the typed `commit` helper keys off this. */
 export interface AgentEventMap {
