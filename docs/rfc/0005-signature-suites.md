@@ -27,7 +27,7 @@ algorithm-confusion attacks.
   the canonicalization that fixes the exact bytes signed, and class (single/threshold).
   Identified by a **Suite ID**.
 - **MTI suite** — the Mandatory-To-Implement suite every conforming region MUST verify.
-- **Minimum-strength policy** — a region's floor on the `securityLevel` (§4) it will accept.
+- **Minimum-strength policy** — a region's floor on the `securityBits` (§4) it will accept.
 - **agreedSuites** — the ordered Suite ID set bound to a Connection Agreement (RFC 0004 §4).
 
 ## 3. Signature Suites
@@ -51,9 +51,11 @@ material MUST NOT be reused under two suites.
 
 ## 4. The Signature Suite Registry
 
-An append-only table; each entry: `suite-id`, `name`, `reference`, `class`, `securityLevel`
-(classical-equivalent strength in bits; `(PQ)` marks post-quantum resistance), `status`
-(`active` | `deprecated`). `securityLevel` is what the minimum-strength policy (§6) checks.
+An append-only table; each entry: `suite-id`, `name`, `reference`, `class`, `securityBits`
+(classical-equivalent strength in bits), `pq` (boolean: post-quantum resistance), `status`
+(`active` | `deprecated`). `securityBits` is what the minimum-strength policy (§6) checks; a
+PQ requirement (§8) checks `pq`. NIST PQC levels map to classical-equivalent floors:
+L1 → 128, L3 → 192, L5 → 256.
 
 Rules: an `active` entry MUST NOT be modified or removed; it MAY move to `deprecated`; a
 deprecated suite MUST NOT be selected in a new negotiation and SHOULD be phased out at renewal;
@@ -61,21 +63,21 @@ new suites are appended.
 
 Seed registry (all listed; a region implements only what it advertises):
 
-| suite-id | name | class | securityLevel | status |
-|----------|------|-------|---------------|--------|
-| `ed25519` | EdDSA over Curve25519 (RFC 8032) | single | 128-bit | active (**MTI**) |
-| `ecdsa-secp256k1` | ECDSA over secp256k1 | single | 128-bit | active |
-| `ecdsa-p256` | ECDSA over NIST P-256 | single | 128-bit | active |
-| `ecdsa-p384` | ECDSA over NIST P-384 | single | 192-bit | active |
-| `ed448` | EdDSA over Curve448 (RFC 8032) | single | 224-bit | active |
-| `rsa-pss-sha256` | RSASSA-PSS SHA-256 (key ≥3072-bit) | single | 128-bit | active |
-| `bbs-2023` | BBS+ over BLS12-381 (selective disclosure) | single | 128-bit | active |
-| `bls-12381` | BLS signatures over BLS12-381 (aggregatable) | single | 128-bit | active |
-| `sm2` | SM2 (GB/T 32918) | single | 128-bit | active |
-| `frost-ed25519` | FROST threshold Ed25519 | threshold | 128-bit | active |
-| `ml-dsa-65` | ML-DSA (FIPS 204) | single | NIST-L3 `(PQ)` | active |
-| `slh-dsa-128s` | SLH-DSA (FIPS 205) | single | NIST-L1 `(PQ)` | active |
-| `falcon-512` | FN-DSA / Falcon | single | NIST-L1 `(PQ)` | active |
+| suite-id | name | class | securityBits | pq | status |
+|----------|------|-------|--------------|----|--------|
+| `ed25519` | EdDSA over Curve25519 (RFC 8032) | single | 128 | no | active (**MTI**) |
+| `ecdsa-secp256k1` | ECDSA over secp256k1 | single | 128 | no | active |
+| `ecdsa-p256` | ECDSA over NIST P-256 | single | 128 | no | active |
+| `ecdsa-p384` | ECDSA over NIST P-384 | single | 192 | no | active |
+| `ed448` | EdDSA over Curve448 (RFC 8032) | single | 224 | no | active |
+| `rsa-pss-sha256` | RSASSA-PSS SHA-256 (key ≥3072-bit) | single | 128 | no | active |
+| `bbs-2023` | BBS+ over BLS12-381 (selective disclosure) | single | 128 | no | active |
+| `bls-12381` | BLS signatures over BLS12-381 (aggregatable) | single | 128 | no | active |
+| `sm2` | SM2 (GB/T 32918) | single | 128 | no | active |
+| `frost-ed25519` | FROST threshold Ed25519 | threshold | 128 | no | active |
+| `ml-dsa-65` | ML-DSA (FIPS 204, NIST-L3) | single | 192 | yes | active |
+| `slh-dsa-128s` | SLH-DSA (FIPS 205, NIST-L1) | single | 128 | yes | active |
+| `falcon-512` | FN-DSA / Falcon (NIST-L1) | single | 128 | yes | active |
 
 ## 5. Capability Advertisement
 
@@ -147,9 +149,9 @@ additional registered suites.
 ## 10. Open Questions
 
 1. Confirm MTI = `ed25519`.
-2. Default responder preference metric (`securityLevel` descending?).
+2. Default responder preference metric (`securityBits` descending?).
 3. Whether `bbs-2023` belongs to a recommended baseline set or is purely opt-in.
-4. Registry governance: who may append an entry, and the `securityLevel` assignment criteria
+4. Registry governance: who may append an entry, and the `securityBits` / `pq` assignment criteria
    (especially for PQ).
 
 ## 11. Relationship to RFC 0004 and vouch
