@@ -1,0 +1,42 @@
+# Caddy in front of vouch-node. Replace node.example.org with your hostname.
+#
+# One site block and no default vhost on purpose: anyone who finds the origin IP and
+# connects to it directly gets a TLS failure rather than a working endpoint listing.
+#
+# TLS: this uses a Cloudflare Origin CA certificate rather than Caddy's automatic
+# Let's Encrypt. Two reasons — no ACME means no port 80 and no renewal daemon, and a
+# public ACME certificate is published to Certificate Transparency logs, which puts the
+# hostname in a permanently searchable public record. Origin CA certs are not in CT and
+# are trusted only by Cloudflare, which is the only client that should reach this box.
+#
+#   sudo install -d -m 0750 -o root -g caddy /etc/caddy/tls
+#   # place origin.crt / origin.key (0640 root:caddy) from the Cloudflare dashboard
+#   # then set Cloudflare SSL mode to Full (strict) and enable Authenticated Origin Pulls
+
+{
+	# No ACME account, no automatic HTTPS negotiation for this site.
+	auto_https disable_redirects
+	admin off
+}
+
+node.example.org {
+	tls /etc/caddy/tls/origin.crt /etc/caddy/tls/origin.key {
+		# Authenticated Origin Pulls: only Cloudflare holds a cert signed by this CA, so
+		# someone who discovers the IP still cannot use it.
+		client_auth {
+			mode require_and_verify
+			trust_pool file /etc/caddy/tls/cloudflare-origin-pull-ca.pem
+		}
+	}
+
+	reverse_proxy 127.0.0.1:8787
+
+	# Don't advertise the server software.
+	header -Server
+
+	log {
+		output file /var/log/caddy/access.log
+		# Client IPs are Cloudflare's here anyway; keep the log small and boring.
+		format json
+	}
+}
