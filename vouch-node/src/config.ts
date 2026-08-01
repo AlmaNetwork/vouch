@@ -7,6 +7,7 @@
 
 import { createHash } from "node:crypto";
 import { type KeyPair, keyPairFromSeed } from "vouch-core";
+import { isLogLevel, LOG_LEVELS, type LogLevel } from "./log";
 
 export type RawEnv = Record<string, string | undefined>;
 
@@ -17,6 +18,8 @@ export interface NodeConfig {
   readonly journalPath: string | null; // null => in-memory (ephemeral)
   readonly accountsPath: string | null; // null => in-memory (ephemeral)
   readonly notary: KeyPair;
+  readonly logLevel: LogLevel;
+  readonly build: string; // git tag / short SHA baked in at build time; "dev" when unset
 }
 
 function requireInt(raw: string | undefined, name: string, def: number, min: number, max: number): number {
@@ -64,6 +67,13 @@ export function loadConfig(env: RawEnv): NodeConfig {
   if (!notarySource || notarySource.length === 0) {
     throw new Error("config: VOUCH_NOTARY is required (e.g. seed://<dev-secret> or env://VOUCH_NOTARY_SECRET)");
   }
+  // Same strictness as the ints: a typo'd level is an error, not a silent default,
+  // so nobody discovers at 3am that the node has been logging at the wrong level.
+  const rawLevel = env.VOUCH_LOG_LEVEL ?? "info";
+  if (!isLogLevel(rawLevel)) {
+    throw new Error(`config: VOUCH_LOG_LEVEL must be one of ${LOG_LEVELS.join(" | ")}, got "${rawLevel}"`);
+  }
+
   return {
     // Loopback by default — an operator opts into public exposure explicitly.
     host: env.VOUCH_HOST ?? "127.0.0.1",
@@ -72,5 +82,7 @@ export function loadConfig(env: RawEnv): NodeConfig {
     journalPath: env.VOUCH_JOURNAL ?? null,
     accountsPath: env.VOUCH_ACCOUNTS ?? null,
     notary: resolveNotary(notarySource, env),
+    logLevel: rawLevel,
+    build: env.VOUCH_BUILD ?? "dev",
   };
 }

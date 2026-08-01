@@ -5,15 +5,19 @@ import { FileAccountLog, MemoryAccountLog } from "./account-log";
 import { loadConfig } from "./config";
 import { createNodeApp } from "./http";
 import { FileJournal, MemoryJournal } from "./journal";
+import { createLogger } from "./log";
 import { VouchNode } from "./node";
 
 const config = loadConfig(process.env);
+const log = createLogger(config.logLevel, config.build);
+
 const journal = config.journalPath ? new FileJournal(config.journalPath) : new MemoryJournal();
 const accountLog = config.accountsPath ? new FileAccountLog(config.accountsPath) : new MemoryAccountLog();
 
-const node = new VouchNode({ seed: config.seed, notary: config.notary, journal, accountLog });
-// The node resolves the environment; the engine reads none of it.
-const app = createNodeApp(node, { build: process.env.VOUCH_BUILD ?? "dev" });
+const node = new VouchNode({ seed: config.seed, notary: config.notary, journal, accountLog, log });
+// The node resolves the environment (config.build comes from VOUCH_BUILD); the engine
+// reads none of it.
+const app = createNodeApp(node, { build: config.build, log });
 
 // Cap the request body: a signed command is tiny, so don't let an unauthenticated
 // caller force large allocations before we ever check a signature.
@@ -29,11 +33,18 @@ const server = Bun.serve({
   fetch: app.fetch,
 });
 
-console.log(`vouch-node listening on http://${server.hostname}:${server.port}`);
-console.log(`  persistence: journal=${config.journalPath ?? "(memory)"} accounts=${config.accountsPath ?? "(memory)"}`);
-console.log("  GET  /state /regions /agents /metrics /log …   observation (read-only)");
-console.log("  POST /v1/register                              bind principal -> public key (self-signed)");
-console.log("  POST /v1/command                               signed command: found | admit | transfer | vouch");
+log.info(
+  {
+    host: server.hostname,
+    port: server.port,
+    // Whether persistence is durable at all is the single most useful boot fact: an
+    // unset path means the world is lost on restart, and nothing else surfaces that.
+    journal: config.journalPath ?? "(memory — EPHEMERAL)",
+    accounts: config.accountsPath ?? "(memory — EPHEMERAL)",
+    durable: config.journalPath !== null && config.accountsPath !== null,
+  },
+  "vouch-node listening",
+);
 
 // Graceful shutdown. `docker stop` and systemd both send SIGTERM and then hard-kill
 // after a timeout; without this the process dies mid-request, so a client whose nonce
@@ -43,7 +54,7 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.on(signal, async () => {
     if (shuttingDown) return;
     shuttingDown = true;
-    console.log(`${signal} received — draining`);
+    log.info({ signal }, "shutdown signal received — draining");
 
     // `server.stop()` returns a Promise that resolves once in-flight requests have
     // finished. It MUST be awaited: exiting synchronously after calling it kills those
@@ -53,7 +64,7 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
     // own kill timeout (docker stop -t, systemd TimeoutStopSec), or we get SIGKILLed
     // anyway and lose the graceful exit. `unref` so it never holds the loop open.
     const forceExit = setTimeout(() => {
-      console.log("drain timed out — exiting anyway");
+      log.warn("drain timed out — exiting anyway");
       process.exit(0);
     }, 10_000);
     forceExit.unref?.();
