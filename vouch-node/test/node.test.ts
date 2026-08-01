@@ -140,3 +140,50 @@ describe("VouchNode — authorization & integrity", () => {
     expect(node.submit(signCommand("acct:alice", 1, { kind: "found", regionId: "nova", displayName: "Nova" }, ALICE)).ok).toBe(true);
   });
 });
+
+describe("VouchNode — a failed durable append is fatal, never a 500-and-continue", () => {
+  /** A journal whose append always fails, as a full disk / read-only data dir would. */
+  class BrokenJournal extends MemoryJournal {
+    override append(): void {
+      throw new Error("ENOSPC: no space left on device");
+    }
+  }
+
+  test("a journal append failure reaches onDurabilityFailure and does not return a result", () => {
+    const failures: unknown[] = [];
+    const node = new VouchNode({
+      seed: "n",
+      notary: NOTARY,
+      journal: new BrokenJournal(),
+      accountLog: new MemoryAccountLog(),
+      onDurabilityFailure: (err) => failures.push(err),
+    });
+    node.register(signRegister("acct:alice", 0, ALICE));
+
+    // The world advances in memory at dispatch and persists afterwards, so a node that
+    // swallowed this would serve state its journal never saw — and lose it on restart.
+    expect(() => node.submit(signCommand("acct:alice", 1, { kind: "found", regionId: "nova", displayName: "Nova" }, ALICE))).toThrow(
+      /ENOSPC/,
+    );
+    expect(failures).toHaveLength(1);
+  });
+
+  test("an auth-log append failure is fatal too (the nonce is persisted before dispatch)", () => {
+    class BrokenAccountLog extends MemoryAccountLog {
+      override append(): void {
+        throw new Error("EROFS: read-only file system");
+      }
+    }
+    const failures: unknown[] = [];
+    const node = new VouchNode({
+      seed: "n",
+      notary: NOTARY,
+      journal: new MemoryJournal(),
+      accountLog: new BrokenAccountLog(),
+      onDurabilityFailure: (err) => failures.push(err),
+    });
+
+    expect(() => node.register(signRegister("acct:alice", 0, ALICE))).toThrow(/EROFS/);
+    expect(failures).toHaveLength(1);
+  });
+});
