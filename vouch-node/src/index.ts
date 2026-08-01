@@ -39,11 +39,26 @@ console.log("  POST /v1/command                               signed command: fo
 // was already consumed never learns whether its write landed.
 let shuttingDown = false;
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
-  process.on(signal, () => {
+  process.on(signal, async () => {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log(`${signal} received — draining`);
-    server.stop(); // let in-flight requests finish; stop accepting new ones
+
+    // `server.stop()` returns a Promise that resolves once in-flight requests have
+    // finished. It MUST be awaited: exiting synchronously after calling it kills those
+    // requests mid-response, which is the exact failure this handler exists to prevent.
+    //
+    // The timeout is the backstop — a hung connection must not outlive the supervisor's
+    // own kill timeout (docker stop -t, systemd TimeoutStopSec), or we get SIGKILLed
+    // anyway and lose the graceful exit. `unref` so it never holds the loop open.
+    const forceExit = setTimeout(() => {
+      console.log("drain timed out — exiting anyway");
+      process.exit(0);
+    }, 10_000);
+    forceExit.unref?.();
+
+    await server.stop();
+    clearTimeout(forceExit);
     process.exit(0);
   });
 }
