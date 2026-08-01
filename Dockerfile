@@ -31,7 +31,13 @@ RUN addgroup -g 1001 -S vouch \
  && chown -R vouch:vouch /app/data
 USER vouch
 
-ENV VOUCH_HOST=0.0.0.0 \
+# Which code is in this image — surfaced at GET /health so a deploy and a failed
+# rollback are distinguishable. Pass a git tag or short SHA:
+#   docker build --build-arg VOUCH_BUILD="$(git describe --tags --always)" .
+ARG VOUCH_BUILD=dev
+
+ENV VOUCH_BUILD=${VOUCH_BUILD} \
+    VOUCH_HOST=0.0.0.0 \
     VOUCH_PORT=8787 \
     VOUCH_JOURNAL=/app/data/journal.jsonl \
     VOUCH_ACCOUNTS=/app/data/accounts.jsonl

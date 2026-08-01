@@ -13,6 +13,22 @@ import type { WorldView } from "../foundation";
 import { getRegion, listRegions } from "../region";
 import { metrics } from "./metrics";
 
+/**
+ * Largest `/log` page. The log is unauthenticated and grows without bound, so an
+ * uncapped dump is both a bandwidth amplifier and a stall — serialization is
+ * synchronous and Bun is single-threaded, so a big response blocks every other
+ * request, including the health check.
+ */
+export const LOG_PAGE_LIMIT = 1000;
+
+/** A non-negative integer query param, or `undefined` if it is anything else. */
+function parseSeq(raw: string | undefined): number | undefined {
+  if (raw === undefined || raw === "") return 0;
+  if (!/^\d+$/.test(raw)) return undefined; // rejects "abc", "-1", "2.7", "1e3", " 5"
+  const n = Number(raw);
+  return Number.isSafeInteger(n) ? n : undefined;
+}
+
 /** Build a read-only observation HTTP app over a world view. GET-only by construction. */
 export function createObservationApp(view: WorldView<WorldState>): Hono {
   const app = new Hono();
@@ -34,7 +50,10 @@ export function createObservationApp(view: WorldView<WorldState>): Hono {
       ],
     }),
   );
-  app.get("/health", (c) => c.json({ ok: true, tick: view.tick }));
+  // `build` identifies WHICH code is answering. Without it a deploy and a failed
+  // rollback look identical from the outside. Set VOUCH_BUILD at image build time
+  // (git tag or short SHA); "dev" when unset.
+  app.get("/health", (c) => c.json({ ok: true, tick: view.tick, build: process.env.VOUCH_BUILD ?? "dev" }));
   app.get("/tick", (c) => c.json({ tick: view.tick }));
   app.get("/metrics", (c) => c.json(metrics(view)));
 
@@ -50,7 +69,19 @@ export function createObservationApp(view: WorldView<WorldState>): Hono {
     return a ? c.json(a) : c.json({ error: "agent not found" }, 404);
   });
 
-  app.get("/log", (c) => c.json(view.log.since(Number(c.req.query("since") ?? 0))));
+  // Still a bare array (vouch-cli, vouch-web and openapi/read.yaml all consume it that
+  // way), but `since` is now validated and the page is capped. Passing the raw query to
+  // Number() let slice() read sloppy values in ways no caller means: Number("abc") is
+  // NaN and slice(NaN) returns the WHOLE log — an unauthenticated full dump from a
+  // typo — while "-1" slices from the end and "2.7" silently truncates.
+  //
+  // A caller that receives exactly LOG_PAGE_LIMIT events should ask again from
+  // `since + LOG_PAGE_LIMIT`; /log/digest reports the total length.
+  app.get("/log", (c) => {
+    const since = parseSeq(c.req.query("since"));
+    if (since === undefined) return c.json({ error: "since must be a non-negative integer" }, 400);
+    return c.json(view.log.since(since).slice(0, LOG_PAGE_LIMIT));
+  });
   app.get("/log/digest", (c) => c.json({ digest: view.log.digest(), length: view.log.length }));
 
   return app;

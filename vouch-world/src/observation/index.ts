@@ -4,4 +4,4 @@
 // It imports downward (environment/region/agent/foundation) and never the write path.
 
 export { gini, type Metrics, metrics } from "./metrics";
-export { createObservationApp, type ObservationServer, serveObservation } from "./server";
+export { createObservationApp, LOG_PAGE_LIMIT, type ObservationServer, serveObservation } from "./server";
