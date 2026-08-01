@@ -142,10 +142,11 @@ describe("observation — the read-only HTTP connection point", () => {
     expect(all.length).toBeLessThanOrEqual(LOG_PAGE_LIMIT);
   });
 
-  test("/health reports which build is answering", async () => {
-    const health = await getJson(createObservationApp(world()), "/health");
-    expect(health.ok).toBe(true);
-    expect(typeof health.build).toBe("string"); // "dev" unless VOUCH_BUILD is set
+  test("/health reports which build is answering — passed in, not read from the env", async () => {
+    // build identity is deploy metadata; the engine takes it as a parameter so it
+    // reads no ambient environment (and this is testable without mutating process.env).
+    expect((await getJson(createObservationApp(world()), "/health")).build).toBe("dev");
+    expect((await getJson(createObservationApp(world(), { build: "v1.2.3" }), "/health")).build).toBe("v1.2.3");
   });
 
   test("it is read-only: no write route, and watching never changes the world (§2-6)", async () => {

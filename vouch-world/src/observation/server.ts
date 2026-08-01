@@ -29,8 +29,19 @@ function parseSeq(raw: string | undefined): number | undefined {
   return Number.isSafeInteger(n) ? n : undefined;
 }
 
+export interface ObservationOptions {
+  /**
+   * Which code is serving — a git tag or short SHA, reported at `GET /health`.
+   * Passed IN rather than read from the environment: build identity is deploy
+   * metadata, and the engine reads no ambient input (the same reason `issuedAt` is
+   * caller-supplied in vouch-core). The node resolves `VOUCH_BUILD` and hands it here.
+   */
+  readonly build?: string;
+}
+
 /** Build a read-only observation HTTP app over a world view. GET-only by construction. */
-export function createObservationApp(view: WorldView<WorldState>): Hono {
+export function createObservationApp(view: WorldView<WorldState>, opts: ObservationOptions = {}): Hono {
+  const build = opts.build ?? "dev";
   const app = new Hono();
 
   app.get("/", (c) =>
@@ -51,9 +62,8 @@ export function createObservationApp(view: WorldView<WorldState>): Hono {
     }),
   );
   // `build` identifies WHICH code is answering. Without it a deploy and a failed
-  // rollback look identical from the outside. Set VOUCH_BUILD at image build time
-  // (git tag or short SHA); "dev" when unset.
-  app.get("/health", (c) => c.json({ ok: true, tick: view.tick, build: process.env.VOUCH_BUILD ?? "dev" }));
+  // rollback look identical from the outside.
+  app.get("/health", (c) => c.json({ ok: true, tick: view.tick, build }));
   app.get("/tick", (c) => c.json({ tick: view.tick }));
   app.get("/metrics", (c) => c.json(metrics(view)));
 
