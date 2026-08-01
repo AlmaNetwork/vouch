@@ -72,6 +72,23 @@ with the principal's Ed25519 key (JCS canonicalization, base64 signature). See
 | `transfer` | `{ from, to, amount }` | principal must equal `from` |
 | `vouch` | `{ from, to, weight }` | principal must equal `from` |
 
+These four are the **hardcoded** command surface exposed over HTTP today.
+
+### Data-defined commands (RFC 0007 §4 — minimal skeleton)
+
+Alongside the hardcoded switch, an experimental **data-defined command engine**
+(`interpreter.ts`) runs commands that live in the log as data, not code. A command
+definition (`putDefinition`, stored in vouch-world's definition slice) carries a
+closed **precondition** vocabulary (§4.2: `isSelf` / `balanceAtLeast` /
+`isRegionOwner` / `tickAfter`) and a closed **effect** vocabulary (§3.4: `transfer` /
+`recordVouch` / `suspendId` / `reinstateId`), with `$.field` / `$actor` / `$tick`
+references resolved by the kernel. `core.transfer` and `core.vouch` are seeded as data
+and produce **byte-identical events** to the hardcoded `transfer` / `vouch` above
+(proven in `test/interpreter.test.ts`). Deferred: payloadSchema enforcement,
+multi-effect atomicity (needs a vouch-world tx boundary), Roles/bundles (§4.4),
+finality/objection/reorg (§5), SoD/penal laws (§6/§9). Not yet wired into the HTTP
+surface — the migration off the hardcoded switch is a follow-up.
+
 ## Security model
 
 - **Network-facing auth is unforgeable** — acting as a principal requires its
