@@ -1,3 +1,7 @@
+# Ports are published to LOOPBACK ONLY. Docker inserts its published-port rules into
+# iptables ahead of most host firewalls, so "8787:8787" would make the origin answer on
+# 8787 directly on the public IP — bypassing the host firewall and defeating any
+# reverse-proxy/CDN in front. Put a proxy on the host and point it at 127.0.0.1:8787.
 services:
   vouch-node:
     build:
@@ -5,19 +9,26 @@ services:
       dockerfile: Dockerfile
     container_name: vouch-node
     ports:
-      - "8787:8787"
+      - "127.0.0.1:8787:8787"
     environment:
       - VOUCH_HOST=0.0.0.0
       - VOUCH_PORT=8787
-      # VOUCH_NOTARY is required (no fallback); override with a real secret in production.
-      - VOUCH_NOTARY=${VOUCH_NOTARY:-seed://dev-change-me}
+      # REQUIRED, and deliberately WITHOUT a default: config.ts throws on a missing
+      # VOUCH_NOTARY so a node can never boot on a predictable key. A default here would
+      # reintroduce exactly that — and since the keypair is keyPairFromSeed(sha256(secret)),
+      # a well-known string means anyone can forge notary-signed receipts.
+      #   export VOUCH_NOTARY=env://VOUCH_NOTARY_SECRET
+      #   export VOUCH_NOTARY_SECRET="$(openssl rand -base64 48)"
+      - VOUCH_NOTARY=${VOUCH_NOTARY:?set VOUCH_NOTARY (e.g. env://VOUCH_NOTARY_SECRET) — there is no default}
+      - VOUCH_NOTARY_SECRET=${VOUCH_NOTARY_SECRET:-}
       - VOUCH_JOURNAL=/app/data/journal.jsonl
       - VOUCH_ACCOUNTS=/app/data/accounts.jsonl
     volumes:
       - vouch-data:/app/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8787/health"]
+      # 127.0.0.1, not localhost — busybox tries [::1] first and the node binds IPv4 only.
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8787/health"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -30,11 +41,14 @@ services:
       dockerfile: Dockerfile.dev
     container_name: vouch-node-dev
     ports:
-      - "8787:8787"
+      - "127.0.0.1:8787:8787"
     environment:
       - VOUCH_HOST=0.0.0.0
       - VOUCH_PORT=8787
-      - VOUCH_NOTARY=${VOUCH_NOTARY:-seed://dev-change-me}
+      # Same rule as the production service: no default, not even for dev. A dev default
+      # is how a well-known key reaches production.
+      - VOUCH_NOTARY=${VOUCH_NOTARY:?set VOUCH_NOTARY (e.g. env://VOUCH_NOTARY_SECRET) — there is no default}
+      - VOUCH_NOTARY_SECRET=${VOUCH_NOTARY_SECRET:-}
       - VOUCH_JOURNAL=/app/data/journal.jsonl
       - VOUCH_ACCOUNTS=/app/data/accounts.jsonl
     volumes:
