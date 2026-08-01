@@ -13,6 +13,7 @@ import type { AccountLog } from "./account-log";
 import { AccountRegistry, type AuthResult, type HttpStatus, type RegisterRequest, type SignedRequest } from "./accounts";
 import { type Command, commandSchema, dispatch } from "./commands";
 import type { Journal } from "./journal";
+import { type Logger, silentLogger } from "./log";
 
 export interface NodeDeps {
   readonly seed: string;
@@ -29,11 +30,8 @@ export interface NodeDeps {
    * Injectable so tests can assert the path without exiting the test runner.
    */
   readonly onDurabilityFailure?: (err: unknown) => void;
-}
-
-function exitOnDurabilityFailure(err: unknown): void {
-  console.error("vouch-node: DURABLE APPEND FAILED — exiting rather than serving un-persisted state:", err);
-  process.exit(1);
+  /** Structured logger. Defaults to silent so embedders/tests stay quiet. */
+  readonly log?: Logger;
 }
 
 export type SubmitResult =
@@ -47,13 +45,20 @@ export class VouchNode {
   private readonly journal: Journal;
   private readonly notary: KeyPair;
   private readonly onDurabilityFailure: (err: unknown) => void;
+  private readonly log: Logger;
 
   constructor(deps: NodeDeps) {
     this.journal = deps.journal;
     this.notary = deps.notary;
     this.world = rehydrateAlmaWorld(deps.seed, deps.journal.load());
     this.registry = new AccountRegistry(deps.accountLog);
-    this.onDurabilityFailure = deps.onDurabilityFailure ?? exitOnDurabilityFailure;
+    this.log = deps.log ?? silentLogger;
+    this.onDurabilityFailure =
+      deps.onDurabilityFailure ??
+      ((err) => {
+        this.log.fatal({ err }, "durable append failed — exiting rather than serving un-persisted state");
+        process.exit(1);
+      });
   }
 
   /**

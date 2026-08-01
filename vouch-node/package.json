@@ -14,9 +14,10 @@
     "start": "bun src/index.ts"
   },
   "dependencies": {
+    "hono": "^4.6.0",
+    "pino": "^10.3.1",
     "vouch-core": "file:../vouch-core",
     "vouch-world": "file:../vouch-world",
-    "hono": "^4.6.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
