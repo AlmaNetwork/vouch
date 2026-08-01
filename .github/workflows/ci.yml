@@ -100,18 +100,42 @@ jobs:
       - name: Build the image
         run: docker build -t vouch-node:ci .
 
+      # smoke.sh --write drives the write half through vouch-cli (a signed command needs
+      # Ed25519 over JCS bytes; curl cannot produce that). The CLI runs from source, so
+      # its deps must be installed — and in dependency order, because the `file:` links
+      # are symlinks and each package resolves its own deps from its OWN directory.
+      # This is the same rule the Dockerfile follows, and it fails at RUNTIME, not at
+      # install: with no installs at all, "Cannot find package 'vouch-core' from
+      # vouch-cli/src/cli.ts"; with vouch-node missing, "Cannot find module
+      # 'vouch-world/environment' from vouch-node/src/node.ts" — vouch-cli imports
+      # vouch-node, so the whole chain has to be present.
+      - name: Install vouch-cli (for the smoke test's signed write)
+        run: |
+          ( cd vouch-core  && bun install --frozen-lockfile )
+          ( cd vouch-world && bun install --frozen-lockfile )
+          ( cd vouch-node  && bun install --frozen-lockfile )
+          ( cd vouch-cli   && bun install --frozen-lockfile )
+
       - name: Boot it and check the read + write surfaces
         run: |
           docker run -d --name vouch-ci -p 127.0.0.1:8787:8787 \
             -e VOUCH_NOTARY=env://VOUCH_NOTARY_SECRET \
             -e VOUCH_NOTARY_SECRET="ci-throwaway-$GITHUB_RUN_ID" \
             vouch-node:ci
+          # Explicit timeout arm: without it a node that never comes up falls through to
+          # smoke.sh, and the log then blames the smoke test instead of the boot.
+          up=""
           for i in $(seq 1 30); do
-            curl -fsS --max-time 2 http://127.0.0.1:8787/health >/dev/null 2>&1 && break
+            if curl -fsS --max-time 2 http://127.0.0.1:8787/health >/dev/null 2>&1; then up=1; break; fi
             sleep 1
           done
+          if [ -z "$up" ]; then
+            echo "the node never became healthy within 30s"
+            docker logs vouch-ci
+            exit 1
+          fi
           docker logs vouch-ci
-          sh deploy/smoke.sh http://127.0.0.1:8787
+          sh deploy/smoke.sh http://127.0.0.1:8787 --write
 
       - name: SIGTERM must be a graceful exit 0, not a kill
         run: |

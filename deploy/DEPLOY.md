@@ -41,7 +41,7 @@ Three properties worth knowing before you touch any of them:
 | `node.env.example` | Template for `/etc/vouch/node.env`. |
 | `vouch-node.service` | systemd unit for running Bun directly (no container). |
 | `Caddyfile` | Reverse proxy + TLS, with a Cloudflare Origin CA cert. |
-| `smoke.sh` | Post-deploy check: reads, a real signed write, and the rejection path. |
+| `smoke.sh` | Post-deploy check. Read-only by default; `--write` adds a real signed write. |
 
 The repo root also carries `Dockerfile` / `docker-compose.yml` for the container route.
 Pick **one** of container-or-systemd; running both against the same data directory
@@ -106,8 +106,15 @@ produces two writers and a broken journal.
 7. **Run the smoke test against the public hostname**, through the proxy — not against
    localhost:
    ```
-   sh deploy/smoke.sh https://node.example.org
+   sh deploy/smoke.sh https://node.example.org --write
    ```
+
+   `--write` founds a `smoke*` region through the real signed path. **Regions are
+   never deleted by design**, so each `--write` run leaves a permanent region in the
+   world and its log. That is the right trade on a deploy — it is the only way to
+   prove the signature path and the write path actually work — and the wrong one for
+   a probe on a timer, which is why the default is read-only. If you monitor the node
+   continuously, run it without `--write`.
 
 8. **Prove writes survive a restart.** The smoke test cannot do this, and this is the one
    failure that hides: a node with an unwritable data directory (or an in-memory journal)
