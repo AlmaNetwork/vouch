@@ -27,7 +27,12 @@ function errorBody(code: string, requestId: string) {
   return { ok: false as const, error: { code, message: code.replace(/-/g, " "), requestId } };
 }
 
-export function createNodeApp(node: VouchNode): Hono {
+export interface NodeAppOptions {
+  /** Git tag / short SHA of the running code, surfaced at `GET /health`. */
+  readonly build?: string;
+}
+
+export function createNodeApp(node: VouchNode, opts: NodeAppOptions = {}): Hono {
   const app = new Hono();
 
   // WRITE — authenticated, persisted.
@@ -67,7 +72,7 @@ export function createNodeApp(node: VouchNode): Hono {
   // (GET /state /regions /agents /metrics /log …). Delegating via `.fetch` keeps the
   // two packages' hono types decoupled and preserves the "reads can't write" boundary
   // (the observation app only ever receives a WorldView).
-  const observation = createObservationApp(node.world);
+  const observation = createObservationApp(node.world, { build: opts.build });
   app.all("*", (c) => observation.fetch(c.req.raw));
   return app;
 }

@@ -12,7 +12,8 @@ const journal = config.journalPath ? new FileJournal(config.journalPath) : new M
 const accountLog = config.accountsPath ? new FileAccountLog(config.accountsPath) : new MemoryAccountLog();
 
 const node = new VouchNode({ seed: config.seed, notary: config.notary, journal, accountLog });
-const app = createNodeApp(node);
+// The node resolves the environment; the engine reads none of it.
+const app = createNodeApp(node, { build: process.env.VOUCH_BUILD ?? "dev" });
 
 // Cap the request body: a signed command is tiny, so don't let an unauthenticated
 // caller force large allocations before we ever check a signature.

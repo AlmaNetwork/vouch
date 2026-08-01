@@ -47,7 +47,7 @@ bun run start                        # serve on 127.0.0.1:8787
 | `VOUCH_SEED` | `vouch-node` | world RNG seed |
 | `VOUCH_JOURNAL` | *(memory)* | path to the event journal (JSONL); unset = ephemeral |
 | `VOUCH_ACCOUNTS` | *(memory)* | path to the auth log (JSONL); unset = ephemeral |
-| `VOUCH_NOTARY` | `seed://dev-notary` | notary key source: `seed://<secret>` or `env://<VAR>`. **In production set `env://…`** — a missing env var throws (no silent well-known-key fallback). |
+| `VOUCH_NOTARY` | **none — required** | notary key source: `seed://<secret>` or `env://<VAR>` (`file://` is not supported). There is **no default**: the node throws rather than booting on a predictable key. The keypair is `keyPairFromSeed(sha256(secret))`, so the secret string *is* the private key material — in production use `env://…` fed from a secret store. |
 
 ## HTTP surface
 
