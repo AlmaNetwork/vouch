@@ -18,9 +18,12 @@ import {
   getRegion,
   type InstitutionChange,
   type RegionState,
+  validateDiplomacyPolicy,
   validateEconomyPolicy,
   validateGovernance,
   validateResourcePolicy,
+  validateSchemaLedger,
+  validateVerificationPolicy,
 } from "../region";
 import { commit, readBackOrThrow, type WorldCommit, type WorldState } from "./state";
 
@@ -39,6 +42,12 @@ export function validateInstitutionChange(change: InstitutionChange, region: Reg
   }
   if (change.policy === "economy") validateEconomyPolicy(change.value);
   if (change.policy === "resource") validateResourcePolicy(change.value);
+  // These three were never validated, because nothing could change them: `found`
+  // installs the defaults and there was no amend path on the network. Opening one
+  // makes them writable, and every collection here is journalled forever.
+  if (change.policy === "verification") validateVerificationPolicy(change.value);
+  if (change.policy === "diplomacy") validateDiplomacyPolicy(change.value);
+  if (change.policy === "schemaLedger") validateSchemaLedger(change.value);
 }
 
 /**

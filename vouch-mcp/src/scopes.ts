@@ -13,6 +13,13 @@ export const SCOPE_FOR_COMMAND: Readonly<Record<string, string>> = {
   transfer: "vouch:transfer",
   vouch: "vouch:vouch",
   migrate: "vouch:migrate",
+  // Governance is one scope, not three. `propose` and `vote` are the council's two
+  // halves of the same act that `amend` performs alone under a dictatorship — a token
+  // trusted to change a region's rules is trusted to change them whichever way that
+  // region is constituted.
+  amend: "vouch:govern",
+  propose: "vouch:govern",
+  vote: "vouch:govern",
 };
 
 /** The coarse scope that implies every write scope (a convenience for trusted clients). */

@@ -132,6 +132,18 @@ export class VouchClient {
   migrate(principal: string, toRegion: string): Promise<SubmitResult> {
     return this.submit(principal, { kind: "migrate", agentId: principal, toRegion });
   }
+  /** Amend a region's institutions directly — dictatorship only. Councils use propose/vote. */
+  amend(principal: string, regionId: string, change: unknown): Promise<SubmitResult> {
+    return this.submit(principal, { kind: "amend", regionId, change });
+  }
+  /** Open a council proposal. The opener's ballot is cast with it. */
+  propose(principal: string, regionId: string, change: unknown): Promise<SubmitResult> {
+    return this.submit(principal, { kind: "propose", regionId, change });
+  }
+  /** Approve the open proposal. A ballot is approval-only; casting one IS approving. */
+  vote(principal: string, regionId: string): Promise<SubmitResult> {
+    return this.submit(principal, { kind: "vote", regionId });
+  }
   vouch(principal: string, to: string, weight: number): Promise<SubmitResult> {
     return this.submit(principal, { kind: "vouch", from: principal, to, weight });
   }
