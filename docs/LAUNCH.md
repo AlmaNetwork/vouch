@@ -206,6 +206,44 @@ does not prejudge the §9 design. Not yet agreed.
       unimplemented — it is implemented and verified on every boot
       (`vouch-node/src/journal.ts`)
 
+### Phase 5.5 — open the command surface
+
+The node accepts four commands — `found`, `admit`, `transfer`, `vouch`. The engine can do
+far more, and the gap makes the README untrue of a running node: it promises villages that
+migrate, secede, amend their institutions and negotiate across borders, and none of that
+is reachable over the network. Worse, with one governance model available there is nothing
+to compare, so "watch which institutions prosper" has no subject.
+
+Each command touches five places: the node's schema and dispatch, `SCOPE_FOR_COMMAND`,
+the MCP tool, the CLI SDK method, and the CLI dispatch arm. `commandAllowed` is
+fail-closed, so a command missing from the scope map is denied by MCP rather than waved
+through — forgetting that step breaks loudly, which is the right way round.
+
+- [x] `migrate` — the exit option (#55)
+- [ ] `amend` / `propose` / `vote` — governance. The one that makes comparison possible
+- [ ] `recognize` — diplomacy
+- [ ] `list-region` / `set-lifecycle` / `transfer-region` — the region market
+- [ ] `mint-item` / `transfer-item` — digital items
+- [ ] `suspend` / `reinstate` — a region's own discipline over its residents
+
+#### Deliberately not exposed
+
+- **`mintCurrency` — never.** Unlike every other mutator it has **no authorization check
+  at all**: `suspendAgent` consults `canSanction`, `listRegion` consults `isOwner`,
+  `mintCurrency` consults nothing, because it is engine-internal and the environment is
+  its only caller. On the HTTP surface it would be "anyone may print money to
+  themselves", and the README's *no one can mint themselves money* would be false in one
+  request. There is no version of open-everything that includes this one.
+- **`drawResource` — blocked on the tick.** Resource pools refill at `regenPerTick`, and
+  the node never advances the tick, so every pool is permanently empty and the command
+  could only ever fail. Exposing it would ship a button that does nothing.
+- **`detectEmergence` — not a command.** It takes a whole `World` (not a `WorldCommit`),
+  sweeps every agent, and founds regions on their behalf. It belongs to a tick loop, not
+  to a participant. Secession stays unreachable until the world runs on its own.
+
+The first is a permanent exclusion. The other two are consequences of the tick being
+frozen, and would come back into scope with it.
+
 ### Phase 6 — AWS
 
 Detail lives in the EC2 track; the shape is one `t4g.small` in `us-east-1`, IMDSv2 with
