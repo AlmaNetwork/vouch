@@ -20,6 +20,11 @@ export const SCOPE_FOR_COMMAND: Readonly<Record<string, string>> = {
   amend: "vouch:govern",
   propose: "vouch:govern",
   vote: "vouch:govern",
+  // One scope for the item ledger: minting and handing over are the two ends of the
+  // same asset moving, and both are already gated in-world (the region's `items`
+  // institution for minting, current-holder-only for transfer).
+  "mint-item": "vouch:item",
+  "transfer-item": "vouch:item",
 };
 
 /** The coarse scope that implies every write scope (a convenience for trusted clients). */

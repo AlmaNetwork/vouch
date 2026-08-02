@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { admitAgent, createAlmaWorld, INITIAL_WORLD_STATE, mintItem, rootReducer, seedGenesis, transferItem } from "../../src/environment";
 import { replayState } from "../../src/foundation";
-import { EVENT_ITEM_MINTED, getItem, itemsOwnedBy } from "../../src/item";
+import { EVENT_ITEM_MINTED, getItem, itemsOwnedBy, MAX_ITEM_ID_LENGTH, MAX_ITEM_KIND_LENGTH } from "../../src/item";
 import { defineRegion, makeInstitutions } from "../../src/region";
 
 function world() {
@@ -46,5 +46,17 @@ describe("Track A P3 — digital items (event-sourced ownership ledger)", () => 
 
     // the ledger is event-sourced and replays exactly
     expect(replayState(w.log.all(), INITIAL_WORLD_STATE, rootReducer).state).toEqual(w.getState());
+  });
+
+  test("oversized ids and kind tags are refused at the mutator, not journalled", () => {
+    const w = world();
+    const before = w.log.length;
+    // both strings are journalled forever and echoed on every transfer, so the write
+    // path bounds them like every other permanent string (see MAX_DISPLAY_NAME_LENGTH)
+    expect(mintItem(w, "x".repeat(MAX_ITEM_ID_LENGTH + 1), "deed", "alice@umi").ok).toBe(false);
+    expect(mintItem(w, "deed-2", "k".repeat(MAX_ITEM_KIND_LENGTH + 1), "alice@umi").ok).toBe(false);
+    expect(w.log.length).toBe(before);
+    // at the bound is fine
+    expect(mintItem(w, "y".repeat(MAX_ITEM_ID_LENGTH), "k".repeat(MAX_ITEM_KIND_LENGTH), "alice@umi").ok).toBe(true);
   });
 });

@@ -147,6 +147,18 @@ export class VouchClient {
   vouch(principal: string, to: string, weight: number): Promise<SubmitResult> {
     return this.submit(principal, { kind: "vouch", from: principal, to, weight });
   }
+  /**
+   * Mint an item for an agent. Who may mint is the recipient's region's `items`
+   * institution — under the default {minting:"owner"} that is the region's owner, so
+   * sign as the owning account; under "residents", sign as an agent living there.
+   */
+  mintItem(principal: string, itemId: string, itemKind: string, owner: string): Promise<SubmitResult> {
+    return this.submit(principal, { kind: "mint-item", itemId, itemKind, owner });
+  }
+  /** Hand an item you hold to another agent. Holder-gated: the signer must be its current owner. */
+  transferItem(principal: string, itemId: string, to: string): Promise<SubmitResult> {
+    return this.submit(principal, { kind: "transfer-item", itemId, to });
+  }
 
   // --- reads (observation surface) --------------------------------------------
   regions(): Promise<unknown[]> {
@@ -154,6 +166,10 @@ export class VouchClient {
   }
   agents(): Promise<unknown[]> {
     return this.getJson("/agents");
+  }
+  /** The item ledger — every item and who holds it. */
+  items(): Promise<unknown[]> {
+    return this.getJson("/items");
   }
   state(): Promise<unknown> {
     return this.getJson("/state");

@@ -73,13 +73,17 @@ write  (signed as your active principal, or --as <p>)
   vouch <to> <weight>
   migrate <toRegion>                 move yourself to another region
 
+items  (unique assets; who may mint = the recipient's region's "items" institution)
+  mint-item <itemId> <kind> <owner>  mint an item for an agent (sign as whoever the rule names)
+  transfer-item <itemId> <to>        hand over an item you hold
+
 govern  (a region's institutions; dictatorships amend, councils propose+vote)
   amend <regionId> '<change-json>'   change the rules directly (dictatorship only)
   propose <regionId> '<change-json>' open a council proposal (your ballot is cast with it)
   vote <regionId>                    approve the open proposal
 
 read
-  regions | agents | state | metrics
+  regions | agents | items | state | metrics
   watch [--interval N]               tail the world's event feed (the village newspaper)
 
 flags:  --as <principal>   --node <url>   --currency N   --interval N
@@ -147,7 +151,9 @@ export async function run(argv: string[], env: Env, io: Io): Promise<number> {
       case "migrate":
       case "amend":
       case "propose":
-      case "vote": {
+      case "vote":
+      case "mint-item":
+      case "transfer-item": {
         const principal = activePrincipal();
         if (!principal) {
           io.err("no active principal — run: vouch register <name>, or pass --as <name>");
@@ -166,6 +172,7 @@ export async function run(argv: string[], env: Env, io: Io): Promise<number> {
 
       case "regions":
       case "agents":
+      case "items":
       case "state":
       case "metrics": {
         const client = new VouchClient(nodeUrl, undefined, cfg.timeoutMs);
@@ -279,6 +286,25 @@ async function dispatchWrite(
       return "usage";
     }
     return client.vote(principal, regionId);
+  }
+  if (cmd === "mint-item") {
+    const [, itemId, itemKind, owner] = positional;
+    if (!itemId || !itemKind || !owner) {
+      io.err("usage: vouch mint-item <itemId> <kind> <owner>");
+      io.err(
+        "who may mint is the recipient's region's `items` institution — sign as the region owner (default), or as a resident there under {minting:'residents'}",
+      );
+      return "usage";
+    }
+    return client.mintItem(principal, itemId, itemKind, owner);
+  }
+  if (cmd === "transfer-item") {
+    const [, itemId, to] = positional;
+    if (!itemId || !to) {
+      io.err("usage: vouch transfer-item <itemId> <to>");
+      return "usage";
+    }
+    return client.transferItem(principal, itemId, to);
   }
   // vouch
   const [, to, weight] = positional;
