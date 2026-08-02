@@ -85,6 +85,12 @@ A region MUST expose, in its region metadata (RFC 0004 §5.1), an ordered
 `signatureSuites` list — the suites it can VERIFY, most-preferred first — and it MUST include
 the MTI suite. It MAY expose `signingSuites` when the set it produces differs.
 
+A region MUST also expose its `minSecurityBits` floor, and MUST expose `requirePq: true`
+when it requires post-quantum resistance (§8). Rationale: §6 negotiation evaluates
+acceptability against **both** regions' policies, so each side needs the other's floor —
+without these fields on the wire, the responder cannot evaluate the initiator's half of the
+candidate filter with what the protocol transmits.
+
 ## 6. Negotiation
 
 Each region MUST define a minimum-strength policy. When two regions establish a Connection
@@ -97,8 +103,13 @@ candidate = MUST exclude any 'deprecated' suite
 ```
 
 6.1. The responder MUST select `agreedSuites` as a non-empty, preference-ordered subset of
-`candidate`. If `candidate` is empty, the parties MUST fall back to the MTI suite — unless a
-region's policy excludes the MTI, in which case negotiation MUST fail and no Connection forms.
+`candidate` (an ordered set: duplicates in an advertisement MUST NOT survive into `agreedSuites`).
+If `candidate` is empty, negotiation MUST fail and no Connection forms. There is deliberately
+**no separate MTI fallback**: §5 obliges every region to advertise the MTI, so between conformant
+regions whose policies admit the MTI it is always already in `candidate`. A counterparty whose
+advertisement omits the MTI is violating §5, and a fallback that rescued such a negotiation would
+legitimize the violation — the advertisement ("what I can verify", §5) must remain the single
+source of truth for what can be agreed.
 
 6.2. **Bootstrap suite.** `agreedSuites` is not in force until the Agreement carrying it is
 signed. Therefore the region signatures that ESTABLISH the Connection Agreement (RFC 0004 §4.2)

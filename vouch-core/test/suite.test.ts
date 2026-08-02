@@ -9,6 +9,8 @@ import {
   listSuiteMeta,
   listSuites,
   MTI_SUITE_ID,
+  negotiate,
+  type SuitePolicy,
 } from "../src/suite";
 
 describe("signature-suite registry", () => {
@@ -103,5 +105,126 @@ describe("RFC 0005 §4 suite registry (metadata)", () => {
       (meta as { status: string }).status = "deprecated";
     }).toThrow(TypeError);
     expect(getSuiteMeta("ed25519")?.status).toBe("active");
+  });
+});
+
+describe("RFC 0005 §6 negotiation", () => {
+  const policy = (signatureSuites: string[], minSecurityBits = 128, requirePq = false): SuitePolicy => ({
+    signatureSuites,
+    minSecurityBits,
+    requirePq,
+  });
+
+  test("two MTI-only regions agree on ed25519", () => {
+    expect(negotiate(policy(["ed25519"]), policy(["ed25519"]))).toEqual({ ok: true, agreedSuites: ["ed25519"] });
+  });
+
+  test("agreedSuites follow the responder's preference order", () => {
+    const r = negotiate(policy(["ed25519", "ecdsa-p384"]), policy(["ecdsa-p384", "ed25519"]));
+    expect(r).toEqual({ ok: true, agreedSuites: ["ecdsa-p384", "ed25519"] });
+  });
+
+  test("a suite below either region's minimum strength is excluded", () => {
+    // initiator floor is 192-bit, so ed25519 (128) drops out; p384 (192) survives.
+    const r = negotiate(policy(["ed25519", "ecdsa-p384"], 192), policy(["ed25519", "ecdsa-p384"]));
+    expect(r).toEqual({ ok: true, agreedSuites: ["ecdsa-p384"] });
+  });
+
+  test("unregistered advertised ids are skipped", () => {
+    const r = negotiate(policy(["ed25519", "made-up-suite"]), policy(["ed25519", "made-up-suite"]));
+    expect(r).toEqual({ ok: true, agreedSuites: ["ed25519"] });
+  });
+
+  test("negotiation fails when the MTI is excluded by strength", () => {
+    const r = negotiate(policy(["ed25519"], 256), policy(["ed25519"]));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("no-acceptable-suite");
+  });
+
+  test("a PQ-requiring region excludes all non-PQ suites (§8)", () => {
+    const r = negotiate(policy(["ed25519", "ml-dsa-65"]), policy(["ed25519", "ml-dsa-65"], 128, true));
+    expect(r).toEqual({ ok: true, agreedSuites: ["ml-dsa-65"] });
+  });
+
+  test("PQ required with no common PQ suite fails (MTI is non-PQ)", () => {
+    const r = negotiate(policy(["ed25519"]), policy(["ed25519"], 128, true));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("no-acceptable-suite");
+  });
+
+  test("disjoint advertisements fail cleanly — there is no MTI rescue", () => {
+    // both policies admit the MTI (min 128), but neither advertises a common suite
+    const r = negotiate(policy(["ecdsa-p256"]), policy(["ecdsa-p384"]));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("no-acceptable-suite");
+  });
+
+  test("a duplicated advertisement is deduplicated (agreedSuites is an ordered set)", () => {
+    expect(negotiate(policy(["ed25519"]), policy(["ed25519", "ed25519"]))).toEqual({ ok: true, agreedSuites: ["ed25519"] });
+  });
+
+  test("an empty advertisement fails cleanly", () => {
+    const r = negotiate(policy([]), policy(["ed25519"]));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("no-acceptable-suite");
+  });
+
+  test("a malformed policy is a structured failure on EITHER side, never a throw (invalid-policy)", () => {
+    // Policies are wire-derived (a counterparty's region metadata). Previously a missing
+    // responder list escaped as a raw TypeError while the initiator side failed closed.
+    const broken = { minSecurityBits: 128 } as unknown as SuitePolicy; // no signatureSuites
+    for (const [a, b, side] of [
+      [broken, policy(["ed25519"]), "initiator"],
+      [policy(["ed25519"]), broken, "responder"],
+    ] as const) {
+      const r = negotiate(a, b);
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.reason).toBe("invalid-policy");
+        expect(r.detail).toContain(side); // says WHICH side is malformed
+      }
+    }
+    // non-array is equally structured
+    const r = negotiate(policy(["ed25519"]), { signatureSuites: "ed25519", minSecurityBits: 128 } as unknown as SuitePolicy);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("invalid-policy");
+  });
+
+  test("a deprecated suite is excluded (§6 MUST) — exercised through the lookup seam", () => {
+    // The frozen seed table has no deprecated entry, so the rule is testable only via the
+    // caller-parameterized lookup (the same discipline as verifyCertificate taking the key).
+    const deprecatedEd25519 = (id: string) => {
+      const meta = getSuiteMeta(id);
+      return meta && id === "ed25519" ? { ...meta, status: "deprecated" as const } : meta;
+    };
+    const r = negotiate(policy(["ed25519", "ecdsa-p384"]), policy(["ed25519", "ecdsa-p384"]), deprecatedEd25519);
+    expect(r).toEqual({ ok: true, agreedSuites: ["ecdsa-p384"] }); // ed25519 excluded as deprecated
+    const alone = negotiate(policy(["ed25519"]), policy(["ed25519"]), deprecatedEd25519);
+    expect(alone.ok).toBe(false);
+    if (!alone.ok) expect(alone.reason).toBe("no-acceptable-suite");
+  });
+
+  test("dedup keeps the FIRST occurrence (a discriminating case, not just a doubled singleton)", () => {
+    // first-wins: [p384, ed25519]; last-wins would yield [ed25519, p384].
+    const r = negotiate(policy(["ecdsa-p384", "ed25519"]), policy(["ecdsa-p384", "ed25519", "ecdsa-p384"]));
+    expect(r).toEqual({ ok: true, agreedSuites: ["ecdsa-p384", "ed25519"] });
+  });
+
+  test("agreedSuites is frozen at runtime — it binds into a co-signed Connection Agreement", () => {
+    const r = negotiate(policy(["ed25519"]), policy(["ed25519"]));
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(Object.isFrozen(r.agreedSuites)).toBe(true);
+      expect(() => {
+        (r.agreedSuites as string[]).push("sneaky");
+      }).toThrow(TypeError);
+    }
+  });
+
+  test("the failure detail says WHICH stage emptied the candidates", () => {
+    const disjoint = negotiate(policy(["ecdsa-p256"]), policy(["ecdsa-p384"]));
+    if (!disjoint.ok) expect(disjoint.detail).toContain("share no suite id");
+    const excluded = negotiate(policy(["ed25519"], 256), policy(["ed25519"]));
+    if (!excluded.ok) expect(excluded.detail).toContain("shared [ed25519]"); // names the overlap
   });
 });
