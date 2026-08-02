@@ -25,28 +25,24 @@ the RFC 0007 command engine (an internal library, deliberately not on the HTTP s
 tick progression (the world stays frozen at tick 0), federation, npm publishing, and real
 money of any kind. `docs/money-boundary.md` is the standing statement on the last one.
 
-## The decision the rest of this document depends on
+## The world keeps what it is given
 
 The world we launch has no way to undo anything. Regions are never deleted. A vouch
-cannot be withdrawn. Currency handed out at `admit` cannot be burned. And the sanction
-machinery that RFC 0007 §9 describes is not reachable over HTTP at all — nor would it
-help, because `canSanction` (`vouch-world/src/environment/sanctions.ts:40`) authorizes
+cannot be withdrawn — `agent/reducer.ts:98` is `trust: a.trust + weight` and nothing
+subtracts. Currency handed out at `admit` cannot be burned. And the sanction machinery
+that RFC 0007 §9 describes is not reachable over HTTP at all — nor would it help as
+written, because `canSanction` (`vouch-world/src/environment/sanctions.ts:40`) authorizes
 only whoever governs the target's citizenship or residence region. Someone who founds
-their own region governs it, so no one else can touch them.
+their own region governs it, so no one else can reach them.
 
-We are not going to build a penal layer before launch. That leaves one honest way to open
-the door:
+**Decided: we are not declaring the launch world resettable.** The alternative was to say
+in the README, in `SECURITY.md` and at `GET /` that the world is an experiment and will be
+reset without notice until v1.0, which would have made every gap above a property we
+described in advance rather than an incident. We are not doing that, so the world we open
+is one people are entitled to take seriously — and that makes a way to stop an abuser a
+launch requirement rather than week-one work. Phase 3 is that requirement.
 
-> **The launch world is an experiment. It will be reset without notice until v1.0.**
-
-Said in the README, in `SECURITY.md` and in the node's own `GET /` response, this changes
-what the missing pieces *are*. A squatted name, an inflated currency supply, a bloated
-journal and an untouchable troll stop being unrecoverable incidents and become properties
-of an experiment we described in advance. Without the declaration, the first person who
-takes the world seriously is someone we misled.
-
-Everything in Phase 1 and Phase 2 still needs doing. The declaration is what makes it
-truthful to launch *with* those limits rather than with a complete governance layer.
+Phases 1, 2 and 4 are unchanged by this decision; they were always needed.
 
 ## What a stranger can do to the node today
 
@@ -116,12 +112,23 @@ Four of these. Each was written deliberately and then quietly failed to take eff
 
 ### Phase 1 — bound the write surface
 
+The limits go in **both** layers: the node's zod schemas reject early with a clear 400,
+and `vouch-world` enforces the same ceilings so any other entry point onto the engine
+(`vouch-mcp`, an embedder, a future route) inherits them instead of having to remember.
+
 - [ ] `.max()` on every string in `vouch-node/src/commands.ts`: `regionId`,
       `displayName`, `agentId`, `region`, and `transfer`/`vouch`'s `from` and `to`
 - [ ] Length bounds on `principal` and `publicKey` in `vouch-node/src/accounts.ts`
 - [ ] Ceilings on `admit.currency` and `transfer.amount`, well under `MAX_SAFE_INTEGER`
-- [ ] An in-app token bucket keyed by IP and by principal, answering 429. In the app and
-      not only at the CDN — an origin reachable around the CDN must still be bounded
+- [ ] The same bounds in `vouch-world`, at the mutators that accept the values
+      (`defineRegion` / `admitAgent` / `executeTransfer`). Existing journals must still
+      replay — the bounds are on new writes, and nothing already recorded may become
+      un-replayable
+- [ ] Rate limiting in the app, keyed by IP and by principal, answering 429. Starting
+      values: **10 writes/min/principal, 60 writes/h/IP, 600 reads/min/IP**. Nothing
+      written to the journal can be taken back, so the tight end is the safe end and we
+      loosen from there. In the app and not only at the CDN — an origin reachable around
+      the CDN must still be bounded
 - [ ] A test asserting the RFC 0007 command engine has no HTTP route, so it cannot be
       exposed by accident later
 
@@ -133,7 +140,27 @@ Four of these. Each was written deliberately and then quietly failed to take eff
 - [ ] Decide what `/state` does at scale: cap it, paginate it, or drop it from the public
       surface and leave `/regions` and `/agents`
 
-### Phase 3 — make the deploy assets true
+### Phase 3 — a way to stop an abuser
+
+Required because we are not declaring the world resettable. The design question is *where*
+the power lives, and the two obvious answers are both bad: leaving `canSanction` as it is
+leaves self-governed abusers untouchable, and granting the operator authority **inside** the
+world puts an administrative override into a governance protocol whose whole subject is how
+authority is constituted. Rushing that is how the protocol ends up with a backdoor nobody
+can remove later.
+
+The proposal is to keep it **outside** the world: a node-level denylist of principals,
+enforced at the HTTP boundary before the engine is touched, held in the operator's own
+config rather than in the journal. It stops abuse on *this node*, it is honestly what it
+is — an operator refusing service — and it makes no claim about in-world legitimacy, so it
+does not prejudge the §9 design. Not yet agreed.
+
+- [ ] Agree where the power lives (node-level refusal, or in-world authority)
+- [ ] Implement it, with the refusal visible in the logs and to the refused caller
+- [ ] Write down the policy: what gets someone refused, and how they contest it
+- [ ] Decide what happens to what an abuser already wrote, given none of it can be removed
+
+### Phase 4 — make the deploy assets true
 
 - [ ] Move `StartLimitIntervalSec` / `StartLimitBurst` to `[Unit]`
 - [ ] Wire `VOUCH_BUILD` through all four paths (env file, compose build args, `DEPLOY.md`,
@@ -143,13 +170,13 @@ Four of these. Each was written deliberately and then quietly failed to take eff
 - [ ] Give `smoke.sh --write` a target that is not production, or reserve the `smoke`
       prefix in the world
 
-### Phase 4 — say what this is
+### Phase 5 — say what this is
 
 - [ ] `SECURITY.md`: how to report, what is in scope, and the known limits stated up
-      front rather than discovered
+      front rather than discovered. The reporting address depends on the domain, so this
+      can be written now and the contact filled in later
 - [ ] Turn on private vulnerability reporting, secret scanning, push protection, and
       required status checks
-- [ ] The reset declaration in the README, in `SECURITY.md` and in `GET /`
 - [ ] Correct the README: test counts are stale (the table says 106 / 35 / 44 / 61 / 28;
       the real counts are **156 / 60 / 46 / 62 / 28**, plus `vouch-web` at **7**, which the
       table omits entirely), `vouch-web` is missing from the package list, and there are no
@@ -158,7 +185,7 @@ Four of these. Each was written deliberately and then quietly failed to take eff
       unimplemented — it is implemented and verified on every boot
       (`vouch-node/src/journal.ts`)
 
-### Phase 5 — AWS
+### Phase 6 — AWS
 
 Detail lives in the EC2 track; the shape is one `t4g.small` in `us-east-1`, IMDSv2 with
 hop limit 1, a dedicated EBS volume for the journal, the notary secret in SSM Parameter
@@ -172,23 +199,31 @@ authenticated origin pulls, and DLM snapshots.
 - [ ] Notary secret generated on the box, stored in SSM, escrowed
 - [ ] Backups **and a rehearsed restore** compared against `/log/digest`
 - [ ] Alerting that reaches a person
-- [ ] Journal ceiling of 50,000 entries with an alarm at 25,000, and a rehearsed world
-      reset. The binding constraint is boot replay time, not disk
+- [ ] Journal ceiling of 50,000 entries with an alarm at 25,000. The binding constraint is
+      boot replay time, not disk. Since the world is not declared resettable, hitting the
+      ceiling is an incident to be handled, not a routine wipe — decide in advance what
+      the answer is
 
-## Open decisions
+## Decisions
 
-These are not blocked on code. Four items above cannot be finished without the first two.
+### Settled
+
+| | |
+|---|---|
+| Reset declaration | **No.** The launch world is not declared resettable, which is what puts Phase 3 in scope |
+| Where the write limits live | **Both layers** — the node's schemas and `vouch-world`'s mutators |
+| Rate limits | **10 writes/min/principal, 60 writes/h/IP, 600 reads/min/IP**, loosened from there |
+| Registration stays open | **Yes.** Permissionless entry is the design; bound it with limits, not with a gate |
+| Instance size | `t4g.small` |
+| Tick progression | Frozen at 0, and said so |
+
+### Still open
 
 | | Recommendation |
 |---|---|
-| Reset declaration | Yes. Everything else in this document assumes it |
-| Domain | Cloudflare Registrar |
-| Project mailbox | One address on the launch domain, used for the registrar, `SECURITY.md`, the code of conduct and the org profile. Needed in the same sitting as the domain |
-| Registration stays open | Yes. Permissionless entry is the design; bound it with limits, not with a gate |
-| Operator powers inside the world | None at launch. Adding an administrative override to a governance protocol in a hurry is the worst version of this. A signed `suspend` route from a genesis region is week-one work |
-| Rate limits | Start at 10 writes/min/principal, 60/h/IP, 600 reads/min/IP and loosen from there. Nothing written to the journal can be taken back, so the tight end is the safe end |
-| Instance size | `t4g.small` |
-| Tick progression | Frozen at 0, and said so |
+| Domain | Not registered yet. Cloudflare Registrar. Everything that does not need it is being done first |
+| Project mailbox | One address on the launch domain, shared by the registrar, `SECURITY.md`, the code of conduct and the org profile. Worth doing in the same sitting as the domain — four items depend on it |
+| Where the power to stop an abuser lives | Node-level refusal, outside the world. See Phase 3 |
 | npm | Reserve the `@almanetwork` scope, publish nothing. The unscoped `vouch`, `vouch-cli` and `vouch-mcp` names are all taken already (the registry answers 200 for each) |
 | CLI distribution | Clone and run from source at launch; a `bun build --compile` binary in week one |
 | Discussions | On |
