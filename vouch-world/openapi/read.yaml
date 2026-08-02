@@ -246,6 +246,48 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
               example: { error: "agent not found" }
 
+  /definitions:
+    get:
+      tags: [state]
+      operationId: listDefinitions
+      summary: Every current command/role/law definition (RFC 0007 §4).
+      description: >-
+        The definition store: what the data-defined command engine can run. Also present
+        inside `/state`, but served here on its own so a caller discovering the runnable
+        command set does not have to fetch every region and agent with it.
+      responses:
+        "200":
+          description: All current (latest-version) definitions, id-sorted.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DefinitionRecord" }
+
+  /definitions/{id}:
+    get:
+      tags: [state]
+      operationId: getDefinition
+      summary: A single definition by id.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The definition id (`<namespace>.<name>`, e.g. "core.transfer").
+          schema: { type: string }
+      responses:
+        "200":
+          description: The definition.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DefinitionRecord" }
+        "404":
+          description: No definition with that id.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { error: "definition not found" }
+
   /log:
     get:
       tags: [log]

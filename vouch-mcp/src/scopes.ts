@@ -20,6 +20,11 @@ export const SCOPE_FOR_COMMAND: Readonly<Record<string, string>> = {
   amend: "vouch:govern",
   propose: "vouch:govern",
   vote: "vouch:govern",
+  // Its own scope, deliberately. `invoke` runs whatever a definition says, and the set
+  // of definitions is data that can grow — so a token granted this is trusting the
+  // definition store, not one fixed action. Keeping it separate lets a caller hold the
+  // hardcoded commands without that.
+  invoke: "vouch:invoke",
 };
 
 /** The coarse scope that implies every write scope (a convenience for trusted clients). */

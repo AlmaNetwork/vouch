@@ -8,6 +8,7 @@ import {
   executeTransfer,
   experimenterProposal,
   proposeFounding,
+  putDefinition,
   seedGenesis,
 } from "../../src/environment";
 import { createObservationApp } from "../../src/observation";
@@ -31,6 +32,9 @@ function world() {
   admitAgent(w, { id: "alice@umi", region: "umi", role: "merchant", valueProfile: "lenient", publicKey: "", currency: 100 });
   admitAgent(w, { id: "bob@umi", region: "umi", role: "artisan", valueProfile: "lenient", publicKey: "", currency: 0 });
   executeTransfer(w, { from: "alice@umi", to: "bob@umi", amount: 40 }, { tick: 0, notary: NOTARY });
+  // A definition, so /definitions/{id} has something to resolve. The body is opaque at
+  // this layer — vouch-node's interpreter is what gives it meaning — so any object does.
+  putDefinition(w, { kind: "command", id: "core.sample", version: 1, status: "active", body: {} });
   return w;
 }
 
@@ -38,6 +42,7 @@ function world() {
 function concretize(path: string): string {
   if (path.startsWith("/regions/")) return path.replace("{id}", "umi");
   if (path.startsWith("/agents/")) return path.replace("{id}", "alice@umi");
+  if (path.startsWith("/definitions/")) return path.replace("{id}", "core.sample");
   return path;
 }
 

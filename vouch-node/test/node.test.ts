@@ -142,19 +142,45 @@ describe("VouchNode — authorization & integrity", () => {
 });
 
 describe("VouchNode — a failed durable append is fatal, never a 500-and-continue", () => {
-  /** A journal whose append always fails, as a full disk / read-only data dir would. */
+  /**
+   * A journal that fails once it has taken `healthy` appends, as a disk filling up
+   * would. Boot itself writes (the core command definitions are seeded into the log),
+   * so a journal that fails from the very first append never lets a node be
+   * constructed — which is its own guarantee, tested below.
+   */
   class BrokenJournal extends MemoryJournal {
-    override append(): void {
-      throw new Error("ENOSPC: no space left on device");
+    private taken = 0;
+    constructor(private readonly healthy = 0) {
+      super();
+    }
+    override append(events: Parameters<MemoryJournal["append"]>[0]): void {
+      if (this.taken >= this.healthy) throw new Error("ENOSPC: no space left on device");
+      this.taken++;
+      super.append(events);
     }
   }
+
+  test("a journal that cannot take the boot seed refuses to construct at all", () => {
+    const failures: unknown[] = [];
+    expect(
+      () =>
+        new VouchNode({
+          seed: "n",
+          notary: NOTARY,
+          journal: new BrokenJournal(0),
+          accountLog: new MemoryAccountLog(),
+          onDurabilityFailure: (err) => failures.push(err),
+        }),
+    ).toThrow(/ENOSPC/);
+    expect(failures).toHaveLength(1);
+  });
 
   test("a journal append failure reaches onDurabilityFailure and does not return a result", () => {
     const failures: unknown[] = [];
     const node = new VouchNode({
       seed: "n",
       notary: NOTARY,
-      journal: new BrokenJournal(),
+      journal: new BrokenJournal(1), // takes the boot seed, then fails
       accountLog: new MemoryAccountLog(),
       onDurabilityFailure: (err) => failures.push(err),
     });
