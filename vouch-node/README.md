@@ -80,19 +80,37 @@ with the principal's Ed25519 key (JCS canonicalization, base64 signature). See
   Ed25519 private key; signatures are principal-bound and domain-separated, with
   strictly-increasing nonces for replay protection. The system actor cannot be
   registered or asserted.
-- **The persisted files are trusted local storage.** The event journal and auth
-  log are not yet cryptographically tamper-evident, so anyone who can write those
-  files controls the node (as with any database). On a single-operator box that is
-  the operator. Per-line signing / hash-chaining + a boot-time digest check is the
-  top hardening follow-up (see below).
+- **Both persisted files are hash-chained and verified on boot.** Each line carries
+  `sha256(canonicalBytes({ prev, … }))` over the line before it, and the whole chain
+  is re-folded from genesis at startup, so editing, reordering, inserting or
+  interior-truncating either file is detected and the node refuses to start. There is
+  no trusted "legacy, un-chained" line to downgrade into — accepting one would be the
+  bypass. The two chains are domain-separated, so a record cannot be lifted from one
+  file into the other.
+
+  The auth log is chained for a sharper reason than the journal. It holds every
+  principal's nonce, and the nonce is the only thing standing between a captured
+  request and a replay of it: the signature on an old command was always valid, the
+  counter is what refuses it. Rewinding one — maliciously, or by restoring a journal
+  against a stale auth log — makes that command work again.
+- **What chaining does not catch** is a rewrite of a whole file with every hash
+  recomputed from genesis, because nothing outside the file commits to its contents.
+  That wants an external anchor (the notary signing the chain tip, or a published
+  checkpoint) and is the follow-up below.
+- **The files are still trusted local storage.** Chaining makes tampering *evident*,
+  not impossible: whoever can write the data directory controls the node, as with any
+  database. On a single-operator box that is the operator.
 - **Crash recovery** — appends are `fsync`ed, and boot tolerates a torn final line
   (an interrupted append is dropped; the client retries). A whole lost tail after a
-  crash recovers to the last intact event — a durability window, not corruption.
+  crash recovers to the last intact event — a durability window, not corruption. The
+  fragment is also truncated before the next append, so a write taken after a crash
+  lands instead of being glued onto it and silently lost.
 
 ## Deferred (follow-ups, not in this package yet)
 
-- **Journal integrity** — per-line signature / hash-chain + a committed
-  length/digest checkpoint, so a tampered or truncated log is detected on boot.
+- **An external anchor for the two logs** — the notary signing the chain tip, or a
+  published checkpoint, so a wholesale rewrite is detectable and not just an interior
+  edit. Chaining alone cannot see it.
 - More commands: `amend` (governance/economy), region market (`list` / `sell`),
   digital items, resource draw — each maps to an existing engine mutator.
 - Idempotency keys (safe retries), WebSocket/SSE streaming, an autonomous tick
