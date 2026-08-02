@@ -50,6 +50,33 @@ bun run start                        # serve on 127.0.0.1:8787
 | `VOUCH_LOG_LEVEL` | `info` | pino level: `fatal｜error｜warn｜info｜debug｜trace｜silent`. A typo throws rather than silently defaulting. |
 | `VOUCH_BUILD` | `dev` | Git tag / short SHA baked in at image build time; reported at `GET /health` and stamped on every log line. |
 | `VOUCH_NOTARY` | **none — required** | notary key source: `seed://<secret>` or `env://<VAR>` (`file://` is not supported). There is **no default**: the node throws rather than booting on a predictable key. The keypair is `keyPairFromSeed(sha256(secret))`, so the secret string *is* the private key material — in production use `env://…` fed from a secret store. |
+| `VOUCH_CLIENT_IP_HEADER` | *(none)* | Header carrying the real client IP, e.g. `CF-Connecting-IP`. Unset means the socket address — which behind a loopback reverse proxy is `127.0.0.1` for everyone, so **the per-IP limits below then share one bucket across the whole world**. See the warning under Rate limits. |
+| `VOUCH_WRITES_PER_MIN_PER_PRINCIPAL` | `10` | signed writes per minute, per principal. `0` disables. |
+| `VOUCH_WRITES_PER_HOUR_PER_IP` | `60` | write attempts per hour, per client IP. `0` disables. |
+| `VOUCH_READS_PER_MIN_PER_IP` | `600` | reads per minute, per client IP. `0` disables. |
+
+### Rate limits
+
+Limits live in the node, not only at a CDN. A CDN rule protects a hostname; it does
+nothing for whoever finds the origin and talks to it directly, and the origin is what
+owns the journal. Everything a write costs is permanent, so the limiter belongs where
+the write happens. Over the limit is `429` with `Retry-After`.
+
+The defaults are deliberately tight. Nothing appended to the journal can be taken back,
+so the safe direction to be wrong in is *too strict* — that is an annoyed participant,
+where the other way is a permanent record nobody wanted.
+
+**`VOUCH_CLIENT_IP_HEADER` is a security setting, not a convenience.** A request header
+is caller-supplied: trusting one is only safe when the node cannot be reached except
+through a proxy that *overwrites* it. Otherwise anyone sets it per request, gets a fresh
+bucket every time, and the per-IP limit stops existing. The shipped topology earns that
+trust — Cloudflare writes `CF-Connecting-IP`, and authenticated origin pulls mean only
+Cloudflare can reach Caddy — which is why it is opt-in rather than a default.
+
+The per-principal limit is consulted *before* a signature is checked but only **charged
+after** it verifies. The principal in a request body is claimed, not proven; if a claim
+alone could spend a token, anyone could lock a participant out of their own account by
+spamming their name. An unauthenticated caller is charged to their IP instead.
 
 ## HTTP surface
 

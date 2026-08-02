@@ -40,7 +40,7 @@ export interface SignedRequest {
 }
 
 /** HTTP status codes the auth/command layer can produce (kept a literal union so it satisfies hono's typed status). */
-export type HttpStatus = 200 | 400 | 401 | 409 | 422 | 500;
+export type HttpStatus = 200 | 400 | 401 | 409 | 422 | 429 | 500;
 
 export type AuthResult =
   | { readonly ok: true; readonly principal: string }
