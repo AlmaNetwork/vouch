@@ -11,16 +11,30 @@ import { getAgent } from "vouch-world/agent";
 import {
   admitAgent,
   admitTreasury,
+  amendInstitution,
+  castVote,
   executeTransfer,
   experimenterProposal,
   immigrate,
   MAX_BALANCE,
+  openProposal,
   proposeFounding,
   vouchFor,
   type WorldState,
 } from "vouch-world/environment";
 import type { Result, World } from "vouch-world/foundation";
-import { defineRegion, getRegion, MAX_DISPLAY_NAME_LENGTH, ownerOf } from "vouch-world/region";
+import {
+  canGovern,
+  defineRegion,
+  getRegion,
+  MAX_COUNCIL_MEMBERS,
+  MAX_DISPLAY_NAME_LENGTH,
+  MAX_INSTITUTION_INT,
+  MAX_MEMBER_LENGTH,
+  MAX_SCHEMA_ENTRIES,
+  MAX_SCHEMA_ID_LENGTH,
+  ownerOf,
+} from "vouch-world/region";
 import { z } from "zod";
 
 // Every bound below is the ENGINE's bound, imported rather than restated. The engine
@@ -66,7 +80,82 @@ const migrateSchema = z.object({
   toRegion: z.string().min(1).max(MAX_REGION_LENGTH),
 });
 
-export const commandSchema = z.discriminatedUnion("kind", [foundSchema, admitSchema, transferSchema, vouchSchema, migrateSchema]);
+// --- institutions -----------------------------------------------------------
+//
+// A region's institutions are the one part of it a participant may REWRITE, which
+// makes this the widest-shaped payload on the surface — six policy kinds, several of
+// them collections. Every bound is the engine's, imported rather than restated, and
+// the engine validates the same things again at the mutator
+// (`validateInstitutionChange`). That second pass is the real gate; these schemas
+// exist so a malformed policy comes back as a 400 naming the field rather than a
+// 422 "command-rejected", which for a nested object is the difference between a
+// fixable error and a guessing game.
+
+const stance = z.enum(["absorb", "map", "reexamine", "reject"]);
+const schemaId = z.string().min(1).max(MAX_SCHEMA_ID_LENGTH);
+
+const governanceValue = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("dictatorship") }),
+  z.object({
+    kind: z.literal("council"),
+    members: z.array(z.string().min(1).max(MAX_MEMBER_LENGTH)).min(1).max(MAX_COUNCIL_MEMBERS),
+    threshold: z.number().int().min(1).max(MAX_INSTITUTION_INT),
+    electorate: z.enum(["members", "citizens"]).optional(),
+    quorum: z.number().int().min(1).max(MAX_INSTITUTION_INT).optional(),
+    tenureSeq: z.number().int().min(0).max(MAX_INSTITUTION_INT).optional(),
+    maturity: z.number().int().min(0).max(MAX_INSTITUTION_INT).optional(),
+    weighting: z.enum(["equal", "reputation", "stake"]).optional(),
+  }),
+]);
+
+const institutionChange = z.discriminatedUnion("policy", [
+  z.object({
+    policy: z.literal("verification"),
+    value: z.object({ acceptedSchemaIds: z.array(schemaId).max(MAX_SCHEMA_ENTRIES), rejectUnknownSchemas: z.boolean() }),
+  }),
+  z.object({
+    policy: z.literal("diplomacy"),
+    value: z.object({ defaultStance: stance, overrides: z.record(schemaId, stance) }),
+  }),
+  z.object({
+    policy: z.literal("schemaLedger"),
+    value: z.array(z.object({ schemaId, label: z.string().max(MAX_SCHEMA_ID_LENGTH).optional() })).max(MAX_SCHEMA_ENTRIES),
+  }),
+  z.object({ policy: z.literal("governance"), value: governanceValue }),
+  z.object({
+    policy: z.literal("economy"),
+    value: z.object({
+      baseCostRate: z.number().min(0).max(1),
+      minCostRate: z.number().min(0).max(1),
+      repDiscount: z.number().min(0).max(1),
+      creditPerTx: z.number().int().min(0).max(MAX_INSTITUTION_INT),
+    }),
+  }),
+  z.object({
+    policy: z.literal("resource"),
+    value: z.object({
+      capacity: z.number().int().min(0).max(MAX_INSTITUTION_INT),
+      regenPerTick: z.number().int().min(0).max(MAX_INSTITUTION_INT),
+    }),
+  }),
+]);
+
+const regionId = z.string().min(1).max(MAX_REGION_LENGTH);
+
+const amendSchema = z.object({ kind: z.literal("amend"), regionId, change: institutionChange });
+const proposeSchema = z.object({ kind: z.literal("propose"), regionId, change: institutionChange });
+const voteSchema = z.object({ kind: z.literal("vote"), regionId });
+
+export const commandSchema = z.discriminatedUnion("kind", [
+  foundSchema,
+  admitSchema,
+  transferSchema,
+  vouchSchema,
+  migrateSchema,
+  amendSchema,
+  proposeSchema,
+  voteSchema,
+]);
 export type Command = z.infer<typeof commandSchema>;
 
 export type CommandResult = Result<{ detail?: Record<string, unknown> }>;
@@ -139,6 +228,49 @@ export function dispatch(world: World<WorldState>, principal: string, command: C
         // in yama is a resident of yama and a citizen of umi — which is exactly the
         // distinction sanctions.ts reads when it asks who may act on someone.
         return { ok: true, detail: { agentId: command.agentId, from: agent.region, to: command.toRegion } };
+      }
+      // Governance is the one place authorization is NOT re-implemented here. The
+      // three mutators take `by` and consult `canGovern` themselves, so the principal
+      // is passed straight through and the engine decides. What this layer adds is a
+      // readable REASON: the catch below flattens every engine throw into
+      // "command-rejected", and for governance there are eight distinct ways to be
+      // refused. Each pre-check below mirrors a guard the engine will apply anyway —
+      // if they ever drift, the engine still refuses and the caller just gets the
+      // generic reason instead of the specific one.
+      case "amend": {
+        const region = getRegion(world.getState(), command.regionId);
+        if (!region) return { ok: false, reason: "unknown-region" };
+        if (region.institutions.governance.kind === "council") return { ok: false, reason: "council-governed-use-propose" };
+        if (!canGovern(region, principal)) return { ok: false, reason: "not-governor" };
+        amendInstitution(world, command.regionId, command.change, principal);
+        return { ok: true, detail: { regionId: command.regionId, policy: command.change.policy } };
+      }
+      case "propose": {
+        const region = getRegion(world.getState(), command.regionId);
+        if (!region) return { ok: false, reason: "unknown-region" };
+        if (region.institutions.governance.kind !== "council") return { ok: false, reason: "not-council-governed" };
+        if (!canGovern(region, principal)) return { ok: false, reason: "not-council-member" };
+        // A region holds at most one open proposal, and a council cannot amend
+        // directly — so an occupied slot blocks all governance until it resolves.
+        if (region.openProposal) return { ok: false, reason: "proposal-already-open" };
+        openProposal(world, command.regionId, command.change, principal);
+        return { ok: true, detail: { regionId: command.regionId, policy: command.change.policy } };
+      }
+      case "vote": {
+        const region = getRegion(world.getState(), command.regionId);
+        if (!region) return { ok: false, reason: "unknown-region" };
+        const proposal = region.openProposal;
+        if (!proposal) return { ok: false, reason: "no-open-proposal" };
+        // The roll is the RFC 0001 §5 snapshot taken at open. Being a council member
+        // now is not the question — being on that roll is, which is why this reads
+        // the proposal rather than the governance.
+        if (!proposal.roll.some((entry) => entry.voter === principal)) return { ok: false, reason: "not-on-roll" };
+        if (proposal.votes.includes(principal)) return { ok: false, reason: "already-voted" };
+        const after = castVote(world, command.regionId, principal);
+        // The proposal resolves in the reducer the moment approving weight crosses the
+        // threshold, so it is gone from the region by the time we read back. Reporting
+        // that is the difference between "my vote counted" and "the amendment passed".
+        return { ok: true, detail: { regionId: command.regionId, resolved: after.openProposal === null } };
       }
     }
   } catch {
