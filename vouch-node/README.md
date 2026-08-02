@@ -80,19 +80,26 @@ with the principal's Ed25519 key (JCS canonicalization, base64 signature). See
   Ed25519 private key; signatures are principal-bound and domain-separated, with
   strictly-increasing nonces for replay protection. The system actor cannot be
   registered or asserted.
-- **The persisted files are trusted local storage.** The event journal and auth
-  log are not yet cryptographically tamper-evident, so anyone who can write those
-  files controls the node (as with any database). On a single-operator box that is
-  the operator. Per-line signing / hash-chaining + a boot-time digest check is the
-  top hardening follow-up (see below).
+- **The journal is hash-chained and verified on boot.** Every line is
+  `{ event, hash }` where `hash = sha256(canonicalBytes({ prev, event }))`, and the
+  whole chain is re-folded from genesis at startup — so editing, reordering,
+  inserting or truncating in the middle is detected and the node refuses to start
+  (`src/journal.ts`). What it does **not** catch is someone rewriting the whole file
+  and recomputing every hash from genesis, because nothing outside the file commits
+  to its contents; that needs an external anchor, and it is the follow-up below. The
+  auth log is not chained.
+- **The persisted files are still trusted local storage.** Chaining makes tampering
+  *evident*, not impossible: whoever can write the data directory controls the node.
+  On a single-operator box that is the operator.
 - **Crash recovery** — appends are `fsync`ed, and boot tolerates a torn final line
   (an interrupted append is dropped; the client retries). A whole lost tail after a
   crash recovers to the last intact event — a durability window, not corruption.
 
 ## Deferred (follow-ups, not in this package yet)
 
-- **Journal integrity** — per-line signature / hash-chain + a committed
-  length/digest checkpoint, so a tampered or truncated log is detected on boot.
+- **An external anchor for the journal** — the notary signing the chain tip, or a
+  published checkpoint, so a wholesale rewrite is detectable too and not just an
+  interior edit. Chaining alone cannot see it. The auth log wants the same treatment.
 - More commands: `amend` (governance/economy), region market (`list` / `sell`),
   digital items, resource draw — each maps to an existing engine mutator.
 - Idempotency keys (safe retries), WebSocket/SSE streaming, an autonomous tick

@@ -54,17 +54,31 @@ fails fast with a clear error instead of hanging.
 
 ## A session
 
+There is no installed `vouch` binary yet, so run it from source. To follow along, put
+`vouch() { bun /path/to/vouch-cli/src/main.ts "$@"; }` in your shell, or write
+`bun src/main.ts` wherever this shows `vouch`.
+
 ```
 $ vouch keygen
-$ vouch register alice
-$ vouch found nova Nova                         # alice owns nova
-$ vouch admit bob@nova nova merchant --currency 50   # owner-gated join
-$ vouch transfer market@nova 20 --as alice      # (or set active principal)
-$ vouch watch                                   # tail the feed:
-  #  0  region.founded    by world   {"region":{"id":"nova",…}}
-  #  2  agent.admitted    by world   {"agent":{"id":"bob@nova",…}}
+$ vouch register alice                                # your ACCOUNT
+$ vouch found umi Umi                                 # alice owns umi
+$ vouch admit alice@umi umi merchant --currency 50    # alice's RESIDENT in umi
+$ vouch admit market@umi umi broker                   # a counterparty
+$ vouch register alice@umi                            # bind a key to that resident
+$ vouch transfer market@umi 20 --as alice@umi         # -> {"fee":4}
+$ vouch vouch market@umi 3 --as alice@umi
+$ vouch watch                                         # tail the feed:
+  #  0  region.founded    by world   {"region":{"id":"umi",…}}
+  #  2  agent.admitted    by world   {"agent":{"id":"alice@umi",…}}
   #  4  economy.settled   by world   {"entries":[…]}
 ```
+
+The two `register` calls are the thing to notice, and the reason for the identity model
+below: **an account is not a resident.** `alice` founds and governs regions; only
+`alice@umi` lives in one, holds a balance and can transfer. A transfer's `from` has to
+be the principal that signed it, so acting as a resident means registering that resident
+id too. Transferring `--as alice` is refused with `unknown-agent` — alice is an account,
+and accounts hold nothing.
 
 ## Identity model
 
