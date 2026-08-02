@@ -19,12 +19,8 @@ defaults — loopback bind, in-memory journal — while looking healthy.
 | `VOUCH_JOURNAL` | *(unset = in-memory)* | Event journal path. Unset means the world is lost on restart. |
 | `VOUCH_ACCOUNTS` | *(unset = in-memory)* | Auth log path (per-principal nonces). |
 | `VOUCH_NOTARY` | **none — required** | `seed://<literal>` or `env://<VAR>`. `file://` is not supported. |
-| `VOUCH_CLIENT_IP_HEADER` | *(unset)* | Header carrying the real client IP. **Set this** — see below. |
-| `VOUCH_WRITES_PER_MIN_PER_PRINCIPAL` | `10` | Signed writes per minute, per principal. `0` disables. |
-| `VOUCH_WRITES_PER_HOUR_PER_IP` | `60` | Write attempts per hour, per client IP. `0` disables. |
-| `VOUCH_READS_PER_MIN_PER_IP` | `600` | Reads per minute, per client IP. `0` disables. |
 
-Four properties worth knowing before you touch any of them:
+Three properties worth knowing before you touch any of them:
 
 - **`VOUCH_NOTARY` has no fallback, on purpose.** The node throws rather than booting on a
   predictable key. The keypair is `keyPairFromSeed(sha256(secret))`, so the secret string
@@ -37,13 +33,37 @@ Four properties worth knowing before you touch any of them:
   a journal against a stale accounts log rewinds nonces and reopens the replay window the
   auth design rests on. Only ever one writer: `FileJournal` opens with `"a"` and keeps its
   chain tip in memory, so a second process on the same path corrupts the chain.
-- **`VOUCH_CLIENT_IP_HEADER` decides whether the per-IP limits mean anything.** With a
-  proxy in front, every request reaches the node from `127.0.0.1`, so leaving it unset
-  puts the entire internet in one bucket. It is also a security setting rather than a
-  convenience: a header is caller-supplied, so trusting one is safe only because this
-  node cannot be reached except through Cloudflare (authenticated origin pulls) and
-  Cloudflare overwrites `CF-Connecting-IP`. Expose the node directly and anyone sets it
-  per request, takes a fresh bucket each time, and the limit is gone.
+
+## Rate limits
+
+Four more variables, all optional, all with working defaults:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `VOUCH_CLIENT_IP_HEADER` | *(unset)* | Header carrying the real client IP, e.g. `CF-Connecting-IP`. **Set this.** |
+| `VOUCH_WRITES_PER_MIN_PER_PRINCIPAL` | `10` | Signed writes per minute, per principal. `0` disables. |
+| `VOUCH_WRITES_PER_HOUR_PER_IP` | `60` | Write attempts per hour, per client IP. `0` disables. |
+| `VOUCH_READS_PER_MIN_PER_IP` | `600` | Reads per minute, per client IP. `0` disables. |
+
+The limits start deliberately tight. Nothing appended to the journal can be taken back,
+so the safe direction to be wrong in is *too strict* — that costs an annoyed
+participant, where the other way costs a permanent record nobody wanted. Loosen from
+here rather than starting loose.
+
+**`VOUCH_CLIENT_IP_HEADER` decides whether the per-IP limits mean anything at all.**
+With a proxy in front, every request reaches the node from `127.0.0.1` — so leaving it
+unset puts the entire internet in one bucket.
+
+It is also a security setting rather than a convenience. A header is caller-supplied,
+so trusting one is safe *only* because this node cannot be reached except through
+Cloudflare (authenticated origin pulls) and Cloudflare overwrites `CF-Connecting-IP`.
+Expose the node directly and anyone sets it per request, takes a fresh bucket each time,
+and the limit is gone. Left unset, an unidentifiable caller falls back to the socket
+address rather than being treated as exempt: too strict fails loudly, exempt fails
+silently.
+
+`GET /health` is exempt, because rate-limiting a liveness probe lets a read flood get
+the node restarted.
 
 ## Files here
 
