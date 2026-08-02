@@ -13,12 +13,25 @@ import type { AccountLog } from "./account-log";
 import { AccountRegistry, type AuthResult, type HttpStatus, type RegisterRequest, type SignedRequest } from "./accounts";
 import { type Command, commandSchema, dispatch } from "./commands";
 import type { Journal } from "./journal";
+import { type Logger, silentLogger } from "./log";
 
 export interface NodeDeps {
   readonly seed: string;
   readonly notary: KeyPair;
   readonly journal: Journal;
   readonly accountLog: AccountLog;
+  /**
+   * Called when a DURABLE APPEND fails (ENOSPC, EIO, a read-only data dir, …).
+   * The default kills the process, and that is deliberate: state advances in memory
+   * at dispatch and is persisted afterwards, so a node that keeps serving after a
+   * failed append is serving a world its journal never saw — the change vanishes on
+   * restart and every later write chains onto phantom state. Dying instead lets the
+   * supervisor restart us, and boot replay puts us back on the durable truth.
+   * Injectable so tests can assert the path without exiting the test runner.
+   */
+  readonly onDurabilityFailure?: (err: unknown) => void;
+  /** Structured logger. Defaults to silent so embedders/tests stay quiet. */
+  readonly log?: Logger;
 }
 
 export type SubmitResult =
@@ -31,17 +44,40 @@ export class VouchNode {
   private readonly registry: AccountRegistry;
   private readonly journal: Journal;
   private readonly notary: KeyPair;
+  private readonly onDurabilityFailure: (err: unknown) => void;
+  private readonly log: Logger;
 
   constructor(deps: NodeDeps) {
     this.journal = deps.journal;
     this.notary = deps.notary;
     this.world = rehydrateAlmaWorld(deps.seed, deps.journal.load());
     this.registry = new AccountRegistry(deps.accountLog);
+    this.log = deps.log ?? silentLogger;
+    this.onDurabilityFailure =
+      deps.onDurabilityFailure ??
+      ((err) => {
+        this.log.fatal({ err }, "durable append failed — exiting rather than serving un-persisted state");
+        process.exit(1);
+      });
+  }
+
+  /**
+   * Run a step that persists. A throw here is a durability failure — the auth log or
+   * the journal did not take the write — so we hand it to `onDurabilityFailure`
+   * (which normally exits) instead of returning an error and continuing to serve.
+   */
+  private durable<T>(step: () => T): T {
+    try {
+      return step();
+    } catch (err) {
+      this.onDurabilityFailure(err);
+      throw err; // if the handler returned (tests), don't pretend the write succeeded
+    }
   }
 
   /** Bind a principal to a public key (self-signed; first-writer-wins). */
   register(req: RegisterRequest): AuthResult {
-    return this.registry.register(req);
+    return this.durable(() => this.registry.register(req));
   }
 
   /** Whether a principal has been bound to a key. */
@@ -64,7 +100,8 @@ export class VouchNode {
     const parsed = commandSchema.safeParse(req.command);
     if (!parsed.success) return { ok: false, status: 400, reason: "invalid-command" };
 
-    const auth = this.registry.verify(req);
+    // verify() persists the consumed nonce before we dispatch, so it is a durable step.
+    const auth = this.durable(() => this.registry.verify(req));
     if (!auth.ok) return { ok: false, status: auth.status, reason: auth.reason };
 
     const before = this.world.log.length;
@@ -75,7 +112,7 @@ export class VouchNode {
     // command validates fully before emitting, so a rejection emits nothing and this
     // is a no-op on the failure path; the guarantee holds for future commands too.)
     const emitted = this.world.log.length - before;
-    this.journal.append(this.world.log.since(before));
+    this.durable(() => this.journal.append(this.world.log.since(before)));
 
     if (!outcome.ok) return { ok: false, status: 422, reason: outcome.reason };
     return { ok: true, status: 200, detail: outcome.detail, events: emitted };

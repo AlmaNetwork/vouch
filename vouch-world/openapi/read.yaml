@@ -76,11 +76,17 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [ok, tick]
+                required: [ok, tick, build]
                 properties:
                   ok: { type: boolean, const: true }
                   tick: { $ref: "#/components/schemas/Tick" }
-              example: { ok: true, tick: 8 }
+                  build:
+                    type: string
+                    description: >-
+                      Which code is answering — the git tag or short SHA baked in at image
+                      build time (VOUCH_BUILD), or "dev" when unset. Without it a deploy
+                      and a failed rollback are indistinguishable from outside.
+              example: { ok: true, tick: 8, build: v0.1.0 }
 
   /tick:
     get:
@@ -233,20 +239,33 @@ paths:
       tags: [log]
       operationId: getLog
       summary: Events from the append-only log, optionally since a seq.
+      description: >-
+        Returns at most 1000 events per call. A caller that receives exactly 1000 should
+        ask again from `since + 1000`; `/log/digest` reports the total length.
       parameters:
         - name: since
           in: query
           required: false
-          description: Return events with `seq >= since`. Defaults to 0 (the whole log).
+          description: >-
+            Return events with `seq >= since`. Defaults to 0. MUST be a non-negative
+            integer — anything else is a 400 rather than being coerced, because a
+            coerced value silently returned the whole log.
           schema: { type: integer, minimum: 0, default: 0 }
       responses:
         "200":
-          description: The events at or after `since`, in seq order.
+          description: The events at or after `since`, in seq order, capped at 1000.
           content:
             application/json:
               schema:
                 type: array
+                maxItems: 1000
                 items: { $ref: "#/components/schemas/AlmaEvent" }
+        "400":
+          description: '`since` was not a non-negative integer.'
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { error: "since must be a non-negative integer" }
 
   /log/digest:
     get:

@@ -12,7 +12,7 @@ import {
   seedGenesis,
   vouchFor,
 } from "../../src/environment";
-import { createObservationApp, gini, metrics, type ObservationServer } from "../../src/observation";
+import { createObservationApp, gini, LOG_PAGE_LIMIT, metrics, type ObservationServer } from "../../src/observation";
 import { defineRegion } from "../../src/region";
 
 const NOTARY = keyPairFromSeed(new Uint8Array(32).fill(9));
@@ -119,6 +119,34 @@ describe("observation — the read-only HTTP connection point", () => {
     expect(Array.isArray(log)).toBe(true);
     const tail = await getJson(app, "/log?since=3");
     expect(tail.length).toBeLessThan(log.length);
+  });
+
+  test("/log validates `since` instead of coercing it, and caps the page", async () => {
+    const app = createObservationApp(world());
+
+    // The bug this closes: Number("abc") is NaN and slice(NaN) returns the WHOLE log,
+    // so a typo in an unauthenticated query dumped everything.
+    for (const bad of ["abc", "-1", "2.7", "1e3", " 5"]) {
+      const res = await app.request(`/log?since=${encodeURIComponent(bad)}`);
+      expect(res.status).toBe(400);
+    }
+
+    // Valid cursors still work, and the response is still a bare array (vouch-cli,
+    // vouch-web and openapi/read.yaml all consume it that way).
+    const all = await getJson(app, "/log");
+    expect(Array.isArray(all)).toBe(true);
+    const tail = await getJson(app, "/log?since=3");
+    expect(tail.length).toBe(Math.max(0, all.length - 3));
+    expect((await getJson(app, "/log?since=")).length).toBe(all.length); // empty = 0
+    expect((await getJson(app, "/log?since=99999")).length).toBe(0);
+    expect(all.length).toBeLessThanOrEqual(LOG_PAGE_LIMIT);
+  });
+
+  test("/health reports which build is answering — passed in, not read from the env", async () => {
+    // build identity is deploy metadata; the engine takes it as a parameter so it
+    // reads no ambient environment (and this is testable without mutating process.env).
+    expect((await getJson(createObservationApp(world()), "/health")).build).toBe("dev");
+    expect((await getJson(createObservationApp(world(), { build: "v1.2.3" }), "/health")).build).toBe("v1.2.3");
   });
 
   test("it is read-only: no write route, and watching never changes the world (§2-6)", async () => {
