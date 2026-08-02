@@ -29,13 +29,17 @@ certificate means, and whether a village honors it,* is the simulation's drama.
 
 Two packages:
 
-| Package | Role | Tests |
-|---|---|---|
-| `vouch-core` | L1 trust engine — mint ids/keys/certs, **formally verify** signatures. Standalone, no other layer. | 35 |
-| `vouch-world` | The simulator — foundations + region/agent/environment/credential/observation. | 76 |
+| Package | Role |
+|---|---|
+| `vouch-core` | L1 trust engine — mint ids/keys/certs, **formally verify** signatures. Standalone, no other layer. |
+| `vouch-world` | The simulator — foundations + region/agent/environment/credential/observation. |
 
-When you change code, keep these test counts and the milestone table in the READMEs
-in lockstep with reality (see **Working rhythm**).
+**Do not put test counts in prose.** This table used to carry them, and so did every
+package README, and by the time anyone checked, all of them were wrong at once — the
+instruction to keep them "in lockstep with reality" was a manual step nothing enforced,
+which is the only kind of documentation guaranteed to drift. `bun test` is the source
+of truth. Keep the milestone table current instead; that one carries meaning a command
+cannot print.
 
 ---
 

@@ -30,14 +30,14 @@ and there. You can run one yourself today.
 
 ## Packages
 
-| Package | What it is | Tests |
-|---------|-----------|-------|
-| [`vouch-world`](./vouch-world) | The **simulator** — the deterministic world engine, the villages, the agents, the economy, typed credentials, diplomacy, a region market, digital items, a resource/scarcity model, and a read-only observation server. This is the world. | 156 |
-| [`vouch-core`](./vouch-core) | The **trust engine** it runs on — a standalone, dependency-free\* factory that mints ids/keys/certificates and **formally verifies** signatures. It knows nothing of villages or economies; meaning lives outside it, and it's reusable on its own. | 60 |
-| [`vouch-node`](./vouch-node) | The **participate node** — a durable, authenticated write path *onto* the engine: Ed25519-signed commands (found / admit / transfer / vouch), a replay-on-boot journal, and the read-only observation surface. This is how you take part over the network. | 46 |
-| [`vouch-mcp`](./vouch-mcp) | The **MCP participation server** — an OAuth 2.1–protected MCP server so an **AI participates through its own MCP client**. It custodially signs engine commands on the authenticated subject's behalf; supports dynamic client registration so Claude Code can connect. | 62 |
-| [`vouch-cli`](./vouch-cli) | The **non-custodial terminal client** + reusable `VouchClient` SDK — you hold your own Ed25519 key, sign locally, and talk to a `vouch-node`. `vouch found / transfer / vouch / watch`. Same command surface as `vouch-mcp`, opposite trust model. | 28 |
-| [`vouch-web`](./vouch-web) | A **read-only web viewer** — a small proxy plus a single page that polls a node and draws the world. Not part of a public deployment: it refetches the full region and agent lists every two seconds. | 7 |
+| Package | What it is |
+|---------|-----------|
+| [`vouch-world`](./vouch-world) | The **simulator** — the deterministic world engine, the villages, the agents, the economy, typed credentials, diplomacy, a region market, digital items, a resource/scarcity model, and a read-only observation server. This is the world. |
+| [`vouch-core`](./vouch-core) | The **trust engine** it runs on — a standalone, dependency-free\* factory that mints ids/keys/certificates and **formally verifies** signatures. It knows nothing of villages or economies; meaning lives outside it, and it's reusable on its own. |
+| [`vouch-node`](./vouch-node) | The **participate node** — a durable, authenticated write path *onto* the engine: Ed25519-signed commands (found / admit / transfer / vouch), a replay-on-boot journal, and the read-only observation surface. This is how you take part over the network. |
+| [`vouch-mcp`](./vouch-mcp) | The **MCP participation server** — an OAuth 2.1–protected MCP server so an **AI participates through its own MCP client**. It custodially signs engine commands on the authenticated subject's behalf; supports dynamic client registration so Claude Code can connect. |
+| [`vouch-cli`](./vouch-cli) | The **non-custodial terminal client** + reusable `VouchClient` SDK — you hold your own Ed25519 key, sign locally, and talk to a `vouch-node`. `vouch found / transfer / vouch / watch`. Same command surface as `vouch-mcp`, opposite trust model. |
+| [`vouch-web`](./vouch-web) | A **read-only web viewer** — a small proxy plus a single page that polls a node and draws the world. Not part of a public deployment: it refetches the full region and agent lists every two seconds. |
 
 \* depends on no other layer; only `@noble/curves`, `canonicalize`, `zod`.
 
