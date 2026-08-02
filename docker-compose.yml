@@ -7,6 +7,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # WHICH CODE is in the image, surfaced at GET /health. The Dockerfile accepts
+        # this and nothing passed it, so every composed image reported "dev" and a
+        # deploy was indistinguishable from a rollback that failed to take. Set it:
+        #   VOUCH_BUILD="$(git describe --tags --always)" docker compose build
+        VOUCH_BUILD: ${VOUCH_BUILD:-dev}
     container_name: vouch-node
     ports:
       - "127.0.0.1:8787:8787"

@@ -12,6 +12,18 @@ Description=vouch node — durable, authenticated write path onto the engine
 After=network-online.target
 Wants=network-online.target
 
+# Cap the restart loop. A corrupt journal makes the node exit 1 on every boot
+# ("journal: hash-chain broken at line N"), which is correct — but under a bare
+# Restart=on-failure it becomes a silent infinite crash loop instead of an alert.
+#
+# These belong to [Unit]. systemd moved them out of [Service] in v229 and now
+# IGNORES them there — logging "Unknown key name ... in section 'Service'" and
+# carrying on with no cap at all. They sat in [Service] until now, so the cap this
+# unit appeared to have was never in effect. Verify with:
+#   systemctl show vouch-node -p StartLimitIntervalSec -p StartLimitBurst
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
 [Service]
 Type=simple
 User=vouch
@@ -27,12 +39,6 @@ ExecStart=/usr/local/bin/bun src/index.ts
 
 Restart=on-failure
 RestartSec=2
-
-# Cap the restart loop. A corrupt journal makes the node exit 1 on every boot
-# ("journal: hash-chain broken at line N"), which is correct — but under a bare
-# Restart=on-failure it becomes a silent infinite crash loop instead of an alert.
-StartLimitIntervalSec=300
-StartLimitBurst=5
 
 # The app handles SIGTERM and drains, so let it.
 KillSignal=SIGTERM

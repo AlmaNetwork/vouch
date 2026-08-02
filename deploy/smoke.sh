@@ -1,15 +1,22 @@
 #!/usr/bin/env sh
 # Deploy smoke test.
 #
-#   sh deploy/smoke.sh https://node.example.org           # READ-ONLY (default)
-#   sh deploy/smoke.sh https://node.example.org --write   # + a real signed write
+#   sh deploy/smoke.sh https://node.example.org            # READ-ONLY (default)
+#   sh deploy/smoke.sh http://127.0.0.1:8787 --write       # + a real signed write
+#   sh deploy/smoke.sh https://node.example.org --write --force   # ...against a live world
 #
 # The write half is OPT-IN, deliberately. It founds a region through the real signed
 # path, and regions are never deleted by design — so every write run appends a
 # permanent `smoke*` region to the world and its append-only log, visible in /regions
-# and counted in /metrics forever. That is the right trade at DEPLOY time (it is the
-# only way to prove the signature path and the write path actually work) and the wrong
-# one for a probe you might put on a timer. Default read-only; pass --write on deploys.
+# and counted in /metrics forever. There is no un-founding it, and the launch world is
+# not one we intend to reset.
+#
+# So --write REFUSES a remote target unless --force is also given. Point it at the node
+# over loopback, on the box, where the signed write path is proven just as well and the
+# permanent artifact lands before anyone is watching. What loopback does not exercise is
+# the proxy — check that with the read-only run against the public hostname, which is
+# what the proxy actually affects. The old procedure fired this at production on every
+# deploy, which is how a world accumulates a `smoke*` region per release.
 #
 # The write half goes through vouch-cli on purpose. A signed command is an Ed25519
 # signature over JCS-canonicalized bytes with a domain-separated purpose string — curl
@@ -27,13 +34,31 @@ set -eu
 
 BASE="http://127.0.0.1:8787"
 WRITE=""
+FORCE=""
 for arg in "$@"; do
   case "$arg" in
     --write) WRITE=1 ;;
+    --force) FORCE=1 ;;
     -*) printf 'unknown flag: %s\n' "$arg" >&2; exit 2 ;;
     *) BASE="$arg" ;;
   esac
 done
+
+# A write leaves something permanent, so make the remote case a deliberate act rather
+# than the default a copy-pasted deploy step falls into.
+case "$BASE" in
+  http://127.0.0.1:* | http://localhost:* | http://[::1]:*) LOOPBACK=1 ;;
+  *) LOOPBACK="" ;;
+esac
+if [ -n "$WRITE" ] && [ -z "$LOOPBACK" ] && [ -z "$FORCE" ]; then
+  printf 'refusing to write to %s\n\n' "$BASE" >&2
+  printf '  --write founds a region, and a region cannot be deleted. Against a live\n' >&2
+  printf '  world that is a permanent artifact in /regions and /metrics, one per run.\n\n' >&2
+  printf '  Run it over loopback on the box instead:\n' >&2
+  printf '    sh deploy/smoke.sh http://127.0.0.1:8787 --write\n\n' >&2
+  printf '  If you really do mean this target, add --force.\n' >&2
+  exit 2
+fi
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 CLI_HOME="$(mktemp -d)"
