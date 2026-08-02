@@ -7,7 +7,7 @@
 // secession / ownership-turnover counts, trust activity, reputation) — it exposes NO
 // control knobs. Configuring an outcome would defeat the point of observing it.
 
-import { agentsInRegion, EVENT_AGENT_MIGRATED, EVENT_AGENT_VOUCHED, listAgents } from "../agent";
+import { EVENT_AGENT_MIGRATED, EVENT_AGENT_VOUCHED, listAgents } from "../agent";
 import type { WorldState } from "../environment";
 import { SYSTEM_ACTOR, type WorldView } from "../foundation";
 import { EVENT_REGION_OWNERSHIP_TRANSFERRED, listRegions, type RecognitionStatus, type RegionLifecycle } from "../region";
@@ -78,16 +78,37 @@ export function metrics(view: WorldView<WorldState>): Metrics {
     else if (e.type === EVENT_AGENT_VOUCHED) vouches += 1;
   }
 
+  // Group the agents by region in ONE pass, rather than scanning every agent once per
+  // region. Same numbers; the cost goes from O(regions × agents) to O(regions + agents).
+  // The quadratic was the dominant cost of this whole endpoint — 1ms at 100 regions but
+  // 154ms at 4,000, on a single thread that every other request is queued behind.
+  //
+  // Residency here is the same rule `agentsInRegion` applies (region match, treasury
+  // excluded); its id-sort is not reproduced because nothing below depends on order —
+  // `gini` sorts its own input, and the rest is a count.
+  const residentCurrencyByRegion = new Map<string, number[]>();
+  const treasuryByRegion = new Map<string, number>();
+  for (const a of agents) {
+    if (a.role === "treasury") {
+      // First one wins, matching the `find` this replaced. There is at most one per
+      // region in practice — `treasuryId` is a fixed id and admission rejects duplicates.
+      if (!treasuryByRegion.has(a.region)) treasuryByRegion.set(a.region, a.balances.currency);
+      continue;
+    }
+    const bucket = residentCurrencyByRegion.get(a.region);
+    if (bucket) bucket.push(a.balances.currency);
+    else residentCurrencyByRegion.set(a.region, [a.balances.currency]);
+  }
+
   const perRegion: RegionMetrics[] = regions.map((r) => {
-    const inRegion = agentsInRegion(state, r.id); // canonical residency (excludes the treasury)
-    const treasuryAgent = agents.find((a) => a.region === r.id && a.role === "treasury");
+    const currencies = residentCurrencyByRegion.get(r.id) ?? [];
     return {
       id: r.id,
       status: r.status,
       lifecycle: r.lifecycle,
-      residents: inRegion.length,
-      treasury: treasuryAgent?.balances.currency ?? 0,
-      currencyGini: gini(inRegion.map((a) => a.balances.currency)),
+      residents: currencies.length,
+      treasury: treasuryByRegion.get(r.id) ?? 0,
+      currencyGini: gini(currencies),
     };
   });
 
