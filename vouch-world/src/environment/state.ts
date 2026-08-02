@@ -12,12 +12,14 @@
 // event (World.emit is public, so the REDUCER fold point is the real chokepoint).
 
 import { type AgentEventMap, type AgentSlice, agentReducer } from "../agent";
+import { type DefinitionEventMap, type DefinitionSlice, definitionReducer } from "../definition";
 import { type AlmaEvent, type CommitSink, type Reducer, World, type WorldView } from "../foundation";
 import { type ItemEventMap, type ItemSlice, itemReducer } from "../item";
 import { type RegionEventMap, type RegionSlice, regionReducer } from "../region";
 
-export interface WorldState extends RegionSlice, AgentSlice, ItemSlice {
+export interface WorldState extends RegionSlice, AgentSlice, ItemSlice, DefinitionSlice {
   // M3 added the agent slice; balances/economy live inside agent state. P3 added the item slice.
+  // RFC 0007 §4 added the definition slice — data-defined commands stored in the log.
 }
 
 /** The env-only WRITE capability over a world (audit G3). Every environment mutator takes this. */
@@ -37,7 +39,7 @@ export function readBackOrThrow<T>(op: string, value: T | undefined): T {
 }
 
 /** Every system event the environment authors, mapped to its payload — keys the typed `commit`. */
-export type WorldEventMap = AgentEventMap & RegionEventMap & ItemEventMap;
+export type WorldEventMap = AgentEventMap & RegionEventMap & ItemEventMap & DefinitionEventMap;
 
 /**
  * Author a system event, type-checked. The payload must match the event type's declared
@@ -48,7 +50,7 @@ export function commit<K extends keyof WorldEventMap>(env: WorldCommit, type: K,
   return env.commitSystem(type, payload as Record<string, unknown>);
 }
 
-export const INITIAL_WORLD_STATE: WorldState = { regions: {}, agents: {}, items: {} };
+export const INITIAL_WORLD_STATE: WorldState = { regions: {}, agents: {}, items: {}, definitions: {} };
 
 /**
  * Composes the per-layer slice reducers. Adding a slice is a downward edit in this
@@ -59,8 +61,9 @@ export const rootReducer: Reducer<WorldState> = (state, event) => {
   const regions = regionReducer({ regions: state.regions }, event).regions;
   const agents = agentReducer({ agents: state.agents }, event).agents;
   const items = itemReducer({ items: state.items }, event).items;
-  if (regions === state.regions && agents === state.agents && items === state.items) return state;
-  return { regions, agents, items };
+  const definitions = definitionReducer({ definitions: state.definitions }, event).definitions;
+  if (regions === state.regions && agents === state.agents && items === state.items && definitions === state.definitions) return state;
+  return { regions, agents, items, definitions };
 };
 
 /** Construct an ALMA world: deterministic engine (M1) + the composed root reducer. */

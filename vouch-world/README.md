@@ -30,6 +30,7 @@ vouch-world/  (this repo, the simulator)
     region/      ✅ Layer 2 Villages: institutions vocab + slice reducer + selectors (M2)
     agent/       ✅ Layer 3 Residents: brains (view→intent) + agent-slice fold (M3)
     environment/ ✅ Layer 4 Composition root + founding + economy + diplomacy + driver (M2.5/M3/M4)
+    definition/  ✅ RFC 0007 §4 definition store — opaque, versioned command defs in the log
     credential/  ✅ Typed, validated certificate types on the universal envelope
     observation/ 🟡 Layer 5 Read-only HTTP (hono) + metrics (M5); broadcast next
   openapi/       ✅ read.yaml — the observation API's OpenAPI contract (linted in CI,
@@ -60,6 +61,7 @@ bun run typecheck # tsc --noEmit (optional)
 | **M3** | Agents, economy (credit/currency), transactions, migration, emergent founding | ✅ implemented, tests green |
 | **Credentials** | Typed, validated certificate types on the universal envelope (skill/membership/asset/endorsement + custom) | ✅ implemented, tests green |
 | **RFC 0007 §6/§9/§10.1** | Sanctions (`suspendId`/`reinstateId`) with dual-authority authorization (§6 checkpoint + §3.4 effect-primitive seam) + sponsor tracking at admission + `computeStanding` derivation | ✅ implemented, tests green |
+| **RFC 0007 §4** | Definition store — opaque, versioned command definitions stored in the log (`putDefinition`); interpreted by vouch-node's data-defined command engine (form vs meaning) | ✅ implemented, tests green |
 | **M4** | Diplomacy: cert translation (absorb/map/reexamine/reject) + recognition flow + cross-region trade gate | 🟡 in progress — emergent cross-border (scarcity) next |
 | **M5** | Observation: read-only HTTP server (hono) + metrics — external clients connect to watch (§2-6) | 🟡 in progress — broadcast / newspaper next |
 

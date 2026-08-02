@@ -600,7 +600,7 @@ components:
     # --- composed world (Layer 4) -------------------------------------------
     WorldState:
       type: object
-      required: [regions, agents, items]
+      required: [regions, agents, items, definitions]
       properties:
         regions:
           type: object
@@ -614,6 +614,38 @@ components:
           type: object
           description: Digital items keyed by id (the P3 ownership ledger).
           additionalProperties: { $ref: "#/components/schemas/ItemState" }
+        definitions:
+          type: object
+          description: >-
+            RFC 0007 §4 definition store — current (latest-version) command/role/law
+            definitions keyed by id. The body is opaque at this layer (form vs meaning);
+            vouch-node's command engine interprets it.
+          additionalProperties: { $ref: "#/components/schemas/DefinitionRecord" }
+
+    DefinitionRecord:
+      type: object
+      description: One versioned, log-stored definition (RFC 0007 §4). The engine validates only this envelope; `body` is never interpreted here.
+      required: [kind, id, version, status, body]
+      properties:
+        kind:
+          type: string
+          description: Definition kind (e.g. `command`, `role`, `procedure`, `law`, `preamble`) — opaque to the engine.
+          example: command
+        id:
+          type: string
+          description: Namespaced id, `<namespace>.<name>`. `kernel.*` is reserved; `core.*` is seed-once.
+          example: core.transfer
+        version:
+          type: integer
+          minimum: 1
+          description: Monotonic per id — a redefinition is always a new version (no shadowing, no gaps).
+        status:
+          type: string
+          enum: [active, retired]
+        body:
+          type: object
+          description: Opaque definition body; interpreted by vouch-node (preconditions/effects), never by the engine.
+          additionalProperties: true
 
     # --- event log (Foundation B) -------------------------------------------
     AlmaEvent:

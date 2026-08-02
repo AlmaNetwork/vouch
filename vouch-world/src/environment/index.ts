@@ -6,6 +6,7 @@
 // and the §3-D emergence trigger. Imports downward only: agent, region,
 // foundation, alma-core.
 
+export { type PutDefinitionResult, putDefinition } from "./definitions";
 export { assessCertificate, type CertAssessment, canTransactAcross, recognizeRegion, stanceToward } from "./diplomacy";
 export { type EconomyConfig, economyStep, runEconomy } from "./driver";
 export {
