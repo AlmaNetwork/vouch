@@ -83,9 +83,14 @@ once per region, and that scans every agent. At the 50,000-entry journal ceiling
 below it is seconds per request, and a single client in a loop owns the node. `/state` is
 linear but is a bandwidth amplifier: 3.2 MB per unauthenticated GET.
 
+*(Phase 2 removes that quadratic: a cold `/metrics` at 4,000 regions is 14.4 ms and a warm
+one 0.2 ms. `/state` is unchanged and still open.)*
+
 ## Things we built that are not doing anything
 
 Four of these. Each was written deliberately and then quietly failed to take effect.
+All four are fixed in #52; they are recorded here because the shape of the mistake is
+worth remembering — none of them failed, they just silently were not there.
 
 - **`StartLimitIntervalSec` and `StartLimitBurst` are in `[Service]`** in
   `deploy/vouch-node.service`. systemd reads them from `[Unit]` and ignores them where
@@ -110,21 +115,34 @@ Four of these. Each was written deliberately and then quietly failed to take eff
 
 ## Work
 
+A ticked box means the change is in an open pull request, not that it is on `main`.
+
+| | |
+|---|---|
+| Phase 1 — write-surface bounds | #49 |
+| Phase 1 — rate limiting | #50 |
+| Phase 2 — read-surface cost | #51 |
+| Phase 4 — deploy assets | #52 |
+| Phase 5 — SECURITY.md + READMEs | #53 |
+
+Each branches from `main` rather than stacking, so they can land in any order. Phase 3
+and Phase 6 are not started.
+
 ### Phase 1 — bound the write surface
 
 The limits go in **both** layers: the node's zod schemas reject early with a clear 400,
 and `vouch-world` enforces the same ceilings so any other entry point onto the engine
 (`vouch-mcp`, an embedder, a future route) inherits them instead of having to remember.
 
-- [ ] `.max()` on every string in `vouch-node/src/commands.ts`: `regionId`,
+- [x] `.max()` on every string in `vouch-node/src/commands.ts`: `regionId`,
       `displayName`, `agentId`, `region`, and `transfer`/`vouch`'s `from` and `to`
-- [ ] Length bounds on `principal` and `publicKey` in `vouch-node/src/accounts.ts`
-- [ ] Ceilings on `admit.currency` and `transfer.amount`, well under `MAX_SAFE_INTEGER`
-- [ ] The same bounds in `vouch-world`, at the mutators that accept the values
+- [x] Length bounds on `principal` and `publicKey` in `vouch-node/src/accounts.ts`
+- [x] Ceilings on `admit.currency` and `transfer.amount`, well under `MAX_SAFE_INTEGER`
+- [x] The same bounds in `vouch-world`, at the mutators that accept the values
       (`defineRegion` / `admitAgent` / `executeTransfer`). Existing journals must still
       replay — the bounds are on new writes, and nothing already recorded may become
       un-replayable
-- [ ] Rate limiting in the app, keyed by IP and by principal, answering 429. Starting
+- [x] Rate limiting in the app, keyed by IP and by principal, answering 429. Starting
       values: **10 writes/min/principal, 60 writes/h/IP, 600 reads/min/IP**. Nothing
       written to the journal can be taken back, so the tight end is the safe end and we
       loosen from there. In the app and not only at the CDN — an origin reachable around
@@ -134,9 +152,12 @@ and `vouch-world` enforces the same ceilings so any other entry point onto the e
 
 ### Phase 2 — bound the read surface
 
-- [ ] Memoize `metrics()` on `log.length`; the world only changes when the log grows
-- [ ] `Cache-Control` on every read endpoint
-- [ ] Report journal length at `/health` so the ceiling below is observable
+- [x] Memoize `metrics()` on `log.length`; the world only changes when the log grows.
+      Also removed the quadratic underneath it, so a cold read is linear rather than
+      merely cached, and memoized `EventLog.digest()`, which restringified the whole log
+- [x] `Cache-Control` on the derived reads. Deliberately NOT on `/health`, `/tick` or
+      `/log/digest` — a cached digest turns a successful write into a failed deploy
+- [x] Report journal length at `/health` so the ceiling below is observable
 - [ ] Decide what `/state` does at scale: cap it, paginate it, or drop it from the public
       surface and leave `/regions` and `/agents`
 
@@ -162,26 +183,26 @@ does not prejudge the §9 design. Not yet agreed.
 
 ### Phase 4 — make the deploy assets true
 
-- [ ] Move `StartLimitIntervalSec` / `StartLimitBurst` to `[Unit]`
-- [ ] Wire `VOUCH_BUILD` through all four paths (env file, compose build args, `DEPLOY.md`,
+- [x] Move `StartLimitIntervalSec` / `StartLimitBurst` to `[Unit]`
+- [x] Wire `VOUCH_BUILD` through all four paths (env file, compose build args, `DEPLOY.md`,
       CI) and assert it at `/health` in the CI image job
-- [ ] Add the Bun installation step, landing the binary somewhere `ProtectHome=true`
+- [x] Add the Bun installation step, landing the binary somewhere `ProtectHome=true`
       permits
-- [ ] Give `smoke.sh --write` a target that is not production, or reserve the `smoke`
-      prefix in the world
+- [x] `smoke.sh --write` now refuses a non-loopback target without `--force`, and the
+      procedure runs the write check over loopback
 
 ### Phase 5 — say what this is
 
-- [ ] `SECURITY.md`: how to report, what is in scope, and the known limits stated up
+- [x] `SECURITY.md`: how to report, what is in scope, and the known limits stated up
       front rather than discovered. The reporting address depends on the domain, so this
       can be written now and the contact filled in later
 - [ ] Turn on private vulnerability reporting, secret scanning, push protection, and
       required status checks
-- [ ] Correct the README: test counts are stale (the table says 106 / 35 / 44 / 61 / 28;
+- [x] Correct the README: test counts were stale (the table says 106 / 35 / 44 / 61 / 28;
       the real counts are **156 / 60 / 46 / 62 / 28**, plus `vouch-web` at **7**, which the
       table omits entirely), `vouch-web` is missing from the package list, and there are no
       links to `docs/rfc/` or `docs/money-boundary.md`
-- [ ] Fix `vouch-node/README.md`'s Security section, which says journal tamper-evidence is
+- [x] Fix `vouch-node/README.md`'s Security section, which says journal tamper-evidence is
       unimplemented — it is implemented and verified on every boot
       (`vouch-node/src/journal.ts`)
 
