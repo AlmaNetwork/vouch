@@ -27,12 +27,22 @@ describe("RFC 0007 §4 — definition store", () => {
 
   test("versions are monotonic: v1 then v2 ok; a repeated v1 is rejected", () => {
     const w = createAlmaWorld("def");
-    expect(putDefinition(w, rec({ version: 1 })).ok).toBe(true);
-    expect(putDefinition(w, rec({ version: 2, body: { effects: [{ op: "transfer" }], note: "v2" } })).ok).toBe(true);
-    expect(getDefinition(w.getState(), "core.transfer")?.version).toBe(2);
+    // a NON-core id: core.* is seed-once (revision requires the §7 procedure layer),
+    // so version bumping is exercised on an ordinary namespace.
+    const id = "guild.transfer";
+    expect(putDefinition(w, rec({ id, version: 1 })).ok).toBe(true);
+    expect(putDefinition(w, rec({ id, version: 2, body: { effects: [{ op: "transfer" }], note: "v2" } })).ok).toBe(true);
+    expect(getDefinition(w.getState(), id)?.version).toBe(2);
     // a gap or repeat is rejected
-    expect(putDefinition(w, rec({ version: 2 }))).toEqual({ ok: false, reason: "non-monotonic-version" });
-    expect(putDefinition(w, rec({ version: 4 }))).toEqual({ ok: false, reason: "non-monotonic-version" });
+    expect(putDefinition(w, rec({ id, version: 2 }))).toEqual({ ok: false, reason: "non-monotonic-version" });
+    expect(putDefinition(w, rec({ id, version: 4 }))).toEqual({ ok: false, reason: "non-monotonic-version" });
+  });
+
+  test("core.* is seed-once: v1 lands (the genesis seeder), a revision is refused", () => {
+    const w = createAlmaWorld("def");
+    expect(putDefinition(w, rec({ version: 1 })).ok).toBe(true); // core.transfer v1 — the seed path
+    expect(putDefinition(w, rec({ version: 2 }))).toEqual({ ok: false, reason: "core-revision-requires-procedure" });
+    expect(getDefinition(w.getState(), "core.transfer")?.version).toBe(1); // meaning untouched
   });
 
   test("a brand-new id must arrive at version 1", () => {

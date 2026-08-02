@@ -101,11 +101,13 @@ describe("RFC 0007 — data-defined command interpreter", () => {
 
   test("a retired definition is not runnable", () => {
     const w = world();
-    // bump core.transfer to v2 with status retired
-    putDefinition(w, { ...CORE_TRANSFER, version: 2, status: "retired" });
+    // a NON-core id: core.* is seed-once (revisions refused), so retirement is exercised
+    // on an ordinary namespace, which is where retirement will actually happen pre-§7.
+    putDefinition(w, { ...CORE_TRANSFER, id: "test.transfer", version: 1 });
+    putDefinition(w, { ...CORE_TRANSFER, id: "test.transfer", version: 2, status: "retired" });
     const res = executeCommand(
       w,
-      { definitionId: "core.transfer", actor: "alice@umi", payload: { from: "alice@umi", to: "bob@umi", amount: 10 } },
+      { definitionId: "test.transfer", actor: "alice@umi", payload: { from: "alice@umi", to: "bob@umi", amount: 10 } },
       { notary: NOTARY },
     );
     expect(res).toEqual({ ok: false, reason: "definition-retired" });
@@ -117,5 +119,88 @@ describe("RFC 0007 — data-defined command interpreter", () => {
     putDefinition(w, { kind: "command", id: "core.weird", version: 1, status: "active", body: { effects: [{ op: "teleport" }] } });
     const res = executeCommand(w, { definitionId: "core.weird", actor: "alice@umi", payload: {} }, { notary: NOTARY });
     expect(res).toEqual({ ok: false, reason: "malformed-definition" });
+  });
+
+  // B1 — a typo must never silently drop the authority checks -------------------
+  test("a misspelled `preconditions` key is rejected, never parsed as unguarded (B1)", () => {
+    const w = world();
+    // `precondtions` (typo): under a non-strict schema with a defaulted `preconditions`,
+    // this parsed as a definition with NO authority checks and bob could move alice's
+    // currency. strictObject + required preconditions make it malformed instead.
+    putDefinition(w, {
+      kind: "command",
+      id: "typo.transfer",
+      version: 1,
+      status: "active",
+      body: {
+        precondtions: [{ check: "isSelf", id: "$.from" }],
+        effects: [{ op: "transfer", from: "$.from", to: "$.to", amount: "$.amount" }],
+      },
+    });
+    const balanceBefore = getAgent(w.getState(), "alice@umi")?.balances.currency;
+    const res = executeCommand(
+      w,
+      { definitionId: "typo.transfer", actor: "bob@umi", payload: { from: "alice@umi", to: "bob@umi", amount: 50 } },
+      { notary: NOTARY },
+    );
+    expect(res).toEqual({ ok: false, reason: "malformed-definition" });
+    expect(getAgent(w.getState(), "alice@umi")?.balances.currency).toBe(balanceBefore); // nothing moved
+  });
+
+  test("omitted `preconditions` is malformed — deliberately unguarded must be written as [] (B1)", () => {
+    const w = world();
+    putDefinition(w, {
+      kind: "command",
+      id: "bare.transfer",
+      version: 1,
+      status: "active",
+      body: { effects: [{ op: "transfer", from: "$.from", to: "$.to", amount: "$.amount" }] },
+    });
+    const res = executeCommand(
+      w,
+      { definitionId: "bare.transfer", actor: "alice@umi", payload: { from: "alice@umi", to: "bob@umi", amount: 10 } },
+      { notary: NOTARY },
+    );
+    expect(res).toEqual({ ok: false, reason: "malformed-definition" });
+  });
+
+  // B2 — the schema must not admit a shape whose atomicity it cannot honour -----
+  test("a multi-effect definition is rejected until the §5 tx boundary exists (B2)", () => {
+    const w = world();
+    putDefinition(w, {
+      kind: "command",
+      id: "multi.transfer",
+      version: 1,
+      status: "active",
+      body: {
+        preconditions: [{ check: "isSelf", id: "$.from" }],
+        effects: [
+          { op: "transfer", from: "$.from", to: "$.to", amount: 7 },
+          { op: "transfer", from: "$.from", to: "$.to", amount: 999 }, // would fail after #1 committed
+        ],
+      },
+    });
+    const digestBefore = w.log.digest();
+    const res = executeCommand(
+      w,
+      { definitionId: "multi.transfer", actor: "alice@umi", payload: { from: "alice@umi", to: "bob@umi" } },
+      { notary: NOTARY },
+    );
+    expect(res).toEqual({ ok: false, reason: "malformed-definition" });
+    expect(w.log.digest()).toBe(digestBefore); // no partial application — nothing emitted at all
+  });
+
+  // core.* is seed-once until the §7 procedure layer lands ----------------------
+  test("revising a core.* definition is refused (constitutional-grade procedure required)", () => {
+    const w = world(); // core.transfer already seeded at v1
+    const res = putDefinition(w, { ...CORE_TRANSFER, version: 2 });
+    expect(res).toEqual({ ok: false, reason: "core-revision-requires-procedure" });
+    // and the seeded meaning is untouched
+    const still = executeCommand(
+      w,
+      { definitionId: "core.transfer", actor: "alice@umi", payload: { from: "alice@umi", to: "bob@umi", amount: 10 } },
+      { notary: NOTARY },
+    );
+    expect(still.ok).toBe(true);
   });
 });

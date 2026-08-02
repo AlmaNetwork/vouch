@@ -36,15 +36,25 @@ const effectSchema = z.discriminatedUnion("op", [
 /**
  * The typed body of a `kind: "command"` definition. `payloadSchema` is carried but NOT yet
  * enforced in this skeleton (full JSON-Schema validation of the payload is a follow-up); a
- * missing `$.field` surfaces at effect time as a clean primitive-level reason. `effects` must
- * be non-empty. NOTE (atomicity): multi-effect all-or-nothing needs a log transaction boundary
- * in vouch-world (deferred with §5); the seeded core definitions are single-effect, where a
- * primitive that validates-before-emitting is already atomic.
+ * missing `$.field` surfaces at effect time as a clean primitive-level reason.
+ *
+ * STRICT object, REQUIRED preconditions, EXACTLY ONE effect — all three are load-bearing:
+ *   - strictObject: a non-strict schema silently DROPS unknown keys, so a one-character typo
+ *     (`precondtions`) would parse as a definition with no authority checks at all — the
+ *     command executes for anyone and nothing anywhere reports a problem.
+ *   - no `.default([])`: an author who wants no preconditions must write `preconditions: []`
+ *     explicitly — the honest way to say "deliberately unguarded", never a typo's side effect.
+ *   - `.max(1)`: the interpreter cannot roll back — multi-effect all-or-nothing needs the §5
+ *     log transaction boundary in vouch-world — so the schema must not ADMIT a shape whose
+ *     RFC §3.4/§3.8 atomicity it cannot honour. A 2-effect definition failing on effect 2
+ *     would leave effect 1 committed while reporting failure. Lift the cap when §5 lands.
+ *     (The seeded `core.*` definitions are single-effect; a validate-before-emit primitive is
+ *     atomic on its own.)
  */
-export const commandBodySchema = z.object({
+export const commandBodySchema = z.strictObject({
   payloadSchema: z.record(z.string(), z.unknown()).optional(),
-  preconditions: z.array(preconditionSchema).default([]),
-  effects: z.array(effectSchema).min(1),
+  preconditions: z.array(preconditionSchema),
+  effects: z.array(effectSchema).min(1).max(1),
 });
 
 export type CommandBody = z.infer<typeof commandBodySchema>;
