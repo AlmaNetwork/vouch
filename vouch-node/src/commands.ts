@@ -6,46 +6,55 @@
 // argument (you can only spend `from` your own account, admit into a region you
 // own, etc.). Meaning beyond that is the engine's to enforce.
 
-import type { KeyPair } from "vouch-core";
+import { type KeyPair, MAX_IDENTIFIER_LENGTH, MAX_REGION_LENGTH } from "vouch-core";
 import {
   admitAgent,
   admitTreasury,
   executeTransfer,
   experimenterProposal,
+  MAX_BALANCE,
   proposeFounding,
   vouchFor,
   type WorldState,
 } from "vouch-world/environment";
 import type { Result, World } from "vouch-world/foundation";
-import { defineRegion, ownerOf } from "vouch-world/region";
+import { defineRegion, MAX_DISPLAY_NAME_LENGTH, ownerOf } from "vouch-world/region";
 import { z } from "zod";
+
+// Every bound below is the ENGINE's bound, imported rather than restated. The engine
+// enforces them too, so a command that slips past this schema still cannot get through
+// — but rejecting here turns a 422 "command-rejected" into a 400 that says which field
+// was wrong, and it does so before any engine work happens.
+//
+// Without them the node accepts, and permanently journals, a 200KB region id or an
+// opening balance of Number.MAX_SAFE_INTEGER (both measured; see docs/LAUNCH.md).
 
 const foundSchema = z.object({
   kind: z.literal("found"),
-  regionId: z.string().min(1),
-  displayName: z.string().min(1),
+  regionId: z.string().min(1).max(MAX_REGION_LENGTH),
+  displayName: z.string().min(1).max(MAX_DISPLAY_NAME_LENGTH),
 });
 
 const admitSchema = z.object({
   kind: z.literal("admit"),
-  agentId: z.string().min(1),
-  region: z.string().min(1),
+  agentId: z.string().min(1).max(MAX_IDENTIFIER_LENGTH),
+  region: z.string().min(1).max(MAX_REGION_LENGTH),
   role: z.enum(["artisan", "merchant", "broker", "treasury"]),
   valueProfile: z.enum(["strict", "lenient"]).optional(),
-  currency: z.number().int().nonnegative().optional(),
+  currency: z.number().int().nonnegative().max(MAX_BALANCE).optional(),
 });
 
 const transferSchema = z.object({
   kind: z.literal("transfer"),
-  from: z.string().min(1),
-  to: z.string().min(1),
-  amount: z.number().int().positive(),
+  from: z.string().min(1).max(MAX_IDENTIFIER_LENGTH),
+  to: z.string().min(1).max(MAX_IDENTIFIER_LENGTH),
+  amount: z.number().int().positive().max(MAX_BALANCE),
 });
 
 const vouchSchema = z.object({
   kind: z.literal("vouch"),
-  from: z.string().min(1),
-  to: z.string().min(1),
+  from: z.string().min(1).max(MAX_IDENTIFIER_LENGTH),
+  to: z.string().min(1).max(MAX_IDENTIFIER_LENGTH),
   weight: z.number().int().min(1).max(5),
 });
 

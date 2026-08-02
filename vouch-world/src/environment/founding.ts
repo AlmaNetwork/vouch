@@ -9,11 +9,12 @@
 // / log through this signature (audit G3). The propose/execute split (§2-B) is
 // unchanged: one engine, one FoundingProposal interface, every proposer equal.
 
-import { isValidRegion } from "vouch-core"; // the extracted Trust Core, consumed as a dependency
+import { isValidRegion, MAX_REGION_LENGTH } from "vouch-core"; // the extracted Trust Core, consumed as a dependency
 import {
   EVENT_REGION_FOUNDED,
   type FoundingProposal,
   getRegion,
+  MAX_DISPLAY_NAME_LENGTH,
   type Proposer,
   type RecognitionStatus,
   type RegionDefinition,
@@ -41,7 +42,16 @@ export function proposeFounding(env: WorldCommit, proposal: FoundingProposal): R
   const { definition, proposer, owner } = proposal;
 
   if (!isValidRegion(definition.id)) {
-    throw new Error(`founding: invalid region id "${definition.id}" (must be lowercase alphanumeric)`);
+    throw new Error(`founding: invalid region id (must be lowercase alphanumeric, at most ${MAX_REGION_LENGTH} characters)`);
+  }
+  // `displayName` has no grammar to fall back on — it is free text — so this is the
+  // only thing standing between a founder and an arbitrarily large permanent journal
+  // entry. The id is bounded by the identifier grammar in vouch-core.
+  if (typeof definition.displayName !== "string" || definition.displayName.length === 0) {
+    throw new Error("founding: displayName is required");
+  }
+  if (definition.displayName.length > MAX_DISPLAY_NAME_LENGTH) {
+    throw new Error(`founding: displayName is longer than ${MAX_DISPLAY_NAME_LENGTH} characters`);
   }
   if (getRegion(env.getState(), definition.id)) {
     throw new Error(`founding: region "${definition.id}" already exists`);
