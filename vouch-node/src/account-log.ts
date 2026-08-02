@@ -74,7 +74,16 @@ function linkHash(prev: string, line: AuthLine): string {
 
 /** File-backed JSON Lines auth log — strictly hash-chained, appended durably (fsync). */
 export class FileAccountLog implements AccountLog {
-  private tip: string | null = null; // chain hash of the last persisted line ("" = empty)
+  /**
+   * Chain hash of the last persisted line ("" = empty log).
+   *
+   * Load-bearing for amortization, not just convenience. `append` needs the previous
+   * hash, and without a cached tip it re-folds the whole file to find it — O(n) per
+   * append. Holding it makes that O(n) once per process. A caller that constructs a
+   * fresh `FileAccountLog` per write would therefore be O(n²) overall; construct one
+   * and keep it, as `index.ts` does.
+   */
+  private tip: string | null = null;
 
   constructor(private readonly path: string) {}
 

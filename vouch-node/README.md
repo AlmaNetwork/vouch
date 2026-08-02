@@ -33,7 +33,7 @@ inherited from the engine — not re-invented.
 
 ```bash
 bun install
-bun run typecheck && bun test        # 25 tests
+bun run typecheck && bun test
 bun examples/participate.ts          # in-process end-to-end demo (no network)
 bun run start                        # serve on 127.0.0.1:8787
 ```
