@@ -53,6 +53,10 @@ interface VouchArgs {
   to: string;
   weight: number;
 }
+interface MigrateArgs {
+  identityRegion: string;
+  toRegion: string;
+}
 
 function textResult(data: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
@@ -212,6 +216,27 @@ export function buildMcpServer(deps: McpDeps, ctx: AuthContext): McpServer {
       const a = args as unknown as VouchArgs;
       const from = residentIn(a.region);
       return runWrite(from, "vouch", { kind: "vouch", from, to: a.to, weight: a.weight });
+    },
+  );
+
+  writeTool(
+    "vouch_migrate",
+    "Move to another region",
+    "Move one of your resident identities to another region — the exit option. Your id never changes, so `identityRegion` is the region inside the id (where that identity was BORN), not where it currently lives: an identity born in 'umi' stays `you@umi` after moving to 'yama', and moving it on again still uses identityRegion 'umi'. After the move you are a resident of the new region and a citizen of the old one. Call vouch_whoami or read /agents to see where each identity currently lives. Needs scope vouch:migrate.",
+    {
+      identityRegion: z
+        .string()
+        .min(1)
+        .describe("The region in your agent id — where this identity was born, which is where it lives only until its first move"),
+      toRegion: z.string().min(1).describe("The region to move to, e.g. 'yama'"),
+    },
+    (args) => {
+      const a = args as unknown as MigrateArgs;
+      // The acting identity is the resident being moved, so the signature that
+      // authorizes the move is made by exactly the agent it moves — the node's
+      // `agentId !== principal` check then passes for that agent and nobody else.
+      const agentId = residentIn(a.identityRegion);
+      return runWrite(agentId, "migrate", { kind: "migrate", agentId, toRegion: a.toRegion });
     },
   );
 
