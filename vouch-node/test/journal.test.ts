@@ -54,6 +54,42 @@ describe("FileJournal — crash tolerance", () => {
     expect(loaded).toEqual(events); // the torn tail is gone; boot still works
   });
 
+  // Reading past a torn tail was handled; WRITING past one was not, and that was the
+  // damaging half. Appending onto a file that ends mid-record used to glue the new
+  // record onto the fragment: the write was reported committed, fsync really ran,
+  // nothing threw, and the event was gone. The append after that turned the fragment
+  // into an INTERIOR malformed line and the node could never boot again.
+  test("events written AFTER a torn tail are persisted, not silently swallowed", () => {
+    const path = tmpFile("events.jsonl");
+    const first = events[0] as AlmaEvent;
+    const second = events[1] as AlmaEvent;
+
+    new FileJournal(path).append([first]);
+    appendFileSync(path, '{"event":{"seq":9,"tick":0,"type":"agent.adm'); // crash mid-append
+
+    // The node restarts, recovers, and then takes another write.
+    const rebooted = new FileJournal(path);
+    rebooted.load();
+    rebooted.append([second]);
+    expect(new FileJournal(path).load()).toEqual([first, second]);
+
+    // And a further write still lands — the file never entered the unbootable state.
+    const third = { seq: 2, tick: 0, type: "agent.vouched", actor: "world", payload: {} } as AlmaEvent;
+    rebooted.append([third]);
+    expect(new FileJournal(path).load()).toEqual([first, second, third]);
+  });
+
+  test("a first write interrupted before any newline leaves a loadable, appendable file", () => {
+    const path = tmpFile("events.jsonl");
+    appendFileSync(path, '{"event":{"seq":0,"tick":0'); // the whole file is one fragment
+    expect(new FileJournal(path).load()).toEqual([]);
+
+    const j = new FileJournal(path);
+    j.load();
+    j.append([events[0] as AlmaEvent]);
+    expect(new FileJournal(path).load()).toEqual(events.slice(0, 1));
+  });
+
   test("a malformed INTERIOR line is real corruption and throws", () => {
     const path = tmpFile("events.jsonl");
     appendFileSync(path, `{"broken":\n${JSON.stringify(events[0])}\n`); // bad line is NOT last

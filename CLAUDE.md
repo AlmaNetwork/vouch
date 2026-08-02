@@ -29,13 +29,17 @@ certificate means, and whether a village honors it,* is the simulation's drama.
 
 Two packages:
 
-| Package | Role | Tests |
-|---|---|---|
-| `vouch-core` | L1 trust engine — mint ids/keys/certs, **formally verify** signatures. Standalone, no other layer. | 35 |
-| `vouch-world` | The simulator — foundations + region/agent/environment/credential/observation. | 76 |
+| Package | Role |
+|---|---|
+| `vouch-core` | L1 trust engine — mint ids/keys/certs, **formally verify** signatures. Standalone, no other layer. |
+| `vouch-world` | The simulator — foundations + region/agent/environment/credential/observation. |
 
-When you change code, keep these test counts and the milestone table in the READMEs
-in lockstep with reality (see **Working rhythm**).
+**Do not put test counts in prose.** This table used to carry them, and so did every
+package README, and by the time anyone checked, all of them were wrong at once — the
+instruction to keep them "in lockstep with reality" was a manual step nothing enforced,
+which is the only kind of documentation guaranteed to drift. `bun test` is the source
+of truth. Keep the milestone table current instead; that one carries meaning a command
+cannot print.
 
 ---
 
@@ -244,8 +248,12 @@ Reproduce these verbatim; tests assert on them and reducers match on them.
 
 **Certificate / protocol**
 - `CERT_VERSION = "alma-cert/v1"`, `DEFAULT_SUITE = "ed25519"`.
-- Identifier grammar: `name@region`, name `/^[A-Za-z][A-Za-z0-9]*$/`, region
-  `/^[a-z0-9]+$/`.
+- Identifier grammar: `name@region`, name `/^[A-Za-z][A-Za-z0-9]*$/` up to
+  `MAX_NAME_LENGTH` (128), region `/^[a-z0-9]+$/` up to `MAX_REGION_LENGTH` (63);
+  whole identifier up to `MAX_IDENTIFIER_LENGTH` (192). **Length is part of the
+  grammar**, not a check layered above it — the character class alone accepts a 200KB
+  region id, and every layer above inherits that. Validate through `isValidName` /
+  `isValidRegion` rather than the bare regexes.
 - `verifyCertificate` reasons (stable API): `malformed-envelope`, `invalid-issuer`,
   `invalid-subject`, `unknown-suite`, `invalid-signature-encoding`, `bad-signature`.
 - Credential reasons add: `schema-mismatch`, `unknown-credential-type`,

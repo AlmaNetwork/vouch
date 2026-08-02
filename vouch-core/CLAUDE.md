@@ -85,6 +85,16 @@ Changing `CERT_VERSION`, the failure-reason set, the `alma-core:` prefix, or the
 `name@region` grammar is a **breaking wire/API change**. Tests and every downstream
 layer pin these exact strings — treat such a change as deliberate, not incidental.
 
+The grammar has had exactly one such change: **length became part of it**
+(`MAX_NAME_LENGTH` 128, `MAX_REGION_LENGTH` 63, `MAX_IDENTIFIER_LENGTH` 192). The
+character classes were unbounded, so `found` with a 200KB region id wrote 600KB into a
+hash-chained journal that can never be trimmed. Bounding the grammar bounds every
+caller of it at once, rather than each one remembering. The deliberate consequence: a
+certificate or edge naming an over-long identifier no longer verifies
+(`invalid-issuer` / `invalid-subject` / `invalid-from`). No persisted world can hold
+one — the write paths never admitted them into state, and replay folds through
+reducers rather than validators.
+
 ## Out of scope (deliberately excluded from L1)
 
 Storage, a key directory, verification policy, certificate chains, revocation,

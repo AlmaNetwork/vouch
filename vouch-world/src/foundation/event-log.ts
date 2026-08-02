@@ -22,6 +22,8 @@ export interface WorldLog {
 
 export class EventLog {
   private readonly events: AlmaEvent[] = [];
+  /** Memoized `digest()`, valid for the log length it was computed at. */
+  private cachedDigest: { length: number; value: string } | null = null;
 
   /** Append a new event. `seq` is assigned here; the stored event is frozen. */
   append(input: Omit<AlmaEvent, "seq">): AlmaEvent {
@@ -53,9 +55,21 @@ export class EventLog {
     return this.events.slice(seq);
   }
 
-  /** Order-independent content fingerprint, for comparing two histories. */
+  /**
+   * Order-independent content fingerprint, for comparing two histories.
+   *
+   * Memoized on length, which is exact rather than approximate: the log is
+   * append-only and stored events are deep-frozen, so nothing but an append can
+   * change the fingerprint, and an append always changes the length. Uncached this
+   * serializes the WHOLE log on every call — and it is on the hot path twice over,
+   * since `metrics()` calls it and `/metrics`, `/log/digest` and every deploy smoke
+   * check reach it from an unauthenticated HTTP GET.
+   */
   digest(): string {
-    return fnv1a(stableStringify(this.events));
+    if (this.cachedDigest?.length === this.events.length) return this.cachedDigest.value;
+    const value = fnv1a(stableStringify(this.events));
+    this.cachedDigest = { length: this.events.length, value };
+    return value;
   }
 
   /** A read-only facade over this log: all readers, no `append` (audit G1). */

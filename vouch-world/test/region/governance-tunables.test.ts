@@ -278,13 +278,19 @@ describe("governance tunables (RFC 0001)", () => {
       [{ ...base, quorum: 0 }, /quorum must be an integer >= 1/],
       [{ ...base, quorum: 1.5 }, /quorum must be an integer >= 1/],
       [{ ...base, quorum: 3 }, /quorum must not exceed/], // members electorate: 3 ballots can never exist
-      [{ ...base, tenureSeq: -1 }, /tenureSeq must be an integer >= 0/],
-      [{ ...base, tenureSeq: 0.5 }, /tenureSeq must be an integer >= 0/],
-      [{ ...base, maturity: -1 }, /maturity must be an integer >= 0/],
-      [{ ...base, maturity: 2.5 }, /maturity must be an integer >= 0/],
+      [{ ...base, tenureSeq: -1 }, /tenureSeq must be an integer in/],
+      [{ ...base, tenureSeq: 0.5 }, /tenureSeq must be an integer in/],
+      [{ ...base, maturity: -1 }, /maturity must be an integer in/],
+      [{ ...base, maturity: 2.5 }, /maturity must be an integer in/],
       [{ ...base, electorate: "aliens" as unknown as "members" }, /electorate must be/],
       [{ ...base, weighting: "wealth" as unknown as "equal" }, /weighting must be/],
       [{ ...base, threshold: 3 }, /threshold must be an integer in \[1, 2\]/], // historic cap
+      // Institutions became amendable over the network, so their collections need ceilings
+      // too — an unbounded member list is one permanent journal entry (see docs/LAUNCH.md).
+      [{ ...base, tenureSeq: 1_000_000_001 }, /tenureSeq must be an integer in/],
+      [{ ...base, maturity: 1_000_000_001 }, /maturity must be an integer in/],
+      [{ ...base, members: Array.from({ length: 65 }, (_, i) => `m${i}`), threshold: 1 }, /at most 64 members/],
+      [{ ...base, members: ["a".repeat(129), "b"], threshold: 1 }, /at most 128 characters/],
     ];
     for (const [g, guard] of cases) expect(() => validateGovernance(g)).toThrow(guard);
     // coherent presets pass, including thresholds beyond members.length once weight is dynamic

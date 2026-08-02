@@ -53,6 +53,17 @@ interface VouchArgs {
   to: string;
   weight: number;
 }
+interface MigrateArgs {
+  identityRegion: string;
+  toRegion: string;
+}
+interface GovernArgs {
+  regionId: string;
+  change: unknown;
+}
+interface VoteArgs {
+  regionId: string;
+}
 
 function textResult(data: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
@@ -212,6 +223,72 @@ export function buildMcpServer(deps: McpDeps, ctx: AuthContext): McpServer {
       const a = args as unknown as VouchArgs;
       const from = residentIn(a.region);
       return runWrite(from, "vouch", { kind: "vouch", from, to: a.to, weight: a.weight });
+    },
+  );
+
+  writeTool(
+    "vouch_migrate",
+    "Move to another region",
+    "Move one of your resident identities to another region — the exit option. Your id never changes, so `identityRegion` is the region inside the id (where that identity was BORN), not where it currently lives: an identity born in 'umi' stays `you@umi` after moving to 'yama', and moving it on again still uses identityRegion 'umi'. After the move you are a resident of the new region and a citizen of the old one. Call vouch_whoami or read /agents to see where each identity currently lives. Needs scope vouch:migrate.",
+    {
+      identityRegion: z
+        .string()
+        .min(1)
+        .describe("The region in your agent id — where this identity was born, which is where it lives only until its first move"),
+      toRegion: z.string().min(1).describe("The region to move to, e.g. 'yama'"),
+    },
+    (args) => {
+      const a = args as unknown as MigrateArgs;
+      // The acting identity is the resident being moved, so the signature that
+      // authorizes the move is made by exactly the agent it moves — the node's
+      // `agentId !== principal` check then passes for that agent and nobody else.
+      const agentId = residentIn(a.identityRegion);
+      return runWrite(agentId, "migrate", { kind: "migrate", agentId, toRegion: a.toRegion });
+    },
+  );
+
+  // Governance acts as the ACCOUNT, not as a resident: a region's owner and its
+  // council members are principals, which is also why `canGovern` compares against
+  // ctx.principal rather than any `principal@region` identity.
+  const changeShape = z
+    .object({
+      policy: z.enum(["verification", "diplomacy", "schemaLedger", "governance", "economy", "resource"]).describe("Which institution"),
+      value: z
+        .unknown()
+        .describe("The new value for that policy — shape depends on `policy`; the node validates it and names the bad field"),
+    })
+    .describe("An institution change");
+
+  writeTool(
+    "vouch_amend_region",
+    "Amend a region's institutions",
+    "Change the rules of a region you govern, directly. Works only for a DICTATORSHIP (its owner); a council-governed region must use vouch_propose_change and vouch_vote instead. `value` shapes: economy {baseCostRate,minCostRate,repDiscount,creditPerTx}, resource {capacity,regenPerTick}, governance {kind:'dictatorship'} or {kind:'council',members,threshold,...}, verification {acceptedSchemaIds,rejectUnknownSchemas}, diplomacy {defaultStance,overrides}, schemaLedger [{schemaId,label?}]. Needs scope vouch:govern.",
+    { regionId: z.string().min(1).describe("The region you govern"), change: changeShape },
+    (args) => {
+      const a = args as unknown as GovernArgs;
+      return runWrite(ctx.principal, "amend", { kind: "amend", regionId: a.regionId, change: a.change });
+    },
+  );
+
+  writeTool(
+    "vouch_propose_change",
+    "Open a council proposal",
+    "Propose an institution change in a COUNCIL-governed region you are a member of. Your ballot is cast with the proposal, so a threshold-1 council resolves immediately. A region holds at most one open proposal at a time, and a council cannot amend directly — so an open proposal blocks all further governance until it resolves. Same `change` shapes as vouch_amend_region. Needs scope vouch:govern.",
+    { regionId: z.string().min(1).describe("The council-governed region"), change: changeShape },
+    (args) => {
+      const a = args as unknown as GovernArgs;
+      return runWrite(ctx.principal, "propose", { kind: "propose", regionId: a.regionId, change: a.change });
+    },
+  );
+
+  writeTool(
+    "vouch_vote",
+    "Approve the open proposal",
+    "Cast your ballot for a region's open proposal. Ballots are approval-only — casting one IS approving; there is no vote against. You must be on the proposal's voter roll, which was snapshotted when it opened: joining, migrating or gaining reputation afterwards changes nothing for this proposal. The reply's `resolved` says whether your ballot carried it. Needs scope vouch:govern.",
+    { regionId: z.string().min(1).describe("The region whose open proposal you are approving") },
+    (args) => {
+      const a = args as unknown as VoteArgs;
+      return runWrite(ctx.principal, "vote", { kind: "vote", regionId: a.regionId });
     },
   );
 

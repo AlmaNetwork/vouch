@@ -1,0 +1,63 @@
+# systemd unit for vouch-node (running Bun directly, not in a container).
+#
+#   sudo useradd --system --home /var/lib/vouch --shell /usr/sbin/nologin vouch
+#   sudo install -d -o vouch -g vouch -m 0700 /var/lib/vouch
+#   sudo install -d -o root  -g vouch -m 0750 /etc/vouch
+#   sudo install -o root -g vouch -m 0640 deploy/node.env.example /etc/vouch/node.env
+#   sudo cp deploy/vouch-node.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now vouch-node
+
+[Unit]
+Description=vouch node — durable, authenticated write path onto the engine
+After=network-online.target
+Wants=network-online.target
+
+# Cap the restart loop. A corrupt journal makes the node exit 1 on every boot
+# ("journal: hash-chain broken at line N"), which is correct — but under a bare
+# Restart=on-failure it becomes a silent infinite crash loop instead of an alert.
+#
+# These belong to [Unit]. systemd moved them out of [Service] in v229 and now
+# IGNORES them there — logging "Unknown key name ... in section 'Service'" and
+# carrying on with no cap at all. They sat in [Service] until now, so the cap this
+# unit appeared to have was never in effect. Verify with:
+#   systemctl show vouch-node -p StartLimitIntervalSec -p StartLimitBurst
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=vouch
+Group=vouch
+
+# NOT optional (no leading "-"): the node needs VOUCH_NOTARY and refuses to boot
+# without it. A missing file should fail loudly here, not surface as a confusing
+# config error at startup.
+EnvironmentFile=/etc/vouch/node.env
+
+WorkingDirectory=/opt/vouch/vouch-node
+ExecStart=/usr/local/bin/bun src/index.ts
+
+Restart=on-failure
+RestartSec=2
+
+# The app handles SIGTERM and drains, so let it.
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+# Hardening. ProtectSystem=strict makes the whole filesystem read-only, so the data
+# directory MUST be granted back explicitly — without this every append fails EROFS,
+# and that failure is invisible at boot: the node starts and /health returns 200
+# because persistence is only touched at the first write.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6
+ReadWritePaths=/var/lib/vouch
+
+[Install]
+WantedBy=multi-user.target

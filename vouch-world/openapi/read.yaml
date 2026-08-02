@@ -76,11 +76,29 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [ok, tick]
+                required: [ok, tick, build, log]
                 properties:
                   ok: { type: boolean, const: true }
                   tick: { $ref: "#/components/schemas/Tick" }
-              example: { ok: true, tick: 8 }
+                  build:
+                    type: string
+                    description: >-
+                      Which code is answering — the git tag or short SHA baked in at image
+                      build time (VOUCH_BUILD), or "dev" when unset. Without it a deploy
+                      and a failed rollback are indistinguishable from outside.
+                  log:
+                    type: object
+                    required: [length]
+                    properties:
+                      length:
+                        type: integer
+                        minimum: 0
+                        description: >-
+                          Events in the journal. Reported here because boot replays the
+                          journal in full, so its length is what governs how long a
+                          restart takes — the node's operational ceiling is a length,
+                          and nothing else on this surface reports it cheaply.
+              example: { ok: true, tick: 8, build: v0.1.0, log: { length: 1423 } }
 
   /tick:
     get:
@@ -233,20 +251,33 @@ paths:
       tags: [log]
       operationId: getLog
       summary: Events from the append-only log, optionally since a seq.
+      description: >-
+        Returns at most 1000 events per call. A caller that receives exactly 1000 should
+        ask again from `since + 1000`; `/log/digest` reports the total length.
       parameters:
         - name: since
           in: query
           required: false
-          description: Return events with `seq >= since`. Defaults to 0 (the whole log).
+          description: >-
+            Return events with `seq >= since`. Defaults to 0. MUST be a non-negative
+            integer — anything else is a 400 rather than being coerced, because a
+            coerced value silently returned the whole log.
           schema: { type: integer, minimum: 0, default: 0 }
       responses:
         "200":
-          description: The events at or after `since`, in seq order.
+          description: The events at or after `since`, in seq order, capped at 1000.
           content:
             application/json:
               schema:
                 type: array
+                maxItems: 1000
                 items: { $ref: "#/components/schemas/AlmaEvent" }
+        "400":
+          description: '`since` was not a non-negative integer.'
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { error: "since must be a non-negative integer" }
 
   /log/digest:
     get:
@@ -569,7 +600,7 @@ components:
     # --- composed world (Layer 4) -------------------------------------------
     WorldState:
       type: object
-      required: [regions, agents, items]
+      required: [regions, agents, items, definitions]
       properties:
         regions:
           type: object
@@ -583,6 +614,38 @@ components:
           type: object
           description: Digital items keyed by id (the P3 ownership ledger).
           additionalProperties: { $ref: "#/components/schemas/ItemState" }
+        definitions:
+          type: object
+          description: >-
+            RFC 0007 §4 definition store — current (latest-version) command/role/law
+            definitions keyed by id. The body is opaque at this layer (form vs meaning);
+            vouch-node's command engine interprets it.
+          additionalProperties: { $ref: "#/components/schemas/DefinitionRecord" }
+
+    DefinitionRecord:
+      type: object
+      description: One versioned, log-stored definition (RFC 0007 §4). The engine validates only this envelope; `body` is never interpreted here.
+      required: [kind, id, version, status, body]
+      properties:
+        kind:
+          type: string
+          description: Definition kind (e.g. `command`, `role`, `procedure`, `law`, `preamble`) — opaque to the engine.
+          example: command
+        id:
+          type: string
+          description: Namespaced id, `<namespace>.<name>`. `kernel.*` is reserved; `core.*` is seed-once.
+          example: core.transfer
+        version:
+          type: integer
+          minimum: 1
+          description: Monotonic per id — a redefinition is always a new version (no shadowing, no gaps).
+        status:
+          type: string
+          enum: [active, retired]
+        body:
+          type: object
+          description: Opaque definition body; interpreted by vouch-node (preconditions/effects), never by the engine.
+          additionalProperties: true
 
     # --- event log (Foundation B) -------------------------------------------
     AlmaEvent:

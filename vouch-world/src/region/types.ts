@@ -320,13 +320,71 @@ export function validateGovernance(g: Governance): void {
         throw new Error(`governance: quorum must not exceed the ${g.members.length} council members (a resolution could never bind)`);
       }
     }
-    if (g.tenureSeq !== undefined && (!Number.isInteger(g.tenureSeq) || g.tenureSeq < 0)) {
-      throw new Error("governance: tenureSeq must be an integer >= 0");
+    if (g.tenureSeq !== undefined && (!Number.isInteger(g.tenureSeq) || g.tenureSeq < 0 || g.tenureSeq > MAX_INSTITUTION_INT)) {
+      throw new Error(`governance: tenureSeq must be an integer in [0, ${MAX_INSTITUTION_INT}]`);
     }
-    if (g.maturity !== undefined && (!Number.isInteger(g.maturity) || g.maturity < 0)) {
-      throw new Error("governance: maturity must be an integer >= 0");
+    if (g.maturity !== undefined && (!Number.isInteger(g.maturity) || g.maturity < 0 || g.maturity > MAX_INSTITUTION_INT)) {
+      throw new Error(`governance: maturity must be an integer in [0, ${MAX_INSTITUTION_INT}]`);
+    }
+    // A council is a governing body, not a census. Unbounded, a single amendment
+    // journals an arbitrarily large member list — and every later proposal rebuilds a
+    // voter roll from it, so the cost is paid again on every open.
+    if (g.members.length > MAX_COUNCIL_MEMBERS) {
+      throw new Error(`governance: a council may name at most ${MAX_COUNCIL_MEMBERS} members, got ${g.members.length}`);
+    }
+    for (const m of g.members) {
+      if (typeof m !== "string" || m.length === 0 || m.length > MAX_MEMBER_LENGTH) {
+        throw new Error(`governance: each council member must be a non-empty id of at most ${MAX_MEMBER_LENGTH} characters`);
+      }
     }
   }
+}
+
+/** Reject an unbounded verification policy. Nothing validated these before they were amendable. */
+export function validateVerificationPolicy(p: VerificationPolicy): void {
+  if (typeof p.rejectUnknownSchemas !== "boolean") throw new Error("verificationPolicy: rejectUnknownSchemas must be a boolean");
+  if (!Array.isArray(p.acceptedSchemaIds) || p.acceptedSchemaIds.length > MAX_SCHEMA_ENTRIES) {
+    throw new Error(`verificationPolicy: acceptedSchemaIds must be an array of at most ${MAX_SCHEMA_ENTRIES} entries`);
+  }
+  for (const id of p.acceptedSchemaIds) {
+    if (typeof id !== "string" || id.length === 0 || id.length > MAX_SCHEMA_ID_LENGTH) {
+      throw new Error(`verificationPolicy: each schemaId must be a non-empty string of at most ${MAX_SCHEMA_ID_LENGTH} characters`);
+    }
+  }
+}
+
+/** Reject an unbounded schema ledger. */
+export function validateSchemaLedger(entries: readonly SchemaLedgerEntry[]): void {
+  if (!Array.isArray(entries) || entries.length > MAX_SCHEMA_ENTRIES) {
+    throw new Error(`schemaLedger: must be an array of at most ${MAX_SCHEMA_ENTRIES} entries`);
+  }
+  for (const e of entries) {
+    if (typeof e?.schemaId !== "string" || e.schemaId.length === 0 || e.schemaId.length > MAX_SCHEMA_ID_LENGTH) {
+      throw new Error(`schemaLedger: each schemaId must be a non-empty string of at most ${MAX_SCHEMA_ID_LENGTH} characters`);
+    }
+    if (e.label !== undefined && (typeof e.label !== "string" || e.label.length > MAX_SCHEMA_ID_LENGTH)) {
+      throw new Error(`schemaLedger: a label must be a string of at most ${MAX_SCHEMA_ID_LENGTH} characters`);
+    }
+  }
+}
+
+/** Reject an unbounded diplomacy policy. `overrides` is a per-region opinion map. */
+export function validateDiplomacyPolicy(p: DiplomacyPolicy): void {
+  if (!isStance(p.defaultStance)) throw new Error("diplomacyPolicy: defaultStance must be absorb | map | reexamine | reject");
+  const keys = Object.keys(p.overrides ?? {});
+  if (keys.length > MAX_DIPLOMACY_OVERRIDES) {
+    throw new Error(`diplomacyPolicy: at most ${MAX_DIPLOMACY_OVERRIDES} overrides, got ${keys.length}`);
+  }
+  for (const k of keys) {
+    if (k.length === 0 || k.length > MAX_SCHEMA_ID_LENGTH) {
+      throw new Error(`diplomacyPolicy: each override key must be a non-empty id of at most ${MAX_SCHEMA_ID_LENGTH} characters`);
+    }
+    if (!isStance(p.overrides[k])) throw new Error(`diplomacyPolicy: stance for "${k}" must be absorb | map | reexamine | reject`);
+  }
+}
+
+function isStance(v: unknown): v is ForeignCertStance {
+  return v === "absorb" || v === "map" || v === "reexamine" || v === "reject";
 }
 
 /**
@@ -343,18 +401,25 @@ export function validateEconomyPolicy(p: EconomyPolicy): void {
   if (p.minCostRate > p.baseCostRate) {
     throw new Error("economyPolicy: minCostRate must be <= baseCostRate");
   }
-  if (!Number.isFinite(p.repDiscount) || p.repDiscount < 0) {
-    throw new Error("economyPolicy: repDiscount must be a finite number >= 0");
+  // Capped at 1: the discount is subtracted per reputation point from a rate that is
+  // itself in [0, 1], so anything above 1 collapses to the floor on the first point and
+  // only serves to park an absurd number in the journal.
+  if (!Number.isFinite(p.repDiscount) || p.repDiscount < 0 || p.repDiscount > 1) {
+    throw new Error("economyPolicy: repDiscount must be a finite number in [0, 1]");
   }
-  if (!Number.isInteger(p.creditPerTx) || p.creditPerTx < 0) {
-    throw new Error("economyPolicy: creditPerTx must be an integer >= 0");
+  if (!Number.isInteger(p.creditPerTx) || p.creditPerTx < 0 || p.creditPerTx > MAX_INSTITUTION_INT) {
+    throw new Error(`economyPolicy: creditPerTx must be an integer in [0, ${MAX_INSTITUTION_INT}]`);
   }
 }
 
 /** Reject a degenerate resource policy: capacity and per-tick production must be non-negative integers. */
 export function validateResourcePolicy(p: ResourcePolicy): void {
-  if (!Number.isInteger(p.capacity) || p.capacity < 0) throw new Error("resourcePolicy: capacity must be an integer >= 0");
-  if (!Number.isInteger(p.regenPerTick) || p.regenPerTick < 0) throw new Error("resourcePolicy: regenPerTick must be an integer >= 0");
+  if (!Number.isInteger(p.capacity) || p.capacity < 0 || p.capacity > MAX_INSTITUTION_INT) {
+    throw new Error(`resourcePolicy: capacity must be an integer in [0, ${MAX_INSTITUTION_INT}]`);
+  }
+  if (!Number.isInteger(p.regenPerTick) || p.regenPerTick < 0 || p.regenPerTick > MAX_INSTITUTION_INT) {
+    throw new Error(`resourcePolicy: regenPerTick must be an integer in [0, ${MAX_INSTITUTION_INT}]`);
+  }
 }
 
 export function makeInstitutions(partial: Partial<Institutions> = {}): Institutions {
@@ -373,6 +438,49 @@ export function makeInstitutions(partial: Partial<Institutions> = {}): Instituti
     resourcePolicy,
   };
 }
+
+/**
+ * Longest region `displayName`. Unlike `id`, a display name has no grammar at all —
+ * it is free text a founder chooses — so length is the only thing bounding it, and
+ * without a bound a single `found` writes a 200KB entry into a hash-chained journal
+ * that can never be trimmed (measured; see docs/LAUNCH.md). Checked at the write path
+ * (`proposeFounding`), not here: `defineRegion` is a plain constructor and validation
+ * in this codebase lives with the mutator that commits.
+ */
+export const MAX_DISPLAY_NAME_LENGTH = 128;
+
+// --- institution bounds --------------------------------------------------
+//
+// Institutions are the one part of a region a participant may REWRITE, and every
+// rewrite is journalled forever. Until now nothing could reach them — `found`
+// installs the defaults and there was no amend path on the network — so these
+// collections were never bounded. Opening `amend`/`propose` makes them the same
+// class of surface the identifier grammar and the balance ceiling already are
+// (see docs/LAUNCH.md): a policy that names 100,000 council members is one
+// request that no one can take back.
+//
+// The numbers are deliberately generous for what these things ARE. A council is a
+// governing body, not a population; a schema ledger is a vocabulary, not a
+// database. Raising a bound later is easy, lowering one is a breaking change, so
+// they are set where a legitimate use will not notice them.
+
+/** Most members a council may name. A governing body, not a census. */
+export const MAX_COUNCIL_MEMBERS = 64;
+/** Most entries in a region's schema ledger, and in a verification policy's accept-list. */
+export const MAX_SCHEMA_ENTRIES = 64;
+/** Most per-region stances a diplomacy policy may override. */
+export const MAX_DIPLOMACY_OVERRIDES = 128;
+/** Longest `schemaId` / ledger label. `alma.skill/v1` is 13. */
+export const MAX_SCHEMA_ID_LENGTH = 128;
+/** Longest council member id. Members are principals, so this matches the node's principal bound. */
+export const MAX_MEMBER_LENGTH = 128;
+/**
+ * Ceiling for the unbounded-by-nature institution integers: `creditPerTx`,
+ * `capacity`, `regenPerTick`, `tenureSeq`, `maturity`. Shares the reasoning behind
+ * the economy's `MAX_BALANCE` — these feed sums and comparisons that must stay
+ * exact well below 2^53, and none of them has a legitimate use near the ceiling.
+ */
+export const MAX_INSTITUTION_INT = 1_000_000_000;
 
 export function defineRegion(id: string, displayName: string, institutions: Institutions = makeInstitutions()): RegionDefinition {
   return { id, displayName, institutions };
