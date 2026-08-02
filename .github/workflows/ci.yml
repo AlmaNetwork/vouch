@@ -98,7 +98,10 @@ jobs:
           bun-version: "1.3.2"
 
       - name: Build the image
-        run: docker build -t vouch-node:ci .
+        # Pass VOUCH_BUILD the way a real deploy does. Building without it is how the
+        # arg came to be accepted by the Dockerfile and set by nothing — the image built
+        # fine and reported "dev" forever. The assertion below closes that loop.
+        run: docker build --build-arg VOUCH_BUILD="ci-$GITHUB_SHA" -t vouch-node:ci .
 
       # smoke.sh --write drives the write half through vouch-cli (a signed command needs
       # Ed25519 over JCS bytes; curl cannot produce that). The CLI runs from source, so
@@ -135,7 +138,19 @@ jobs:
             exit 1
           fi
           docker logs vouch-ci
-          sh deploy/smoke.sh http://127.0.0.1:8787 --write
+          sh deploy/smoke.sh http://127.0.0.1:8787 --write --force
+
+      # /health must report the build that was actually passed in. Without this the
+      # whole VOUCH_BUILD path can rot silently: it is only ever read by a human
+      # squinting at a deploy, so nothing fails when it quietly reverts to "dev".
+      - name: /health must report the build it was given, not "dev"
+        run: |
+          build=$(curl -fsS http://127.0.0.1:8787/health | sed -n 's/.*"build":"\([^"]*\)".*/\1/p')
+          echo "reported build: $build"
+          [ "$build" = "ci-$GITHUB_SHA" ] || {
+            echo "expected ci-$GITHUB_SHA — VOUCH_BUILD is not reaching the running node"
+            exit 1
+          }
 
       - name: SIGTERM must be a graceful exit 0, not a kill
         run: |
