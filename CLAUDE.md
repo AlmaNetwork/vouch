@@ -244,8 +244,12 @@ Reproduce these verbatim; tests assert on them and reducers match on them.
 
 **Certificate / protocol**
 - `CERT_VERSION = "alma-cert/v1"`, `DEFAULT_SUITE = "ed25519"`.
-- Identifier grammar: `name@region`, name `/^[A-Za-z][A-Za-z0-9]*$/`, region
-  `/^[a-z0-9]+$/`.
+- Identifier grammar: `name@region`, name `/^[A-Za-z][A-Za-z0-9]*$/` up to
+  `MAX_NAME_LENGTH` (128), region `/^[a-z0-9]+$/` up to `MAX_REGION_LENGTH` (63);
+  whole identifier up to `MAX_IDENTIFIER_LENGTH` (192). **Length is part of the
+  grammar**, not a check layered above it — the character class alone accepts a 200KB
+  region id, and every layer above inherits that. Validate through `isValidName` /
+  `isValidRegion` rather than the bare regexes.
 - `verifyCertificate` reasons (stable API): `malformed-envelope`, `invalid-issuer`,
   `invalid-subject`, `unknown-suite`, `invalid-signature-encoding`, `bad-signature`.
 - Credential reasons add: `schema-mismatch`, `unknown-credential-type`,

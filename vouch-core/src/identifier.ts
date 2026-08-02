@@ -17,12 +17,15 @@
 /**
  * Longest `name` part of an identifier.
  *
- * A name has to be able to hold a whole account principal, because a resident agent
- * id is `principal@region`: anything a caller may register as a principal must still
- * be usable as a name, or it could hold an account it can never inhabit. So this is
- * the number that governs both, and it is why it is not smaller — vouch-mcp derives
- * its principals as `u` + a full sha256 hex digest, 65 characters, and the digest is
- * deliberately un-truncated for collision resistance.
+ * The node ties its principal bound to this number (`MAX_PRINCIPAL_LENGTH`), because a
+ * resident agent id is `principal@region` — a principal LONGER than a name could be
+ * registered and then never take part in a region. Only the LENGTH is shared: plenty of
+ * principals are not valid names at all (`acct:alice` has a colon), and that is fine,
+ * since such a principal simply acts as an account rather than a resident.
+ *
+ * It is 128 rather than something tighter because vouch-mcp derives its principals as
+ * `u` + a full sha256 hex digest — 65 characters, deliberately un-truncated for
+ * collision resistance — and those ARE used as `principal@region`.
  */
 export const MAX_NAME_LENGTH = 128;
 

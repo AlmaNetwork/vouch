@@ -48,9 +48,13 @@ export interface SignedRequest {
  * replayed-forever storage (measured; see docs/LAUNCH.md).
  *
  * Tied to `MAX_NAME_LENGTH` rather than picked separately: a resident agent id is
- * `principal@region`, so a principal longer than a name would be registrable but could
+ * `principal@region`, so a principal LONGER than a name would be registrable but could
  * never take part in a region. Letting these two drift apart is how you get an account
  * that exists and can do nothing.
+ *
+ * Only the length is shared, not the character set. A principal that is not a valid
+ * name (`acct:alice` has a colon) is perfectly fine — it simply acts as an account
+ * rather than as a resident.
  */
 export const MAX_PRINCIPAL_LENGTH = MAX_NAME_LENGTH;
 
