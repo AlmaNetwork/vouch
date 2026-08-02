@@ -12,6 +12,7 @@ export const SCOPE_FOR_COMMAND: Readonly<Record<string, string>> = {
   admit: "vouch:admit",
   transfer: "vouch:transfer",
   vouch: "vouch:vouch",
+  migrate: "vouch:migrate",
 };
 
 /** The coarse scope that implies every write scope (a convenience for trusted clients). */

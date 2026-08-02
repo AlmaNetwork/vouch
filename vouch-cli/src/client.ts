@@ -128,6 +128,10 @@ export class VouchClient {
   transfer(principal: string, to: string, amount: number): Promise<SubmitResult> {
     return this.submit(principal, { kind: "transfer", from: principal, to, amount });
   }
+  /** Move yourself to another region. Residence changes; the id keeps its birth region. */
+  migrate(principal: string, toRegion: string): Promise<SubmitResult> {
+    return this.submit(principal, { kind: "migrate", agentId: principal, toRegion });
+  }
   vouch(principal: string, to: string, weight: number): Promise<SubmitResult> {
     return this.submit(principal, { kind: "vouch", from: principal, to, weight });
   }

@@ -7,18 +7,20 @@
 // own, etc.). Meaning beyond that is the engine's to enforce.
 
 import { type KeyPair, MAX_IDENTIFIER_LENGTH, MAX_REGION_LENGTH } from "vouch-core";
+import { getAgent } from "vouch-world/agent";
 import {
   admitAgent,
   admitTreasury,
   executeTransfer,
   experimenterProposal,
+  immigrate,
   MAX_BALANCE,
   proposeFounding,
   vouchFor,
   type WorldState,
 } from "vouch-world/environment";
 import type { Result, World } from "vouch-world/foundation";
-import { defineRegion, MAX_DISPLAY_NAME_LENGTH, ownerOf } from "vouch-world/region";
+import { defineRegion, getRegion, MAX_DISPLAY_NAME_LENGTH, ownerOf } from "vouch-world/region";
 import { z } from "zod";
 
 // Every bound below is the ENGINE's bound, imported rather than restated. The engine
@@ -58,7 +60,13 @@ const vouchSchema = z.object({
   weight: z.number().int().min(1).max(5),
 });
 
-export const commandSchema = z.discriminatedUnion("kind", [foundSchema, admitSchema, transferSchema, vouchSchema]);
+const migrateSchema = z.object({
+  kind: z.literal("migrate"),
+  agentId: z.string().min(1).max(MAX_IDENTIFIER_LENGTH),
+  toRegion: z.string().min(1).max(MAX_REGION_LENGTH),
+});
+
+export const commandSchema = z.discriminatedUnion("kind", [foundSchema, admitSchema, transferSchema, vouchSchema, migrateSchema]);
 export type Command = z.infer<typeof commandSchema>;
 
 export type CommandResult = Result<{ detail?: Record<string, unknown> }>;
@@ -111,6 +119,26 @@ export function dispatch(world: World<WorldState>, principal: string, command: C
         if (command.from !== principal) return { ok: false, reason: "not-voucher" };
         const res = vouchFor(world, command.from, command.to, command.weight);
         return res.ok ? { ok: true } : { ok: false, reason: res.reason };
+      }
+      case "migrate": {
+        // You move yourself and nobody else. There is no expulsion: a region owner
+        // cannot evict a resident, and no one can drag someone into their region.
+        // Migration is the exit half of "the disadvantaged move on" (README) — it is
+        // the participant's own lever, so it is bound to their own identity.
+        if (command.agentId !== principal) return { ok: false, reason: "not-self" };
+        const state = world.getState();
+        const agent = getAgent(state, command.agentId);
+        if (!agent) return { ok: false, reason: "unknown-agent" };
+        // Refuse the no-op rather than journalling it. `immigrate` would happily emit
+        // an event for a move to where you already are, and the journal is permanent,
+        // so a back-and-forth loop would be free growth.
+        if (agent.region === command.toRegion) return { ok: false, reason: "already-resident" };
+        if (!getRegion(state, command.toRegion)) return { ok: false, reason: "unknown-region" };
+        immigrate(world, command.agentId, command.toRegion);
+        // Citizenship does not move. The id keeps its birth region, so `ann@umi` living
+        // in yama is a resident of yama and a citizen of umi — which is exactly the
+        // distinction sanctions.ts reads when it asks who may act on someone.
+        return { ok: true, detail: { agentId: command.agentId, from: agent.region, to: command.toRegion } };
       }
     }
   } catch {

@@ -71,6 +71,7 @@ write  (signed as your active principal, or --as <p>)
   admit <agentId> <region> <role> [--currency N]
   transfer <to> <amount>
   vouch <to> <weight>
+  migrate <toRegion>                 move yourself to another region
 
 read
   regions | agents | state | metrics
@@ -137,7 +138,8 @@ export async function run(argv: string[], env: Env, io: Io): Promise<number> {
       case "found":
       case "admit":
       case "transfer":
-      case "vouch": {
+      case "vouch":
+      case "migrate": {
         const principal = activePrincipal();
         if (!principal) {
           io.err("no active principal — run: vouch register <name>, or pass --as <name>");
@@ -232,6 +234,14 @@ async function dispatchWrite(
       return "usage";
     }
     return client.transfer(principal, to, Number(amount));
+  }
+  if (cmd === "migrate") {
+    const [, toRegion] = positional;
+    if (!toRegion) {
+      io.err("usage: vouch migrate <toRegion>");
+      return "usage";
+    }
+    return client.migrate(principal, toRegion);
   }
   // vouch
   const [, to, weight] = positional;
