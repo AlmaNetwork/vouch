@@ -15,6 +15,7 @@ export {
   executeTransfer,
   isCurrencyConserving,
   isTransferable,
+  MAX_BALANCE,
   type MintResult,
   mintCurrency,
   type TransferMove,

@@ -71,6 +71,12 @@ write  (signed as your active principal, or --as <p>)
   admit <agentId> <region> <role> [--currency N]
   transfer <to> <amount>
   vouch <to> <weight>
+  migrate <toRegion>                 move yourself to another region
+
+govern  (a region's institutions; dictatorships amend, councils propose+vote)
+  amend <regionId> '<change-json>'   change the rules directly (dictatorship only)
+  propose <regionId> '<change-json>' open a council proposal (your ballot is cast with it)
+  vote <regionId>                    approve the open proposal
 
 read
   regions | agents | state | metrics
@@ -137,7 +143,11 @@ export async function run(argv: string[], env: Env, io: Io): Promise<number> {
       case "found":
       case "admit":
       case "transfer":
-      case "vouch": {
+      case "vouch":
+      case "migrate":
+      case "amend":
+      case "propose":
+      case "vote": {
         const principal = activePrincipal();
         if (!principal) {
           io.err("no active principal — run: vouch register <name>, or pass --as <name>");
@@ -232,6 +242,43 @@ async function dispatchWrite(
       return "usage";
     }
     return client.transfer(principal, to, Number(amount));
+  }
+  if (cmd === "migrate") {
+    const [, toRegion] = positional;
+    if (!toRegion) {
+      io.err("usage: vouch migrate <toRegion>");
+      return "usage";
+    }
+    return client.migrate(principal, toRegion);
+  }
+  // `change` is a nested policy object with six shapes, so it is taken as JSON rather
+  // than flattened into a flag grammar that would have to grow a case per policy and
+  // still could not express a council's member list.
+  if (cmd === "amend" || cmd === "propose") {
+    const [, regionId, changeJson] = positional;
+    if (!regionId || !changeJson) {
+      io.err(`usage: vouch ${cmd} <regionId> '<change-json>'`);
+      io.err(
+        `example: vouch ${cmd} umi '{"policy":"economy","value":{"baseCostRate":0.1,"minCostRate":0.02,"repDiscount":0.01,"creditPerTx":1}}'`,
+      );
+      return "usage";
+    }
+    let change: unknown;
+    try {
+      change = JSON.parse(changeJson);
+    } catch {
+      io.err("the change argument is not valid JSON — quote it as a single shell argument");
+      return "usage";
+    }
+    return cmd === "amend" ? client.amend(principal, regionId, change) : client.propose(principal, regionId, change);
+  }
+  if (cmd === "vote") {
+    const [, regionId] = positional;
+    if (!regionId) {
+      io.err("usage: vouch vote <regionId>");
+      return "usage";
+    }
+    return client.vote(principal, regionId);
   }
   // vouch
   const [, to, weight] = positional;

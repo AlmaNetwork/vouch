@@ -19,8 +19,10 @@ defaults — loopback bind, in-memory journal — while looking healthy.
 | `VOUCH_JOURNAL` | *(unset = in-memory)* | Event journal path. Unset means the world is lost on restart. |
 | `VOUCH_ACCOUNTS` | *(unset = in-memory)* | Auth log path (per-principal nonces). |
 | `VOUCH_NOTARY` | **none — required** | `seed://<literal>` or `env://<VAR>`. `file://` is not supported. |
+| `VOUCH_BUILD` | `dev` | Which code is running — a git tag or short SHA, reported at `GET /health`. Set it at every deploy; see below. |
+| `VOUCH_LOG_LEVEL` | `info` | pino level. A typo throws rather than silently defaulting. |
 
-Three properties worth knowing before you touch any of them:
+Four properties worth knowing before you touch any of them:
 
 - **`VOUCH_NOTARY` has no fallback, on purpose.** The node throws rather than booting on a
   predictable key. The keypair is `keyPairFromSeed(sha256(secret))`, so the secret string
@@ -33,6 +35,41 @@ Three properties worth knowing before you touch any of them:
   a journal against a stale accounts log rewinds nonces and reopens the replay window the
   auth design rests on. Only ever one writer: `FileJournal` opens with `"a"` and keeps its
   chain tip in memory, so a second process on the same path corrupts the chain.
+- **`VOUCH_BUILD` has to be set by whoever deploys.** Nothing derives it. Left at the
+  default, `/health` reports `"dev"` on a production node, and from outside a successful
+  deploy and a rollback that silently failed to take are the same observation. Step 5
+  sets it for the systemd route; the container route needs the `--build-arg`.
+
+## Rate limits
+
+Four more variables, all optional, all with working defaults:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `VOUCH_CLIENT_IP_HEADER` | *(unset)* | Header carrying the real client IP, e.g. `CF-Connecting-IP`. **Set this.** |
+| `VOUCH_WRITES_PER_MIN_PER_PRINCIPAL` | `10` | Signed writes per minute, per principal. `0` disables. |
+| `VOUCH_WRITES_PER_HOUR_PER_IP` | `60` | Write attempts per hour, per client IP. `0` disables. |
+| `VOUCH_READS_PER_MIN_PER_IP` | `600` | Reads per minute, per client IP. `0` disables. |
+
+The limits start deliberately tight. Nothing appended to the journal can be taken back,
+so the safe direction to be wrong in is *too strict* — that costs an annoyed
+participant, where the other way costs a permanent record nobody wanted. Loosen from
+here rather than starting loose.
+
+**`VOUCH_CLIENT_IP_HEADER` decides whether the per-IP limits mean anything at all.**
+With a proxy in front, every request reaches the node from `127.0.0.1` — so leaving it
+unset puts the entire internet in one bucket.
+
+It is also a security setting rather than a convenience. A header is caller-supplied,
+so trusting one is safe *only* because this node cannot be reached except through
+Cloudflare (authenticated origin pulls) and Cloudflare overwrites `CF-Connecting-IP`.
+Expose the node directly and anyone sets it per request, takes a fresh bucket each time,
+and the limit is gone. Left unset, an unidentifiable caller falls back to the socket
+address rather than being treated as exempt: too strict fails loudly, exempt fails
+silently.
+
+`GET /health` is exempt, because rate-limiting a liveness probe lets a read flood get
+the node restarted.
 
 ## Files here
 
@@ -71,7 +108,26 @@ produces two writers and a broken journal.
 3. **Pin `VOUCH_SEED`** explicitly in `node.env`, even to the default value, and record it
    with the deploy baseline (step 8).
 
-4. **Deploy the code at a tag**, never a branch:
+4. **Install Bun where the unit can reach it.** The unit runs `/usr/local/bin/bun`, and
+   that is not where the usual installer puts it: `bun.sh/install` lands it under
+   `$HOME/.bun/bin`, which the unit's `ProtectHome=true` makes invisible to the service.
+   Fetch the release directly and install it system-wide, pinned to the version CI
+   tests against:
+   ```
+   BUN=1.3.2   # must match .github/workflows/ci.yml
+   curl -fsSL -o /tmp/bun.zip \
+     "https://github.com/oven-sh/bun/releases/download/bun-v$BUN/bun-linux-aarch64.zip"
+   unzip -j /tmp/bun.zip 'bun-linux-aarch64/bun' -d /tmp
+   sudo install -o root -g root -m 0755 /tmp/bun /usr/local/bin/bun
+   rm -f /tmp/bun.zip /tmp/bun
+   /usr/local/bin/bun --version    # must print the version above
+   ```
+   `bun-linux-aarch64` is the arm64 build, matching a `t4g` instance; use
+   `bun-linux-x64` on Intel or AMD. Pin the version rather than tracking latest — the
+   runtime is the interpreter for the whole application, so a silent upgrade is a
+   silent deploy of untested behaviour.
+
+5. **Deploy the code at a tag**, never a branch:
    ```
    sudo git -C /opt/vouch fetch --tags
    sudo git -C /opt/vouch checkout v0.1.0
@@ -84,18 +140,30 @@ produces two writers and a broken journal.
    directory. Installing only in `vouch-node` produces a node that starts and dies with
    `Cannot find package 'vouch-core'`.
 
-   *(Container route instead: `docker build -t vouch-node:v0.1.0 .` then
-   `docker compose up -d`. Compose publishes to `127.0.0.1` only and refuses to start
-   without `VOUCH_NOTARY`.)*
+   Then record which code this is, so `/health` can tell a deploy from a rollback that
+   failed to take:
+   ```
+   sudo sed -i "s|^VOUCH_BUILD=.*|VOUCH_BUILD=$(git -C /opt/vouch describe --tags --always)|" \
+     /etc/vouch/node.env
+   ```
 
-5. **Start it.**
+   *(Container route instead: `VOUCH_BUILD="$(git describe --tags --always)" docker compose build`
+   then `docker compose up -d`. Pass the build arg — an image built without it reports
+   `"dev"` at `/health` forever. Compose publishes to `127.0.0.1` only and refuses to
+   start without `VOUCH_NOTARY`.)*
+
+6. **Start it.**
    ```
    sudo cp deploy/vouch-node.service /etc/systemd/system/
    sudo systemctl daemon-reload && sudo systemctl enable --now vouch-node
    systemctl status vouch-node
+   systemctl show vouch-node -p StartLimitIntervalSec -p StartLimitBurst
    ```
+   The last line should report `300` and `5`. If it reports `0`, the restart cap is not
+   in effect and a corrupt journal will crash-loop every 2 seconds instead of alerting —
+   these two keys belong to `[Unit]`, and systemd ignores them anywhere else.
 
-6. **Check the exposure.** This one command catches every variant of the mistake — a
+7. **Check the exposure.** This one command catches every variant of the mistake — a
    forgotten `VOUCH_HOST`, a compose file that lost its `127.0.0.1` prefix, a Docker
    iptables rule that went around the host firewall:
    ```
@@ -103,20 +171,28 @@ produces two writers and a broken journal.
    curl -m 5 http://<public-ip>:8787/health   # must NOT answer
    ```
 
-7. **Run the smoke test against the public hostname**, through the proxy — not against
-   localhost:
+8. **Smoke-test the write path over loopback, and the proxy from outside.**
    ```
-   sh deploy/smoke.sh https://node.example.org --write
+   sh deploy/smoke.sh http://127.0.0.1:8787 --write     # on the box
+   sh deploy/smoke.sh https://node.example.org          # read-only, through the proxy
    ```
+   `--write` founds a `smoke*` region through the real signed path, and **regions are
+   never deleted by design** — so it leaves something permanent in `/regions` and
+   `/metrics` that no one can remove. Do it over loopback, where the signed path is
+   proven just as well and the artifact lands before anyone is watching. The proxy is
+   what the public hostname adds, and reads exercise it; the signing path does not care
+   what is in front of it. The script refuses a remote `--write` without `--force` for
+   this reason.
 
-   `--write` founds a `smoke*` region through the real signed path. **Regions are
-   never deleted by design**, so each `--write` run leaves a permanent region in the
-   world and its log. That is the right trade on a deploy — it is the only way to
-   prove the signature path and the write path actually work — and the wrong one for
-   a probe on a timer, which is why the default is read-only. If you monitor the node
-   continuously, run it without `--write`.
+9. **Confirm `/health` reports the build you deployed**, not `dev`:
+   ```
+   curl -s https://node.example.org/health
+   ```
+   A `"build":"dev"` here means `VOUCH_BUILD` never reached the process, and from this
+   point on a successful deploy and a rollback that silently failed look identical from
+   outside.
 
-8. **Prove writes survive a restart.** The smoke test cannot do this, and this is the one
+10. **Prove writes survive a restart.** The smoke test cannot do this, and this is the one
    failure that hides: a node with an unwritable data directory (or an in-memory journal)
    starts, answers `/health` with 200, and silently discards every write, because
    persistence is only touched at the first append — not at boot.
@@ -126,7 +202,7 @@ produces two writers and a broken journal.
    curl -s https://node.example.org/log/digest      # must be IDENTICAL
    ```
 
-9. **Record the deploy baseline**: the `/log/digest` value and length, the git tag (and
+11. **Record the deploy baseline**: the `/log/digest` value and length, the git tag (and
    image digest if containerised), `VOUCH_SEED`, and the notary **public** key. The
    digest gives you an exact-equality check for every future restore and rollback. The
    notary public key is the first entry in the key registry you will need if the notary
@@ -145,8 +221,9 @@ produces two writers and a broken journal.
   the node then refuses to boot.
 - **A corrupt journal is a hard stop, by design.** The node exits with
   `journal: hash-chain broken at line N` rather than serving divergent state. The unit's
-  `StartLimitBurst` turns that into an alert instead of an infinite crash loop. There is
-  no repair tooling yet — restore from a snapshot.
+  `StartLimitBurst` turns that into an alert instead of an infinite crash loop — provided
+  it is actually in effect, which is what step 6 checks. There is no repair tooling yet;
+  restore from a snapshot.
 - **Rollback is a tag swap for code, but data is not reversible.** The journal is
   replayed from genesis on every boot, so an interior edit makes the node refuse to
   start. Roll code back; never hand-edit the journal.

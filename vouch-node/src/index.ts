@@ -17,7 +17,14 @@ const accountLog = config.accountsPath ? new FileAccountLog(config.accountsPath)
 const node = new VouchNode({ seed: config.seed, notary: config.notary, journal, accountLog, log });
 // The node resolves the environment (config.build comes from VOUCH_BUILD); the engine
 // reads none of it.
-const app = createNodeApp(node, { build: config.build, log });
+const app = createNodeApp(node, {
+  build: config.build,
+  log,
+  clientIpHeader: config.clientIpHeader,
+  writesPerMinutePerPrincipal: config.writesPerMinutePerPrincipal,
+  writesPerHourPerIp: config.writesPerHourPerIp,
+  readsPerMinutePerIp: config.readsPerMinutePerIp,
+});
 
 // Cap the request body: a signed command is tiny, so don't let an unauthenticated
 // caller force large allocations before we ever check a signature.
@@ -42,6 +49,15 @@ log.info(
     journal: config.journalPath ?? "(memory — EPHEMERAL)",
     accounts: config.accountsPath ?? "(memory — EPHEMERAL)",
     durable: config.journalPath !== null && config.accountsPath !== null,
+    // Behind a loopback reverse proxy every socket address is 127.0.0.1, so an unset
+    // header means every caller shares one bucket. Surfacing it at boot is the only
+    // place that misconfiguration is visible before it locks the world out.
+    clientIpHeader: config.clientIpHeader ?? "(none — per-IP limits see the proxy, not the caller)",
+    rateLimits: {
+      writesPerMinutePerPrincipal: config.writesPerMinutePerPrincipal,
+      writesPerHourPerIp: config.writesPerHourPerIp,
+      readsPerMinutePerIp: config.readsPerMinutePerIp,
+    },
   },
   "vouch-node listening",
 );

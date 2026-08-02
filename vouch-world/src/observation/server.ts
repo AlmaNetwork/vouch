@@ -11,7 +11,7 @@ import { getAgent, listAgents } from "../agent";
 import type { WorldState } from "../environment";
 import type { WorldView } from "../foundation";
 import { getRegion, listRegions } from "../region";
-import { metrics } from "./metrics";
+import { type Metrics, metrics } from "./metrics";
 
 /**
  * Largest `/log` page. The log is unauthenticated and grows without bound, so an
@@ -29,6 +29,26 @@ function parseSeq(raw: string | undefined): number | undefined {
   return Number.isSafeInteger(n) ? n : undefined;
 }
 
+/**
+ * `Cache-Control` for a derived read. One second is short enough that the world
+ * still looks live and long enough that a CDN absorbs a burst: these endpoints are
+ * unauthenticated and serialize on a single thread, so without it one client in a
+ * loop is indistinguishable from a flood.
+ */
+const DERIVED_CACHE = "public, max-age=1";
+
+/**
+ * `Cache-Control` for the liveness and integrity reads.
+ *
+ * NOT cached, deliberately, even though `/log/digest` is the more expensive of the
+ * two. A cached digest would break the thing it exists for: the deploy check writes,
+ * then re-reads the digest and expects it to have moved (deploy/smoke.sh), and a
+ * one-second-old answer turns a successful write into a failed deploy. The cost is
+ * handled at the source instead — `EventLog.digest()` memoizes on length — rather
+ * than by serving a stale answer.
+ */
+const LIVE_NO_CACHE = "no-store";
+
 export interface ObservationOptions {
   /**
    * Which code is serving — a git tag or short SHA, reported at `GET /health`.
@@ -43,6 +63,32 @@ export interface ObservationOptions {
 export function createObservationApp(view: WorldView<WorldState>, opts: ObservationOptions = {}): Hono {
   const build = opts.build ?? "dev";
   const app = new Hono();
+
+  /**
+   * `metrics()` memoized on log length.
+   *
+   * It remains the most expensive read: it walks the whole event log and rebuilds
+   * every per-region aggregate. That is linear now rather than quadratic (see
+   * metrics.ts), but linear in the size of an append-only world still means an
+   * unauthenticated GET whose cost never stops growing — and on a single thread it is
+   * time every other request waits, including the health check the supervisor restarts
+   * us on. Reads outnumber writes by design here (600/min against 10/min), so almost
+   * all of them land on an unchanged world and cost nothing.
+   *
+   * Length is an exact key, not an approximation: every part of a world is derived by
+   * folding its log, so nothing can differ between two calls at the same length. Tick
+   * is not part of the key because `advanceTick` commits an EVENT_TICK, so it cannot
+   * move without the length moving — the test in observation/read-cost.test.ts pins
+   * that, and will fail loudly if a future tick path stops emitting.
+   */
+  let cached: { length: number; value: Metrics } | null = null;
+  const memoizedMetrics = (): Metrics => {
+    const length = view.log.length;
+    if (cached?.length === length) return cached.value;
+    const value = metrics(view);
+    cached = { length, value };
+    return value;
+  };
 
   app.get("/", (c) =>
     c.json({
@@ -62,21 +108,25 @@ export function createObservationApp(view: WorldView<WorldState>, opts: Observat
     }),
   );
   // `build` identifies WHICH code is answering. Without it a deploy and a failed
-  // rollback look identical from the outside.
-  app.get("/health", (c) => c.json({ ok: true, tick: view.tick, build }));
-  app.get("/tick", (c) => c.json({ tick: view.tick }));
-  app.get("/metrics", (c) => c.json(metrics(view)));
+  // rollback look identical from the outside. `log.length` is here because the journal
+  // has an operational ceiling — boot replays it in full, so its length is what governs
+  // how long a restart takes — and nothing else on the surface reports it cheaply.
+  app.get("/health", (c) =>
+    c.json({ ok: true, tick: view.tick, build, log: { length: view.log.length } }, 200, { "cache-control": LIVE_NO_CACHE }),
+  );
+  app.get("/tick", (c) => c.json({ tick: view.tick }, 200, { "cache-control": LIVE_NO_CACHE }));
+  app.get("/metrics", (c) => c.json(memoizedMetrics(), 200, { "cache-control": DERIVED_CACHE }));
 
-  app.get("/state", (c) => c.json(view.getState()));
-  app.get("/regions", (c) => c.json(listRegions(view.getState())));
+  app.get("/state", (c) => c.json(view.getState(), 200, { "cache-control": DERIVED_CACHE }));
+  app.get("/regions", (c) => c.json(listRegions(view.getState()), 200, { "cache-control": DERIVED_CACHE }));
   app.get("/regions/:id", (c) => {
     const r = getRegion(view.getState(), c.req.param("id"));
-    return r ? c.json(r) : c.json({ error: "region not found" }, 404);
+    return r ? c.json(r, 200, { "cache-control": DERIVED_CACHE }) : c.json({ error: "region not found" }, 404);
   });
-  app.get("/agents", (c) => c.json(listAgents(view.getState())));
+  app.get("/agents", (c) => c.json(listAgents(view.getState()), 200, { "cache-control": DERIVED_CACHE }));
   app.get("/agents/:id", (c) => {
     const a = getAgent(view.getState(), c.req.param("id"));
-    return a ? c.json(a) : c.json({ error: "agent not found" }, 404);
+    return a ? c.json(a, 200, { "cache-control": DERIVED_CACHE }) : c.json({ error: "agent not found" }, 404);
   });
 
   // Still a bare array (vouch-cli, vouch-web and openapi/read.yaml all consume it that
@@ -90,9 +140,9 @@ export function createObservationApp(view: WorldView<WorldState>, opts: Observat
   app.get("/log", (c) => {
     const since = parseSeq(c.req.query("since"));
     if (since === undefined) return c.json({ error: "since must be a non-negative integer" }, 400);
-    return c.json(view.log.since(since).slice(0, LOG_PAGE_LIMIT));
+    return c.json(view.log.since(since).slice(0, LOG_PAGE_LIMIT), 200, { "cache-control": DERIVED_CACHE });
   });
-  app.get("/log/digest", (c) => c.json({ digest: view.log.digest(), length: view.log.length }));
+  app.get("/log/digest", (c) => c.json({ digest: view.log.digest(), length: view.log.length }, 200, { "cache-control": LIVE_NO_CACHE }));
 
   return app;
 }

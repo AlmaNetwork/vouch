@@ -4,8 +4,36 @@
 // or whether it is trustworthy (§2-1, §2-2). It just generates and validates the
 // shape of an identifier string.
 //
-//   name   : starts with a letter, then alphanumerics  ([A-Za-z][A-Za-z0-9]*)
-//   region : lowercase alphanumerics                    ([a-z0-9]+)
+//   name   : starts with a letter, then alphanumerics, up to 128
+//   region : lowercase alphanumerics, up to 63
+//
+// LENGTH IS PART OF THE GRAMMAR, not a separate concern layered on top. Without
+// it the character class alone accepts a 200KB region id, and every layer above
+// inherits that: a `found` command with one writes a 600KB entry into a
+// hash-chained journal that can never be trimmed (measured — see docs/LAUNCH.md).
+// Bounding it here means every caller of the grammar is bounded, rather than each
+// one having to remember.
+
+/**
+ * Longest `name` part of an identifier.
+ *
+ * The node ties its principal bound to this number (`MAX_PRINCIPAL_LENGTH`), because a
+ * resident agent id is `principal@region` — a principal LONGER than a name could be
+ * registered and then never take part in a region. Only the LENGTH is shared: plenty of
+ * principals are not valid names at all (`acct:alice` has a colon), and that is fine,
+ * since such a principal simply acts as an account rather than a resident.
+ *
+ * It is 128 rather than something tighter because vouch-mcp derives its principals as
+ * `u` + a full sha256 hex digest — 65 characters, deliberately un-truncated for
+ * collision resistance — and those ARE used as `principal@region`.
+ */
+export const MAX_NAME_LENGTH = 128;
+
+/**
+ * Longest `region` part of an identifier. 63 is the DNS label limit — the closest
+ * well-worn precedent for a short name people type and pass around.
+ */
+export const MAX_REGION_LENGTH = 63;
 
 const NAME_RE = /^[A-Za-z][A-Za-z0-9]*$/;
 const REGION_RE = /^[a-z0-9]+$/;
@@ -16,20 +44,28 @@ export interface Identifier {
 }
 
 export function isValidName(name: string): boolean {
-  return typeof name === "string" && NAME_RE.test(name);
+  // Length before the pattern: the check is O(1) and the input may be arbitrarily
+  // large, since this is reached straight from an unauthenticated request body.
+  return typeof name === "string" && name.length <= MAX_NAME_LENGTH && NAME_RE.test(name);
 }
 
 export function isValidRegion(region: string): boolean {
-  return typeof region === "string" && REGION_RE.test(region);
+  return typeof region === "string" && region.length <= MAX_REGION_LENGTH && REGION_RE.test(region);
 }
 
 export function isValidIdentifier(id: unknown): id is string {
   return typeof id === "string" && parseIdentifier(id) !== undefined;
 }
 
+/** Longest whole `name@region` identifier: both parts plus the separator. */
+export const MAX_IDENTIFIER_LENGTH = MAX_NAME_LENGTH + 1 + MAX_REGION_LENGTH;
+
 /** Parse `name@region` into parts, or `undefined` if it is malformed. */
 export function parseIdentifier(id: string): Identifier | undefined {
   if (typeof id !== "string") return undefined;
+  // Reject on length first, before slicing: the parts are validated below anyway, but
+  // an oversized input should not be copied twice on its way to being refused.
+  if (id.length > MAX_IDENTIFIER_LENGTH) return undefined;
   const at = id.indexOf("@");
   if (at < 0) return undefined;
   if (id.indexOf("@", at + 1) !== -1) return undefined; // exactly one '@'

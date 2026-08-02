@@ -76,7 +76,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [ok, tick, build]
+                required: [ok, tick, build, log]
                 properties:
                   ok: { type: boolean, const: true }
                   tick: { $ref: "#/components/schemas/Tick" }
@@ -86,7 +86,19 @@ paths:
                       Which code is answering — the git tag or short SHA baked in at image
                       build time (VOUCH_BUILD), or "dev" when unset. Without it a deploy
                       and a failed rollback are indistinguishable from outside.
-              example: { ok: true, tick: 8, build: v0.1.0 }
+                  log:
+                    type: object
+                    required: [length]
+                    properties:
+                      length:
+                        type: integer
+                        minimum: 0
+                        description: >-
+                          Events in the journal. Reported here because boot replays the
+                          journal in full, so its length is what governs how long a
+                          restart takes — the node's operational ceiling is a length,
+                          and nothing else on this surface reports it cheaply.
+              example: { ok: true, tick: 8, build: v0.1.0, log: { length: 1423 } }
 
   /tick:
     get:
