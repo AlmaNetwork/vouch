@@ -78,6 +78,12 @@ govern  (a region's institutions; dictatorships amend, councils propose+vote)
   propose <regionId> '<change-json>' open a council proposal (your ballot is cast with it)
   vote <regionId>                    approve the open proposal
 
+market  (a region is never deleted — a defunct one is hibernated and handed on)
+  lifecycle <regionId> <active|dormant>
+  list <regionId> <price|none>       list a DORMANT region, or delist with "none"
+  handover <regionId> <to>           give a listed region to another account.
+                                     NOTE: no currency moves — settlement is not built
+
 read
   regions | agents | state | metrics
   watch [--interval N]               tail the world's event feed (the village newspaper)
@@ -147,7 +153,10 @@ export async function run(argv: string[], env: Env, io: Io): Promise<number> {
       case "migrate":
       case "amend":
       case "propose":
-      case "vote": {
+      case "vote":
+      case "lifecycle":
+      case "list":
+      case "handover": {
         const principal = activePrincipal();
         if (!principal) {
           io.err("no active principal — run: vouch register <name>, or pass --as <name>");
@@ -279,6 +288,37 @@ async function dispatchWrite(
       return "usage";
     }
     return client.vote(principal, regionId);
+  }
+  if (cmd === "lifecycle") {
+    const [, regionId, lifecycle] = positional;
+    if (!regionId || (lifecycle !== "active" && lifecycle !== "dormant")) {
+      io.err("usage: vouch lifecycle <regionId> <active|dormant>");
+      return "usage";
+    }
+    return client.lifecycle(principal, regionId, lifecycle);
+  }
+  if (cmd === "list") {
+    const [, regionId, price] = positional;
+    if (!regionId || price === undefined) {
+      io.err('usage: vouch list <regionId> <price|none>   ("none" delists)');
+      return "usage";
+    }
+    // "none" rather than a bare flag: delisting and pricing at 0 are different acts,
+    // and a free region is a legitimate listing.
+    const salePrice = price === "none" ? null : Number(price);
+    if (salePrice !== null && !Number.isFinite(salePrice)) {
+      io.err(`not a price: ${price}  (use a whole number, or "none" to delist)`);
+      return "usage";
+    }
+    return client.list(principal, regionId, salePrice);
+  }
+  if (cmd === "handover") {
+    const [, regionId, to] = positional;
+    if (!regionId || !to) {
+      io.err("usage: vouch handover <regionId> <to>");
+      return "usage";
+    }
+    return client.handover(principal, regionId, to);
   }
   // vouch
   const [, to, weight] = positional;

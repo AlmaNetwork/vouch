@@ -144,6 +144,18 @@ export class VouchClient {
   vote(principal: string, regionId: string): Promise<SubmitResult> {
     return this.submit(principal, { kind: "vote", regionId });
   }
+  /** Hibernate or reactivate a region you own. A region must be dormant to be listed. */
+  lifecycle(principal: string, regionId: string, lifecycle: "active" | "dormant"): Promise<SubmitResult> {
+    return this.submit(principal, { kind: "lifecycle", regionId, lifecycle });
+  }
+  /** Put a dormant region up at an asking price, or pass null to delist. */
+  list(principal: string, regionId: string, salePrice: number | null): Promise<SubmitResult> {
+    return this.submit(principal, { kind: "list", regionId, salePrice });
+  }
+  /** Hand a listed region to another account. No currency moves — see the CLI help. */
+  handover(principal: string, regionId: string, to: string): Promise<SubmitResult> {
+    return this.submit(principal, { kind: "handover", regionId, to });
+  }
   vouch(principal: string, to: string, weight: number): Promise<SubmitResult> {
     return this.submit(principal, { kind: "vouch", from: principal, to, weight });
   }
