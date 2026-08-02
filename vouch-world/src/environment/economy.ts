@@ -26,6 +26,23 @@ import { type EconomyPolicy, getRegion } from "../region";
 import { canTransactAcross } from "./diplomacy";
 import { commit, type WorldCommit, type WorldState } from "./state";
 
+/**
+ * The largest value any single balance-bearing operation may name — an opening
+ * balance at admission, or an amount in a transfer.
+ *
+ * The point is that TOTALS stay exactly representable. `/metrics` sums currency over
+ * every agent, and JavaScript integers are only exact below 2^53; with an unbounded
+ * per-agent value a single `admit` of `Number.MAX_SAFE_INTEGER` pins the reported
+ * total supply there forever, on a public endpoint, with no way to burn it back down
+ * (measured; see docs/LAUNCH.md). At 10^9 apiece the sum stays exact past a million
+ * agents, which is far beyond anything this node will hold.
+ *
+ * This is a bound on what a caller may NAME, not a cap on what an account may
+ * accumulate through legitimate transfers — those conserve, so they cannot inflate
+ * the total.
+ */
+export const MAX_BALANCE = 1_000_000_000;
+
 /** M3: currency is transferable, credit is not (§3-B). A later milestone may let the village decide. */
 export function isTransferable(kind: "credit" | "currency"): boolean {
   return kind === "currency";
@@ -57,7 +74,7 @@ export function executeTransfer(env: WorldCommit, move: TransferMove, opts: { ti
   if (isAgentSuspended(from, opts.tick)) return { ok: false, reason: "suspended" };
   if (from.id === to.id) return { ok: false, reason: "self-transfer" };
   if (!isTransferable("currency")) return { ok: false, reason: "not-transferable" };
-  if (!Number.isInteger(move.amount) || move.amount <= 0) return { ok: false, reason: "bad-amount" };
+  if (!Number.isInteger(move.amount) || move.amount <= 0 || move.amount > MAX_BALANCE) return { ok: false, reason: "bad-amount" };
   if (from.region !== to.region) {
     // M4: cross-region value flows are gated by diplomacy (mutual recognition + stance).
     const gate = canTransactAcross(state, from.region, to.region);
@@ -119,7 +136,9 @@ export type MintResult = Result;
  * mint is rejected at write time and again by the reducer's actor-gate.
  */
 export function mintCurrency(env: WorldCommit, agentId: string, amount: number, reason: string): MintResult {
-  if (!Number.isInteger(amount) || amount <= 0) return { ok: false, reason: "bad-amount" };
+  // The other mint path is an admission endowment; both are bounded by MAX_BALANCE for
+  // the same reason — `currencyOriginTotal` sums them, and that sum has to stay exact.
+  if (!Number.isInteger(amount) || amount <= 0 || amount > MAX_BALANCE) return { ok: false, reason: "bad-amount" };
   if (!getAgent(env.getState(), agentId)) return { ok: false, reason: "unknown-agent" };
   commit(env, EVENT_ECONOMY_MINTED, { agentId, amount, reason } satisfies MintPayload);
   return { ok: true };

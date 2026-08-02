@@ -374,6 +374,16 @@ export function makeInstitutions(partial: Partial<Institutions> = {}): Instituti
   };
 }
 
+/**
+ * Longest region `displayName`. Unlike `id`, a display name has no grammar at all —
+ * it is free text a founder chooses — so length is the only thing bounding it, and
+ * without a bound a single `found` writes a 200KB entry into a hash-chained journal
+ * that can never be trimmed (measured; see docs/LAUNCH.md). Checked at the write path
+ * (`proposeFounding`), not here: `defineRegion` is a plain constructor and validation
+ * in this codebase lives with the mutator that commits.
+ */
+export const MAX_DISPLAY_NAME_LENGTH = 128;
+
 export function defineRegion(id: string, displayName: string, institutions: Institutions = makeInstitutions()): RegionDefinition {
   return { id, displayName, institutions };
 }

@@ -15,7 +15,18 @@ import {
   type ValueProfile,
 } from "../agent";
 import { getRegion } from "../region";
+import { MAX_BALANCE } from "./economy";
 import { commit, readBackOrThrow, type WorldCommit } from "./state";
+
+/** Longest `publicKey` accepted at admission — a base64 Ed25519 key is 44 characters. */
+const MAX_PUBLIC_KEY_LENGTH = 64;
+/** Most sponsors an admission may carry (RFC 0007 §10.1). */
+const MAX_SPONSORS = 32;
+
+/** An opening balance must be a non-negative integer no larger than `MAX_BALANCE`. */
+function isValidOpeningBalance(v: number | undefined): boolean {
+  return v === undefined || (Number.isInteger(v) && v >= 0 && v <= MAX_BALANCE);
+}
 
 export interface AdmitSpec {
   id: string; // name@region
@@ -29,10 +40,21 @@ export interface AdmitSpec {
 }
 
 export function admitAgent(env: WorldCommit, spec: AdmitSpec): AgentState {
-  if (!isValidIdentifier(spec.id)) throw new Error(`admitAgent: invalid agent id "${spec.id}"`);
+  // These messages deliberately do NOT interpolate the offending value. The id arrives
+  // from a request body, and echoing it back builds an error string as large as the
+  // input we are in the middle of refusing.
+  if (!isValidIdentifier(spec.id)) throw new Error("admitAgent: invalid agent id (must be a bounded name@region identifier)");
   if (!spec.id.endsWith(`@${spec.region}`)) {
     throw new Error(`admitAgent: agent id "${spec.id}" must be born in region "${spec.region}"`);
   }
+  // Admission is the only path that MINTS currency into the world; a transfer merely
+  // moves it. So this is the check that keeps the reported total supply meaningful.
+  if (!isValidOpeningBalance(spec.currency)) throw new Error(`admitAgent: currency must be an integer in [0, ${MAX_BALANCE}]`);
+  if (!isValidOpeningBalance(spec.credit)) throw new Error(`admitAgent: credit must be an integer in [0, ${MAX_BALANCE}]`);
+  if (typeof spec.publicKey !== "string" || spec.publicKey.length > MAX_PUBLIC_KEY_LENGTH) {
+    throw new Error(`admitAgent: publicKey must be a string of at most ${MAX_PUBLIC_KEY_LENGTH} characters`);
+  }
+  if (spec.sponsors && spec.sponsors.length > MAX_SPONSORS) throw new Error(`admitAgent: at most ${MAX_SPONSORS} sponsors`);
   if (!getRegion(env.getState(), spec.region)) throw new Error(`admitAgent: region "${spec.region}" does not exist`);
   if (getAgent(env.getState(), spec.id)) throw new Error(`admitAgent: agent "${spec.id}" already exists`);
 
