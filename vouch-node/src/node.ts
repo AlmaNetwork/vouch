@@ -36,7 +36,21 @@ export interface NodeDeps {
 
 export type SubmitResult =
   | { readonly ok: true; readonly status: 200; readonly detail?: Record<string, unknown>; readonly events: number }
-  | { readonly ok: false; readonly status: HttpStatus; readonly reason: string };
+  | {
+      readonly ok: false;
+      readonly status: HttpStatus;
+      readonly reason: string;
+      /**
+       * Whether the signature verified before this failed.
+       *
+       * Reported rather than inferred from the status because it decides who PAYS for
+       * the request: an authenticated write consumed a nonce and did durable work even
+       * when the engine then refused it, while an unauthenticated one must never cost
+       * the principal it merely claimed to be. Inferring that from status codes would
+       * quietly make the next post-auth failure free.
+       */
+      readonly authenticated: boolean;
+    };
 
 export class VouchNode {
   /** Read-only observation reads this; the write path uses the engine's emit. */
@@ -98,11 +112,11 @@ export class VouchNode {
   submit(req: SignedRequest): SubmitResult {
     // Parse first, so a malformed command doesn't consume the principal's nonce.
     const parsed = commandSchema.safeParse(req.command);
-    if (!parsed.success) return { ok: false, status: 400, reason: "invalid-command" };
+    if (!parsed.success) return { ok: false, status: 400, reason: "invalid-command", authenticated: false };
 
     // verify() persists the consumed nonce before we dispatch, so it is a durable step.
     const auth = this.durable(() => this.registry.verify(req));
-    if (!auth.ok) return { ok: false, status: auth.status, reason: auth.reason };
+    if (!auth.ok) return { ok: false, status: auth.status, reason: auth.reason, authenticated: false };
 
     const before = this.world.log.length;
     const outcome = dispatch(this.world, auth.principal, parsed.data, { notary: this.notary });
@@ -114,7 +128,9 @@ export class VouchNode {
     const emitted = this.world.log.length - before;
     this.durable(() => this.journal.append(this.world.log.since(before)));
 
-    if (!outcome.ok) return { ok: false, status: 422, reason: outcome.reason };
+    // Authenticated: the nonce was consumed and the durable append happened, whatever
+    // the engine then decided about the command itself.
+    if (!outcome.ok) return { ok: false, status: 422, reason: outcome.reason, authenticated: true };
     return { ok: true, status: 200, detail: outcome.detail, events: emitted };
   }
 }
