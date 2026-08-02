@@ -6,6 +6,7 @@
 // registered; an unknown suite is an explicit failure (§M0).
 
 import { ed25519 } from "@noble/curves/ed25519";
+import { z } from "zod";
 
 export interface SignatureSuite {
   readonly id: string;
@@ -191,9 +192,21 @@ export interface SuitePolicy {
   readonly requirePq?: boolean;
 }
 
+export type NegotiationFailureReason = "no-acceptable-suite" | "invalid-policy";
+
 export type NegotiationResult =
   | { readonly ok: true; readonly agreedSuites: readonly string[] }
-  | { readonly ok: false; readonly reason: "no-acceptable-suite"; readonly detail: string };
+  | { readonly ok: false; readonly reason: NegotiationFailureReason; readonly detail: string };
+
+// A policy is wire-derived (a counterparty's RFC 0004 §5.1 region metadata), so it is
+// validated like every other wire-derived input in this package — a malformed policy is a
+// structured failure, never an escaping TypeError. Without this, a missing responder
+// `signatureSuites` threw while the same defect on the initiator failed closed (asymmetric).
+const suitePolicySchema = z.object({
+  signatureSuites: z.array(z.string()),
+  minSecurityBits: z.number(),
+  requirePq: z.boolean().optional(),
+});
 
 /** Whether `meta` satisfies `policy`: active, meets the strength floor, and PQ if required. */
 function acceptableTo(policy: SuitePolicy, meta: SuiteMeta): boolean {
@@ -210,23 +223,65 @@ function acceptableTo(policy: SuitePolicy, meta: SuiteMeta): boolean {
  * policies admit the MTI it is always already in the candidate set; a fallback that rescued a
  * negotiation with a counterparty whose advertisement omits the MTI would legitimize that §5
  * violation. Unregistered advertised ids cannot be assessed and are skipped.
+ *
+ * `lookupMeta` is caller-parameterized (defaulting to the registry) for the same reason
+ * `verifyCertificate` takes the issuer key instead of consulting a directory: it keeps the
+ * §6 "MUST exclude deprecated suites" rule testable — the seed table currently has no
+ * deprecated entry and is frozen, so without this seam the rule could only be exercised on
+ * the day a suite is actually deprecated.
+ *
+ * The returned `agreedSuites` is frozen: it gets bound into a co-signed Connection
+ * Agreement (§6.3, the downgrade defence), so runtime immutability matches the frozen
+ * metadata table this file already ships.
  */
-export function negotiate(initiator: SuitePolicy, responder: SuitePolicy): NegotiationResult {
+export function negotiate(
+  initiator: SuitePolicy,
+  responder: SuitePolicy,
+  lookupMeta: (id: string) => SuiteMeta | undefined = getSuiteMeta,
+): NegotiationResult {
+  for (const [side, policy] of [
+    ["initiator", initiator],
+    ["responder", responder],
+  ] as const) {
+    const parsed = suitePolicySchema.safeParse(policy);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return {
+        ok: false,
+        reason: "invalid-policy",
+        detail: `${side} policy is malformed — ${issue ? `${issue.path.join(".") || "<root>"}: ${issue.message}` : "not a policy object"}`,
+      };
+    }
+  }
+
+  // The shared advertisement set first (ordered, deduplicated, responder order) — kept
+  // separate from the acceptability filter so a failure can say WHICH stage emptied it:
+  // this is the one message humans debug across two organizations.
   const advertisedByInitiator = new Set(initiator.signatureSuites);
   const seen = new Set<string>();
-  const agreedSuites = responder.signatureSuites.filter((id) => {
-    if (seen.has(id) || !advertisedByInitiator.has(id)) return false;
-    const meta = getSuiteMeta(id);
-    if (meta === undefined || !acceptableTo(initiator, meta) || !acceptableTo(responder, meta)) return false;
-    seen.add(id); // ordered set: first occurrence wins
-    return true;
-  });
+  const shared: string[] = [];
+  for (const id of responder.signatureSuites) {
+    if (!seen.has(id) && advertisedByInitiator.has(id)) {
+      seen.add(id); // ordered set: first occurrence wins
+      shared.push(id);
+    }
+  }
+
+  const agreedSuites = Object.freeze(
+    shared.filter((id) => {
+      const meta = lookupMeta(id);
+      return meta !== undefined && acceptableTo(initiator, meta) && acceptableTo(responder, meta);
+    }),
+  );
   if (agreedSuites.length > 0) {
     return { ok: true, agreedSuites };
   }
   return {
     ok: false,
     reason: "no-acceptable-suite",
-    detail: "no suite advertised by both regions is registered, active, and acceptable to both regions' policies",
+    detail:
+      shared.length === 0
+        ? "the two advertisements share no suite id"
+        : `shared [${shared.join(", ")}], but every shared suite was excluded — unregistered, deprecated, below a strength floor, or non-PQ under a PQ requirement`,
   };
 }

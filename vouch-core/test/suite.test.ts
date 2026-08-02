@@ -168,4 +168,63 @@ describe("RFC 0005 §6 negotiation", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toBe("no-acceptable-suite");
   });
+
+  test("a malformed policy is a structured failure on EITHER side, never a throw (invalid-policy)", () => {
+    // Policies are wire-derived (a counterparty's region metadata). Previously a missing
+    // responder list escaped as a raw TypeError while the initiator side failed closed.
+    const broken = { minSecurityBits: 128 } as unknown as SuitePolicy; // no signatureSuites
+    for (const [a, b, side] of [
+      [broken, policy(["ed25519"]), "initiator"],
+      [policy(["ed25519"]), broken, "responder"],
+    ] as const) {
+      const r = negotiate(a, b);
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.reason).toBe("invalid-policy");
+        expect(r.detail).toContain(side); // says WHICH side is malformed
+      }
+    }
+    // non-array is equally structured
+    const r = negotiate(policy(["ed25519"]), { signatureSuites: "ed25519", minSecurityBits: 128 } as unknown as SuitePolicy);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("invalid-policy");
+  });
+
+  test("a deprecated suite is excluded (§6 MUST) — exercised through the lookup seam", () => {
+    // The frozen seed table has no deprecated entry, so the rule is testable only via the
+    // caller-parameterized lookup (the same discipline as verifyCertificate taking the key).
+    const deprecatedEd25519 = (id: string) => {
+      const meta = getSuiteMeta(id);
+      return meta && id === "ed25519" ? { ...meta, status: "deprecated" as const } : meta;
+    };
+    const r = negotiate(policy(["ed25519", "ecdsa-p384"]), policy(["ed25519", "ecdsa-p384"]), deprecatedEd25519);
+    expect(r).toEqual({ ok: true, agreedSuites: ["ecdsa-p384"] }); // ed25519 excluded as deprecated
+    const alone = negotiate(policy(["ed25519"]), policy(["ed25519"]), deprecatedEd25519);
+    expect(alone.ok).toBe(false);
+    if (!alone.ok) expect(alone.reason).toBe("no-acceptable-suite");
+  });
+
+  test("dedup keeps the FIRST occurrence (a discriminating case, not just a doubled singleton)", () => {
+    // first-wins: [p384, ed25519]; last-wins would yield [ed25519, p384].
+    const r = negotiate(policy(["ecdsa-p384", "ed25519"]), policy(["ecdsa-p384", "ed25519", "ecdsa-p384"]));
+    expect(r).toEqual({ ok: true, agreedSuites: ["ecdsa-p384", "ed25519"] });
+  });
+
+  test("agreedSuites is frozen at runtime — it binds into a co-signed Connection Agreement", () => {
+    const r = negotiate(policy(["ed25519"]), policy(["ed25519"]));
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(Object.isFrozen(r.agreedSuites)).toBe(true);
+      expect(() => {
+        (r.agreedSuites as string[]).push("sneaky");
+      }).toThrow(TypeError);
+    }
+  });
+
+  test("the failure detail says WHICH stage emptied the candidates", () => {
+    const disjoint = negotiate(policy(["ecdsa-p256"]), policy(["ecdsa-p384"]));
+    if (!disjoint.ok) expect(disjoint.detail).toContain("share no suite id");
+    const excluded = negotiate(policy(["ed25519"], 256), policy(["ed25519"]));
+    if (!excluded.ok) expect(excluded.detail).toContain("shared [ed25519]"); // names the overlap
+  });
 });

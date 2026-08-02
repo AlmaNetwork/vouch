@@ -85,6 +85,12 @@ A region MUST expose, in its region metadata (RFC 0004 §5.1), an ordered
 `signatureSuites` list — the suites it can VERIFY, most-preferred first — and it MUST include
 the MTI suite. It MAY expose `signingSuites` when the set it produces differs.
 
+A region MUST also expose its `minSecurityBits` floor, and MUST expose `requirePq: true`
+when it requires post-quantum resistance (§8). Rationale: §6 negotiation evaluates
+acceptability against **both** regions' policies, so each side needs the other's floor —
+without these fields on the wire, the responder cannot evaluate the initiator's half of the
+candidate filter with what the protocol transmits.
+
 ## 6. Negotiation
 
 Each region MUST define a minimum-strength policy. When two regions establish a Connection
