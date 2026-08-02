@@ -78,6 +78,11 @@ after** it verifies. The principal in a request body is claimed, not proven; if 
 alone could spend a token, anyone could lock a participant out of their own account by
 spamming their name. An unauthenticated caller is charged to their IP instead.
 
+`GET /health` is **exempt** from the read limit. It is the liveness probe, so limiting
+it would let a read flood 429 the health check and get the node restarted — a restart
+loop delivered through the limiter meant to prevent one. It is O(1) with a fixed-size
+body, so exempting it costs nothing the connection did not already cost.
+
 ## HTTP surface
 
 - `POST /v1/register` — bind a principal to a public key (self-signed).

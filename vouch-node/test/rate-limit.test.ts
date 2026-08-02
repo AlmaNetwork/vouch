@@ -113,19 +113,32 @@ const get = (app: Hono, path: string, ip = "1.1.1.1") => app.request(path, { hea
 describe("HTTP rate limiting", () => {
   test("reads are limited per IP, with Retry-After", async () => {
     const app = makeApp({ readsPerMinutePerIp: 3 });
-    for (let i = 0; i < 3; i++) expect((await get(app, "/health")).status).toBe(200);
+    for (let i = 0; i < 3; i++) expect((await get(app, "/regions")).status).toBe(200);
 
-    const res = await get(app, "/health");
+    const res = await get(app, "/regions");
     expect(res.status).toBe(429);
     expect(Number(res.headers.get("retry-after"))).toBeGreaterThan(0);
     expect(((await res.json()) as { error: { code: string } }).error.code).toBe("rate-limited");
   });
 
+  // The liveness probe is exempt. Rate-limiting it lets a read flood 429 the health
+  // check and get the node restarted — a restart loop delivered through the limiter
+  // that exists to prevent one. Behind the shipped proxy with no client-IP header it
+  // is not even a flood: every caller shares one bucket, so ordinary traffic starves
+  // the probe.
+  test("/health is not rate limited, even once every other read is refused", async () => {
+    const app = makeApp({ readsPerMinutePerIp: 2 });
+    for (let i = 0; i < 2; i++) expect((await get(app, "/regions")).status).toBe(200);
+    expect((await get(app, "/regions")).status).toBe(429);
+
+    for (let i = 0; i < 50; i++) expect((await get(app, "/health")).status).toBe(200);
+  });
+
   test("one IP's reads do not affect another's", async () => {
     const app = makeApp({ readsPerMinutePerIp: 2 });
-    for (let i = 0; i < 2; i++) await get(app, "/health", "1.1.1.1");
-    expect((await get(app, "/health", "1.1.1.1")).status).toBe(429);
-    expect((await get(app, "/health", "2.2.2.2")).status).toBe(200);
+    for (let i = 0; i < 2; i++) await get(app, "/regions", "1.1.1.1");
+    expect((await get(app, "/regions", "1.1.1.1")).status).toBe(429);
+    expect((await get(app, "/regions", "2.2.2.2")).status).toBe(200);
   });
 
   test("writes are limited per IP before the body is even read", async () => {
@@ -146,11 +159,11 @@ describe("HTTP rate limiting", () => {
   test("limits recover as the clock advances", async () => {
     const c = clock();
     const app = makeApp({ readsPerMinutePerIp: 60, now: c.now });
-    for (let i = 0; i < 60; i++) await get(app, "/health");
-    expect((await get(app, "/health")).status).toBe(429);
+    for (let i = 0; i < 60; i++) await get(app, "/regions");
+    expect((await get(app, "/regions")).status).toBe(429);
 
     c.advance(1);
-    expect((await get(app, "/health")).status).toBe(200);
+    expect((await get(app, "/regions")).status).toBe(200);
   });
 
   test("the per-principal write limit applies to a real participant", async () => {
@@ -204,6 +217,6 @@ describe("HTTP rate limiting", () => {
 
   test("limits can be turned off entirely", async () => {
     const app = makeApp({ readsPerMinutePerIp: 0, writesPerHourPerIp: 0, writesPerMinutePerPrincipal: 0 });
-    for (let i = 0; i < 200; i++) expect((await get(app, "/health")).status).toBe(200);
+    for (let i = 0; i < 200; i++) expect((await get(app, "/regions")).status).toBe(200);
   });
 });

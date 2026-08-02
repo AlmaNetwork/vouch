@@ -194,8 +194,17 @@ export function createNodeApp(node: VouchNode, opts: NodeAppOptions = {}): Hono 
   // request — including the health check the supervisor restarts us on.
   const observation = createObservationApp(node.world, { build: opts.build });
   app.all("*", (c) => {
-    const ip = clientIp(c);
-    if (!readsPerIp.take(ip)) return tooMany(c, readsPerIp, ip, randomUUID(), "read-ip");
+    // `/health` is exempt. It is the LIVENESS probe: rate-limiting it means a read
+    // flood can 429 the supervisor's health check and get the node restarted, which
+    // hands an attacker a restart loop through the limiter that exists to stop them.
+    // Behind the shipped proxy with no client-IP header configured that is not even a
+    // flood — every caller shares one bucket, so ordinary read traffic can starve the
+    // probe. The endpoint is O(1) and returns a fixed-size body, so exempting it costs
+    // nothing the connection itself did not already cost.
+    if (c.req.path !== "/health") {
+      const ip = clientIp(c);
+      if (!readsPerIp.take(ip)) return tooMany(c, readsPerIp, ip, randomUUID(), "read-ip");
+    }
     return observation.fetch(c.req.raw);
   });
   return app;
