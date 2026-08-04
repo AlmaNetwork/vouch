@@ -17,11 +17,12 @@ jobs:
         with:
           bun-version: "1.3.2"
 
-      # Root tooling package holds Biome (lint + format). `biome ci` is
-      # non-mutating: it fails if anything is unformatted or trips a lint rule.
+      # Root tooling package holds the shared tooling: oxlint lints, Biome checks
+      # formatting. `bun run ci` chains both and is non-mutating: it fails if
+      # anything is unformatted or trips a lint rule.
       - name: Install tooling
         run: bun install --frozen-lockfile
-      - name: Biome — lint + format check
+      - name: oxlint + Biome format check
         run: bun run ci
 
   test:
