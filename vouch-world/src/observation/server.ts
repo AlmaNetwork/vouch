@@ -10,6 +10,7 @@ import { Hono } from "hono";
 import { getAgent, listAgents } from "../agent";
 import type { WorldState } from "../environment";
 import type { WorldView } from "../foundation";
+import { getItem, listItems } from "../item";
 import { getRegion, listRegions } from "../region";
 import { type Metrics, metrics } from "./metrics";
 
@@ -102,6 +103,8 @@ export function createObservationApp(view: WorldView<WorldState>, opts: Observat
         "/regions/:id",
         "/agents",
         "/agents/:id",
+        "/items",
+        "/items/:id",
         "/log?since=N",
         "/log/digest",
       ],
@@ -127,6 +130,15 @@ export function createObservationApp(view: WorldView<WorldState>, opts: Observat
   app.get("/agents/:id", (c) => {
     const a = getAgent(view.getState(), c.req.param("id"));
     return a ? c.json(a, 200, { "cache-control": DERIVED_CACHE }) : c.json({ error: "agent not found" }, 404);
+  });
+
+  // The item ledger. Readable in `/state` too, but a caller who wants to know who holds
+  // what should not have to fetch every region and agent to find out — the same reason
+  // /regions and /agents exist as their own views.
+  app.get("/items", (c) => c.json(listItems(view.getState()), 200, { "cache-control": DERIVED_CACHE }));
+  app.get("/items/:id", (c) => {
+    const i = getItem(view.getState(), c.req.param("id"));
+    return i ? c.json(i, 200, { "cache-control": DERIVED_CACHE }) : c.json({ error: "item not found" }, 404);
   });
 
   // Still a bare array (vouch-cli, vouch-web and openapi/read.yaml all consume it that

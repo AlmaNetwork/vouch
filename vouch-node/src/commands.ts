@@ -17,16 +17,20 @@ import {
   experimenterProposal,
   immigrate,
   MAX_BALANCE,
+  mintItem,
   openProposal,
   proposeFounding,
+  transferItem,
   vouchFor,
   type WorldState,
 } from "vouch-world/environment";
 import type { Result, World } from "vouch-world/foundation";
+import { MAX_ITEM_ID_LENGTH, MAX_ITEM_KIND_LENGTH } from "vouch-world/item";
 import {
   canGovern,
   defineRegion,
   getRegion,
+  itemPolicyOf,
   MAX_COUNCIL_MEMBERS,
   MAX_DISPLAY_NAME_LENGTH,
   MAX_INSTITUTION_INT,
@@ -78,6 +82,28 @@ const migrateSchema = z.object({
   kind: z.literal("migrate"),
   agentId: z.string().min(1).max(MAX_IDENTIFIER_LENGTH),
   toRegion: z.string().min(1).max(MAX_REGION_LENGTH),
+});
+
+// --- digital items -----------------------------------------------------------
+//
+// The item's type tag is `itemKind` on the wire, not `kind` — `kind` is this union's
+// discriminator and cannot be reused inside a member.
+//
+// `transfer-item` carries no `from`: the engine's transferItem is holder-gated (`by`
+// must be the current owner), and the node binds `by` to the authenticated principal,
+// so acting for someone else is not merely refused — it is inexpressible.
+
+const mintItemSchema = z.object({
+  kind: z.literal("mint-item"),
+  itemId: z.string().min(1).max(MAX_ITEM_ID_LENGTH),
+  itemKind: z.string().min(1).max(MAX_ITEM_KIND_LENGTH),
+  owner: z.string().min(1).max(MAX_IDENTIFIER_LENGTH),
+});
+
+const transferItemSchema = z.object({
+  kind: z.literal("transfer-item"),
+  itemId: z.string().min(1).max(MAX_ITEM_ID_LENGTH),
+  to: z.string().min(1).max(MAX_IDENTIFIER_LENGTH),
 });
 
 // --- institutions -----------------------------------------------------------
@@ -138,6 +164,10 @@ const institutionChange = z.discriminatedUnion("policy", [
       regenPerTick: z.number().int().min(0).max(MAX_INSTITUTION_INT),
     }),
   }),
+  z.object({
+    policy: z.literal("items"),
+    value: z.object({ minting: z.enum(["owner", "residents", "anyone"]) }),
+  }),
 ]);
 
 const regionId = z.string().min(1).max(MAX_REGION_LENGTH);
@@ -155,6 +185,8 @@ export const commandSchema = z.discriminatedUnion("kind", [
   amendSchema,
   proposeSchema,
   voteSchema,
+  mintItemSchema,
+  transferItemSchema,
 ]);
 export type Command = z.infer<typeof commandSchema>;
 
@@ -271,6 +303,41 @@ export function dispatch(world: World<WorldState>, principal: string, command: C
         // threshold, so it is gone from the region by the time we read back. Reporting
         // that is the difference between "my vote counted" and "the amendment passed".
         return { ok: true, detail: { regionId: command.regionId, resolved: after.openProposal === null } };
+      }
+      // Minting is the one item act with an authorization question, and the engine
+      // deliberately does not answer it (items.ts: "WHO may mint is left to the API
+      // layer"). The answer here is an INSTITUTION: each region decides who may mint
+      // for its residents, and the policy consulted is the RECIPIENT's region of
+      // residence — an item has no region of its own, so the act of bringing one into
+      // existence for someone is governed by the village that person lives in.
+      case "mint-item": {
+        const state = world.getState();
+        const recipient = getAgent(state, command.owner);
+        if (!recipient) return { ok: false, reason: "unknown-agent" };
+        const region = getRegion(state, recipient.region);
+        if (!region) return { ok: false, reason: "unknown-region" };
+        const policy = itemPolicyOf(region);
+        // Each refusal names the mode in force, so a caller learns the rule rather
+        // than guessing at a generic "not allowed".
+        if (policy.minting === "owner" && ownerOf(state, recipient.region) !== principal) {
+          return { ok: false, reason: "minting-restricted-to-owner" };
+        }
+        if (policy.minting === "residents" && getAgent(state, principal)?.region !== recipient.region) {
+          return { ok: false, reason: "minting-restricted-to-residents" };
+        }
+        const res = mintItem(world, command.itemId, command.itemKind, command.owner);
+        return res.ok
+          ? { ok: true, detail: { itemId: command.itemId, itemKind: command.itemKind, owner: command.owner } }
+          : { ok: false, reason: res.reason };
+      }
+      case "transfer-item": {
+        // Holder-gated by the engine: `by` must be the item's current owner, and `by`
+        // IS the principal here, so there is no impersonation to refuse — it cannot
+        // even be asked for.
+        const res = transferItem(world, command.itemId, command.to, principal);
+        return res.ok
+          ? { ok: true, detail: { itemId: command.itemId, from: principal, to: command.to } }
+          : { ok: false, reason: res.reason };
       }
     }
   } catch {

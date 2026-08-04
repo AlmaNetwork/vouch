@@ -7,6 +7,7 @@ import {
   createAlmaWorld,
   executeTransfer,
   experimenterProposal,
+  mintItem,
   proposeFounding,
   seedGenesis,
 } from "../../src/environment";
@@ -31,6 +32,7 @@ function world() {
   admitAgent(w, { id: "alice@umi", region: "umi", role: "merchant", valueProfile: "lenient", publicKey: "", currency: 100 });
   admitAgent(w, { id: "bob@umi", region: "umi", role: "artisan", valueProfile: "lenient", publicKey: "", currency: 0 });
   executeTransfer(w, { from: "alice@umi", to: "bob@umi", amount: 40 }, { tick: 0, notary: NOTARY });
+  mintItem(w, "deed-umi-1", "deed", "alice@umi"); // so /items/{id} has something to serve
   return w;
 }
 
@@ -38,6 +40,7 @@ function world() {
 function concretize(path: string): string {
   if (path.startsWith("/regions/")) return path.replace("{id}", "umi");
   if (path.startsWith("/agents/")) return path.replace("{id}", "alice@umi");
+  if (path.startsWith("/items/")) return path.replace("{id}", "deed-umi-1");
   return path;
 }
 

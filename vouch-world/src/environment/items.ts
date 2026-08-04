@@ -8,7 +8,7 @@
 
 import { getAgent } from "../agent";
 import type { Result } from "../foundation";
-import { EVENT_ITEM_MINTED, EVENT_ITEM_TRANSFERRED, getItem } from "../item";
+import { EVENT_ITEM_MINTED, EVENT_ITEM_TRANSFERRED, getItem, MAX_ITEM_ID_LENGTH, MAX_ITEM_KIND_LENGTH } from "../item";
 import { commit, type WorldCommit } from "./state";
 
 export type ItemResult = Result;
@@ -16,6 +16,8 @@ export type ItemResult = Result;
 /** Mint a new unique item owned by an agent. itemId must be fresh; the owner must be a real agent. */
 export function mintItem(env: WorldCommit, itemId: string, kind: string, owner: string): ItemResult {
   if (!itemId || !kind) return { ok: false, reason: "bad-item" };
+  // Both strings are journalled forever; bound them at the mutator like every other write.
+  if (itemId.length > MAX_ITEM_ID_LENGTH || kind.length > MAX_ITEM_KIND_LENGTH) return { ok: false, reason: "bad-item" };
   const state = env.getState();
   if (getItem(state, itemId)) return { ok: false, reason: "item-exists" };
   if (!getAgent(state, owner)) return { ok: false, reason: "unknown-agent" };

@@ -14,4 +14,6 @@ export {
   itemReducer,
   itemsOwnedBy,
   listItems,
+  MAX_ITEM_ID_LENGTH,
+  MAX_ITEM_KIND_LENGTH,
 } from "./state";
