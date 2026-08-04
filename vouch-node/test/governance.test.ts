@@ -156,7 +156,7 @@ describe("propose + vote — a council decides collectively", () => {
 
   test("a non-member cannot propose", () => {
     const node = dictatorship();
-    const n = toCouncil(node, 2, 2);
+    toCouncil(node, 2, 2);
     node.register(signRegister("mallory", 0, CAROL));
     const res = node.submit(signCommand("mallory", 1, { kind: "propose", regionId: "umi", change: CHEAPER }, CAROL));
 

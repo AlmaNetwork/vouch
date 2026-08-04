@@ -64,18 +64,21 @@ cd vouch-node  && bun install && bun run typecheck && bun test
 Lint + format are repo-wide, run from the root tooling package:
 
 ```bash
-bun install        # at the repo root, installs Biome
-bun run check      # lint + format + organize-imports, writes fixes in place
+bun install        # at the repo root, installs oxlint + Biome
+bun run check      # format + organize-imports (writes fixes in place), then lint
 bun run ci         # non-mutating: what CI runs (fails on any unformatted / lint issue)
 ```
 
 - Runtime & test runner: **Bun, pinned to 1.3.2 in CI**. Tests use `bun:test`
   (`import { describe, expect, test } from "bun:test"`). Do not add jest/vitest or a
   separate test config.
-- Lint + format: **[Biome](https://biomejs.dev)** (one tool for both), configured in
-  the root `biome.json` — 2-space indent, double quotes, semicolons, trailing commas,
-  140-col. Run `bun run check` before pushing; CI runs `biome ci .` as a separate
-  `lint` job. Do not add ESLint/Prettier.
+- Lint: **[oxlint](https://oxc.rs)**, configured in the root `.oxlintrc.json`
+  (correctness rules as errors; `no-explicit-any` / `no-non-null-assertion` enforced
+  in `src`, relaxed under `**/test/**`). Format: **[Biome](https://biomejs.dev)**
+  (linter disabled), configured in the root `biome.json` — 2-space indent, double
+  quotes, semicolons, trailing commas, 140-col. Run `bun run check` before pushing;
+  CI runs `biome ci . && oxlint .` as a separate `lint` job. Do not add
+  ESLint/Prettier.
 - `bun run typecheck` = `tsc --noEmit`. The `tsconfig.json` files are
   byte-identical and maximally strict (`strict`, `noUncheckedIndexedAccess`,
   `noFallthroughCasesInSwitch`, `noImplicitOverride`). If you change a strictness
@@ -318,8 +321,8 @@ The established cadence for every milestone / feature:
 
 - CI (`oven-sh/setup-bun@v2`, bun `1.3.2`) runs two GitHub Actions jobs, both on push
   to `main` and on all PRs:
-  - **`lint`** — installs the root tooling package and runs `biome ci .` (lint +
-    format check, non-mutating).
+  - **`lint`** — installs the root tooling package and runs `biome ci . && oxlint .`
+    (format check + lint, non-mutating).
   - **`test`** — installs **both** packages (`bun install --frozen-lockfile`, core
     then world) and runs `bun run typecheck && bun test` per package.
 - `test` installs both because `vouch-world`'s typecheck reaches into `vouch-core`'s
