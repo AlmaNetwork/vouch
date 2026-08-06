@@ -64,6 +64,18 @@ interface GovernArgs {
 interface VoteArgs {
   regionId: string;
 }
+interface LifecycleArgs {
+  regionId: string;
+  lifecycle: "active" | "dormant";
+}
+interface ListArgs {
+  regionId: string;
+  salePrice: number | null;
+}
+interface HandoverArgs {
+  regionId: string;
+  to: string;
+}
 interface MintItemArgs {
   itemId: string;
   itemKind: string;
@@ -305,6 +317,23 @@ export function buildMcpServer(deps: McpDeps, ctx: AuthContext): McpServer {
     },
   );
 
+  // The region market. A region is never deleted — a defunct one is hibernated and
+  // handed on — so these three are how a village changes hands rather than ends.
+
+  writeTool(
+    "vouch_set_region_lifecycle",
+    "Hibernate or reactivate a region",
+    "Put a region you own to sleep, or wake it. A DORMANT region's residents cannot transact, and a region must be dormant before it can be listed for sale. Owner-only. Needs scope vouch:market.",
+    {
+      regionId: z.string().min(1).describe("The region you own"),
+      lifecycle: z.enum(["active", "dormant"]).describe("dormant hibernates it; active wakes it"),
+    },
+    (args) => {
+      const a = args as unknown as LifecycleArgs;
+      return runWrite(ctx.principal, "lifecycle", { kind: "lifecycle", regionId: a.regionId, lifecycle: a.lifecycle });
+    },
+  );
+
   // Items act as WHOEVER the rule in force names. Minting is governed by the
   // recipient's region's `items` institution: under {minting:'owner'} the minter is
   // the region-owning ACCOUNT (omit identityRegion), under 'residents' the minter is
@@ -329,6 +358,34 @@ export function buildMcpServer(deps: McpDeps, ctx: AuthContext): McpServer {
       const a = args as unknown as MintItemArgs;
       const minter = a.identityRegion === undefined ? ctx.principal : residentIn(a.identityRegion);
       return runWrite(minter, "mint-item", { kind: "mint-item", itemId: a.itemId, itemKind: a.itemKind, owner: a.owner });
+    },
+  );
+
+  writeTool(
+    "vouch_list_region_for_sale",
+    "List or delist a region",
+    "Put a DORMANT region you own up at an asking price, or pass salePrice null to delist. The region must already be dormant — hibernate it first with vouch_set_region_lifecycle. Owner-only. Needs scope vouch:market.",
+    {
+      regionId: z.string().min(1).describe("The dormant region you own"),
+      salePrice: z.number().int().min(0).nullable().describe("Asking price in whole units, or null to delist. 0 is a valid (free) listing"),
+    },
+    (args) => {
+      const a = args as unknown as ListArgs;
+      return runWrite(ctx.principal, "list", { kind: "list", regionId: a.regionId, salePrice: a.salePrice });
+    },
+  );
+
+  writeTool(
+    "vouch_handover_region",
+    "Hand a listed region to another account",
+    "Transfer ownership of a region you own and have LISTED. The region is preserved whole — institutions, residents and treasury all stay; only the owner changes, and it reactivates and delists. IMPORTANT: no currency moves. Settlement of the asking price is not implemented, so this is a handover that records a price, not a purchase — agree payment out of band. Irreversible from your side: only the new owner can hand it back. Needs scope vouch:market.",
+    {
+      regionId: z.string().min(1).describe("The listed region you own"),
+      to: z.string().min(1).describe("The receiving account — must be a principal registered on this node"),
+    },
+    (args) => {
+      const a = args as unknown as HandoverArgs;
+      return runWrite(ctx.principal, "handover", { kind: "handover", regionId: a.regionId, to: a.to });
     },
   );
 

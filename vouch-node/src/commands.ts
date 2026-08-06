@@ -16,11 +16,14 @@ import {
   executeTransfer,
   experimenterProposal,
   immigrate,
+  listRegion,
   MAX_BALANCE,
   mintItem,
   openProposal,
   proposeFounding,
+  setRegionLifecycle,
   transferItem,
+  transferRegionOwnership,
   vouchFor,
   type WorldState,
 } from "vouch-world/environment";
@@ -40,6 +43,7 @@ import {
   ownerOf,
 } from "vouch-world/region";
 import { z } from "zod";
+import { MAX_PRINCIPAL_LENGTH } from "./accounts";
 
 // Every bound below is the ENGINE's bound, imported rather than restated. The engine
 // enforces them too, so a command that slips past this schema still cannot get through
@@ -172,6 +176,23 @@ const institutionChange = z.discriminatedUnion("policy", [
 
 const regionId = z.string().min(1).max(MAX_REGION_LENGTH);
 
+// --- the region market ------------------------------------------------------
+//
+// A region is never deleted. A defunct one is hibernated and handed on, which is why
+// these three exist: `lifecycle` puts it to sleep, `list` prices it, `handover` moves
+// the ownership. All three are owner-gated inside the engine and return a Result
+// rather than throwing, so the node passes the reason straight through.
+
+const lifecycleSchema = z.object({ kind: z.literal("lifecycle"), regionId, lifecycle: z.enum(["active", "dormant"]) });
+const listSchema = z.object({
+  kind: z.literal("list"),
+  regionId,
+  // null delists. The engine already refuses a negative or fractional price; the
+  // ceiling is here for the same reason every other value on this surface has one.
+  salePrice: z.number().int().min(0).max(MAX_BALANCE).nullable(),
+});
+const handoverSchema = z.object({ kind: z.literal("handover"), regionId, to: z.string().min(1).max(MAX_PRINCIPAL_LENGTH) });
+
 const amendSchema = z.object({ kind: z.literal("amend"), regionId, change: institutionChange });
 const proposeSchema = z.object({ kind: z.literal("propose"), regionId, change: institutionChange });
 const voteSchema = z.object({ kind: z.literal("vote"), regionId });
@@ -185,6 +206,9 @@ export const commandSchema = z.discriminatedUnion("kind", [
   amendSchema,
   proposeSchema,
   voteSchema,
+  lifecycleSchema,
+  listSchema,
+  handoverSchema,
   mintItemSchema,
   transferItemSchema,
 ]);
@@ -194,6 +218,17 @@ export type CommandResult = Result<{ detail?: Record<string, unknown> }>;
 
 export interface DispatchContext {
   readonly notary: KeyPair;
+  /**
+   * Whether a principal has bound a key on this node.
+   *
+   * Needed because handing a region to an account that does not exist is
+   * unrecoverable: regions are never deleted, every governing act is owner-gated, and
+   * an owner nobody holds a key for can never amend, list or hand it on again. The
+   * engine leaves this open deliberately (`transferRegionOwnership` notes that accounts
+   * are not first-class to it), so the node — which is the thing that knows what a
+   * registered account IS — supplies the check.
+   */
+  readonly isRegistered: (principal: string) => boolean;
 }
 
 /**
@@ -303,6 +338,32 @@ export function dispatch(world: World<WorldState>, principal: string, command: C
         // threshold, so it is gone from the region by the time we read back. Reporting
         // that is the difference between "my vote counted" and "the amendment passed".
         return { ok: true, detail: { regionId: command.regionId, resolved: after.openProposal === null } };
+      }
+      case "lifecycle": {
+        const res = setRegionLifecycle(world, command.regionId, command.lifecycle, principal);
+        return res.ok
+          ? { ok: true, detail: { regionId: command.regionId, lifecycle: command.lifecycle } }
+          : { ok: false, reason: res.reason };
+      }
+      case "list": {
+        const res = listRegion(world, command.regionId, command.salePrice, principal);
+        return res.ok
+          ? { ok: true, detail: { regionId: command.regionId, salePrice: command.salePrice } }
+          : { ok: false, reason: res.reason };
+      }
+      case "handover": {
+        // The one guard the engine leaves to us. It does not know what an account is,
+        // so it accepts any non-empty string as the new owner — and an owner nobody
+        // holds a key for is permanent, because regions are never deleted and every
+        // governing act is owner-gated. A typo here would strand a village forever.
+        if (!ctx.isRegistered(command.to)) return { ok: false, reason: "unregistered-recipient" };
+        // Read the asking price BEFORE the handover: it clears the listing, so the
+        // region read back afterwards always reports null.
+        const askingPrice = getRegion(world.getState(), command.regionId)?.salePrice ?? null;
+        const res = transferRegionOwnership(world, command.regionId, command.to, principal);
+        return res.ok
+          ? { ok: true, detail: { regionId: command.regionId, from: principal, to: command.to, price: askingPrice } }
+          : { ok: false, reason: res.reason };
       }
       // Minting is the one item act with an authorization question, and the engine
       // deliberately does not answer it (items.ts: "WHO may mint is left to the API
