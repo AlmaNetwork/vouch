@@ -10,12 +10,12 @@
 // canonicalized (RFC 8785). `edgeId = sha256_hex(canonicalBytes(core))` is a SAID-class
 // content address; the `from` signature is Ed25519 over the same bytes.
 //
-// Scope of this module = RFC 0008 §4 (the wire format) only. It deliberately does NOT yet:
-//   - enforce the §5 micro-chain transition rules (prev/genesis/counter continuity,
-//     endpoint immutability) — that is a follow-up on top of this schema;
-//   - verify §4.6 per-kind co-signatures (membership/connection). A `cosign` map is carried
-//     on the wire as a detached attachment, but verifyEdge checks only the `from` signature.
-// Both are separate, incremental PRs. See RFC 0008 §5 / §4.6.
+// Scope of this module = RFC 0008 §4 (wire format) + §5 (per-edge micro-chain). The §5
+// transition-continuity rules (prev/genesis/counter, endpoint immutability) are checked by
+// verifyTransition / verifyChain — structure only; each state's own signature is verifyEdge's
+// job. It does NOT yet verify §4.6 per-kind co-signatures (membership/connection): a `cosign`
+// map is carried on the wire as a detached attachment, but verifyEdge checks only the `from`
+// signature. §4.6 cosign is a separate follow-up. See RFC 0008 §5 / §4.6.
 
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -229,9 +229,10 @@ export function issueEdge(input: IssueEdgeInput, fromPrivateKey: Uint8Array): Ed
 // --- verify --------------------------------------------------------------
 
 /**
- * Verify the envelope SHAPE and the `from` SIGNATURE over the core (§4.1). Per RFC 0008 §4.6,
+ * Verify the envelope SHAPE and the `from` SIGNATURE over the core (§4.1). The §5 micro-chain
+ * transition rules are checked separately by verifyTransition / verifyChain. Per RFC 0008 §4.6,
  * `membership`/`connection` additionally require a valid counterparty co-signature; that check
- * (and the §5 micro-chain transition rules) are separate follow-ups and are NOT performed here.
+ * is a separate follow-up and is NOT performed here.
  */
 export function verifyEdge(edge: unknown, fromPublicKey: Uint8Array): EdgeVerificationResult {
   const parsed = edgeSchema.safeParse(edge);
@@ -259,6 +260,128 @@ export function verifyEdge(edge: unknown, fromPublicKey: Uint8Array): EdgeVerifi
 
   if (!suite.verify(edgeSigningBytes(e), signature, fromPublicKey)) {
     return fail("bad-signature", "signature does not verify against the provided `from` public key");
+  }
+  return { ok: true };
+}
+
+// --- §5 micro-chain ------------------------------------------------------
+
+export type EdgeTransitionFailureReason =
+  | "not-a-transition"
+  | "endpoint-changed"
+  | "immutable-field-changed"
+  | "counter-not-incremented"
+  | "prev-mismatch"
+  | "genesis-mismatch";
+
+// Fields outside the §5.1 mutable set (weight / context / validity / expiry / status) and the
+// chain machinery (prev / genesis / counter): they carry the relationship's MEANING and MUST NOT
+// change mid-chain — the same RFC 0007 Tier K-4 exclusion as §5.3 endpoints (a changed meaning is
+// a new relationship, not a mutation of this one; capability attenuation is a `parent` chain of
+// separate edges, §10.6, never a mid-chain change).
+const IMMUTABLE_FIELDS = ["version", "suite", "schemaId", "command", "parent"] as const;
+
+export type EdgeTransitionResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: EdgeTransitionFailureReason; readonly detail: string };
+
+/** True iff `core` is a genesis state: `counter` 0, no `prev`, no `genesis` pointer (§5.1). */
+export function isGenesisState(core: EdgeCore): boolean {
+  return core.counter === 0 && core.prev === null && core.genesis === null;
+}
+
+/**
+ * True iff `core` is internally consistent as a §5.1 chain state: either a genesis state
+ * (`counter` 0, null `prev`/`genesis`) or a successor state (`counter` >= 1, non-null `prev`
+ * and `genesis`). A mixed state (e.g. `counter` 5 with null `prev`) is structurally impossible
+ * under §5.1 and must never anchor a transition — `genesisId` would otherwise mask it as a
+ * genesis and let a successor chain onto it.
+ */
+function isChainState(core: EdgeCore): boolean {
+  return isGenesisState(core) || (core.counter >= 1 && core.prev !== null && core.genesis !== null);
+}
+
+/**
+ * The stable name of the relationship `core` belongs to (§5.1): the `edgeId` of its genesis
+ * state. For a genesis state that is its own `edgeId`; for a later state it is the carried
+ * `genesis` pointer.
+ */
+export function genesisId(core: EdgeCore): string {
+  return core.genesis ?? edgeId(core);
+}
+
+/**
+ * Verify a single §5 micro-chain transition `prev -> next` — STRUCTURAL continuity only; each
+ * state's own signature is verifyEdge's job. Enforces (§5.1–§5.3): `prev` is a well-formed chain
+ * state; the endpoints `(from, to, kind)` stay fixed (§5.3 endpoint immutability); every field
+ * outside the §5.1 mutable set stays fixed (`version`/`suite`/`schemaId`/`command`/`parent`);
+ * `counter` increments by exactly 1; `next.prev == edgeId(prev)`; and `next.genesis` is the
+ * relationship's genesisId. The §5.4 rule that only an RFC 0007 §9-authored head may clear/lower
+ * a `sanction` is a penal-authority policy, not a structural edge rule, and is out of scope here.
+ */
+export function verifyTransition(prev: EdgeCore, next: EdgeCore): EdgeTransitionResult {
+  if (!isChainState(prev)) {
+    return {
+      ok: false,
+      reason: "not-a-transition",
+      detail: "prev is not a well-formed chain state (§5.1: counter/prev/genesis must be all-genesis or all-successor)",
+    };
+  }
+  if (next.from !== prev.from || next.to !== prev.to || next.kind !== prev.kind) {
+    return {
+      ok: false,
+      reason: "endpoint-changed",
+      detail: "(from, to, kind) MUST stay fixed within a micro-chain (§5.3)",
+    };
+  }
+  for (const field of IMMUTABLE_FIELDS) {
+    if (next[field] !== prev[field]) {
+      return {
+        ok: false,
+        reason: "immutable-field-changed",
+        detail: `"${field}" MUST stay fixed within a micro-chain (§5.1: only weight/context/validity/status may change)`,
+      };
+    }
+  }
+  if (isGenesisState(next)) {
+    return { ok: false, reason: "not-a-transition", detail: "next is a genesis state (counter 0 / null prev / null genesis)" };
+  }
+  if (next.counter !== prev.counter + 1) {
+    return { ok: false, reason: "counter-not-incremented", detail: `counter must be ${prev.counter + 1}, got ${next.counter}` };
+  }
+  if (next.prev !== edgeId(prev)) {
+    return { ok: false, reason: "prev-mismatch", detail: "next.prev MUST equal edgeId(prev) (§5.1)" };
+  }
+  if (next.genesis !== genesisId(prev)) {
+    return { ok: false, reason: "genesis-mismatch", detail: "next.genesis MUST equal the relationship genesisId (§5.1)" };
+  }
+  return { ok: true };
+}
+
+/**
+ * Verify an ordered micro-chain `[genesis, ...states]` end to end (§5): the first state is a
+ * genesis state, and every consecutive pair is a valid transition. Because `counter` is strictly
+ * `+1` each link, a lower-`counter` state can never re-attach — anti-rollback (§5.2). Returns
+ * the first failure.
+ */
+export function verifyChain(states: readonly EdgeCore[]): EdgeTransitionResult {
+  const first = states[0];
+  if (!first) {
+    return { ok: false, reason: "not-a-transition", detail: "empty chain" };
+  }
+  if (!isGenesisState(first)) {
+    return { ok: false, reason: "not-a-transition", detail: "a chain MUST start at a genesis state (§5.1)" };
+  }
+  let prev = first;
+  for (let i = 1; i < states.length; i++) {
+    const next = states[i];
+    if (!next) {
+      // A hole in the array (sparse chain) — fail closed: an unverifiable tail must not verify.
+      return { ok: false, reason: "not-a-transition", detail: `sparse chain: missing state at index ${i}` };
+    }
+    const res = verifyTransition(prev, next);
+    if (!res.ok) return res;
+    prev = next;
   }
   return { ok: true };
 }

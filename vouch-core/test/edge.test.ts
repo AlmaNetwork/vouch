@@ -4,10 +4,14 @@ import {
   type Edge,
   edgeId,
   edgeSigningBytes,
+  genesisId,
   type IssueEdgeInput,
+  isGenesisState,
   issueEdge,
   isValidEndpoint,
+  verifyChain,
   verifyEdge,
+  verifyTransition,
 } from "../src/edge";
 import { decodeBase64, encodeBase64 } from "../src/encoding";
 import { generateKeyPair, keyPairFromSeed } from "../src/keys";
@@ -152,8 +156,10 @@ const VECTORS: Vector[] = [
 ];
 const V4_COSIGN_BOB = "rdi37Iyj9zlQD+0HGanbYZ+vjBtGOCrMqHpks+MDn+fmCBlmgZtzorR3QBVLdTFCXQsGMBSywhPklEF3oD1sCw==";
 const v0 = VECTORS[0];
+const v1 = VECTORS[1];
+const v2 = VECTORS[2];
 const v4 = VECTORS[4];
-if (!v0 || !v4) throw new Error("edge test vectors missing");
+if (!v0 || !v1 || !v2 || !v4) throw new Error("edge test vectors missing");
 
 // The exact RFC 8785 canonical string of V0's core (§16), keys sorted.
 const V0_CORE_JSON =
@@ -282,5 +288,92 @@ describe("edge issue + verify", () => {
       parent: edge.parent,
     };
     expect(edgeId(reordered)).toBe(edgeId(edge));
+  });
+});
+
+describe("RFC 0008 §5 micro-chain", () => {
+  // The fixed (from,to,kind) triple alice@nova → bob@nova evolving 0.5 → 0.7 → revoked.
+  const e0 = issueEdge(v0.input, alice.privateKey); // genesis vouch (V0)
+  const e1 = issueEdge(v1.input, alice.privateKey); // weight raised (V1)
+  const e2 = issueEdge(v2.input, alice.privateKey); // revoked tombstone (V2)
+
+  test("genesis-state detection and genesisId", () => {
+    expect(isGenesisState(e0)).toBe(true);
+    expect(isGenesisState(e1)).toBe(false);
+    expect(genesisId(e0)).toBe(edgeId(e0)); // genesis: its own content address
+    expect(genesisId(e1)).toBe(edgeId(e0)); // later state: carried pointer == genesis edgeId
+    expect(genesisId(e2)).toBe(edgeId(e0));
+  });
+
+  test("valid transitions and full chain verify (0.5 → 0.7 → revoked)", () => {
+    expect(verifyTransition(e0, e1)).toEqual({ ok: true });
+    expect(verifyTransition(e1, e2)).toEqual({ ok: true });
+    expect(verifyChain([e0, e1, e2])).toEqual({ ok: true });
+  });
+
+  test("next.prev must equal edgeId(prev)", () => {
+    const r = verifyTransition(e0, { ...e1, prev: edgeId(e2) });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("prev-mismatch");
+  });
+
+  test("counter must increment by exactly 1", () => {
+    const r = verifyTransition(e0, { ...e1, counter: 2 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("counter-not-incremented");
+  });
+
+  test("endpoints (from, to, kind) are immutable — no re-pointing (§5.3)", () => {
+    const r = verifyTransition(e0, { ...e1, to: "carol@nova" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("endpoint-changed");
+  });
+
+  test("genesis pointer must match the relationship", () => {
+    const r = verifyTransition(e1, { ...e2, genesis: edgeId(e2) });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("genesis-mismatch");
+  });
+
+  test("a chain must start at a genesis state", () => {
+    const r = verifyChain([e1, e2]);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("not-a-transition");
+  });
+
+  test("anti-rollback: a stale lower-counter head cannot re-attach (§5.2)", () => {
+    const r = verifyChain([e0, e1, e2, e1]);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("counter-not-incremented");
+  });
+
+  test("fields outside the §5.1 mutable set are immutable — no re-pointing of meaning", () => {
+    const patches = [
+      { schemaId: "alma.sanction/v1" }, // change the meaning type
+      { suite: "ecdsa-p256" }, // change the signature suite mid-chain
+      { command: "trade.execute" }, // grow a capability command out of nothing
+      { parent: edgeId(e0) }, // graft an attenuation parent mid-chain
+    ] as const;
+    for (const patch of patches) {
+      const r = verifyTransition(e0, { ...e1, ...patch });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.reason).toBe("immutable-field-changed");
+    }
+  });
+
+  test("a sparse chain fails closed — an unverifiable tail must not verify", () => {
+    const sparse: Edge[] = [e0];
+    sparse[2] = e2; // hole at index 1: the e1 link is missing, but e2 is present
+    const r = verifyChain(sparse);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("not-a-transition");
+  });
+
+  test("an internally inconsistent prev cannot anchor a transition — genesisId masking (§5.1)", () => {
+    const malformed = { ...e0, counter: 5 }; // counter 5 but null prev/genesis — impossible
+    const next = { ...e1, counter: 6, prev: edgeId(malformed), genesis: edgeId(malformed) };
+    const r = verifyTransition(malformed, next);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("not-a-transition");
   });
 });
