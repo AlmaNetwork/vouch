@@ -20,6 +20,17 @@ export type ItemSlice = { readonly items: Readonly<Record<string, ItemState>> };
 export const EVENT_ITEM_MINTED = "item.minted"; // env-authored: a new item enters the ledger
 export const EVENT_ITEM_TRANSFERRED = "item.transferred"; // env-authored: ownership moves
 
+// Length bounds, checked at the write path (environment/items.ts mintItem — validation
+// in this codebase lives with the mutator that commits, like MAX_DISPLAY_NAME_LENGTH).
+// An item id and its kind tag are journalled forever and echoed on every transfer, so
+// without bounds one mint parks an arbitrarily large string in a hash-chained log that
+// can never be trimmed — the same class of surface as the identifier grammar.
+
+/** Longest item id. Ids are chosen by the minter, so free text with only length for a grammar. */
+export const MAX_ITEM_ID_LENGTH = 128;
+/** Longest item `kind` tag. A vocabulary word ("deed", "badge"), not a description. */
+export const MAX_ITEM_KIND_LENGTH = 64;
+
 export type ItemMintedPayload = { readonly itemId: string; readonly kind: string; readonly owner: string };
 export type ItemTransferredPayload = { readonly itemId: string; readonly from: string; readonly to: string };
 

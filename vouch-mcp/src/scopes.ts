@@ -20,6 +20,11 @@ export const SCOPE_FOR_COMMAND: Readonly<Record<string, string>> = {
   amend: "vouch:govern",
   propose: "vouch:govern",
   vote: "vouch:govern",
+  // One scope for the item ledger: minting and handing over are the two ends of the
+  // same asset moving, and both are already gated in-world (the region's `items`
+  // institution for minting, current-holder-only for transfer).
+  "mint-item": "vouch:item",
+  "transfer-item": "vouch:item",
   // Its own scope, deliberately. `invoke` runs whatever a definition says, and the set
   // of definitions is data that can grow — so a token granted this is trusting the
   // definition store, not one fixed action. Keeping it separate lets a caller hold the
