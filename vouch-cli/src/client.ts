@@ -140,6 +140,10 @@ export class VouchClient {
   propose(principal: string, regionId: string, change: unknown): Promise<SubmitResult> {
     return this.submit(principal, { kind: "propose", regionId, change });
   }
+  /** Run a data-defined command (RFC 0007 §4) by definition id. */
+  invoke(principal: string, definitionId: string, payload: Record<string, unknown>): Promise<SubmitResult> {
+    return this.submit(principal, { kind: "invoke", definitionId, payload });
+  }
   /** Approve the open proposal. A ballot is approval-only; casting one IS approving. */
   vote(principal: string, regionId: string): Promise<SubmitResult> {
     return this.submit(principal, { kind: "vote", regionId });

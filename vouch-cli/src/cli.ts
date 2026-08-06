@@ -88,6 +88,11 @@ market  (a region is never deleted — a defunct one is hibernated and handed on
   handover <regionId> <to>           give a listed region to another account.
                                      NOTE: no currency moves — settlement is not built
 
+data-defined commands (RFC 0007 §4 — definitions live in the log, not in code)
+  invoke <definitionId> '<payload-json>'
+                                     e.g. vouch invoke core.transfer \
+                                            '{"from":"ann@umi","to":"bo@umi","amount":10}'
+
 read
   regions | agents | items | state | metrics
   watch [--interval N]               tail the world's event feed (the village newspaper)
@@ -161,6 +166,7 @@ export async function run(argv: string[], env: Env, io: Io): Promise<number> {
       case "lifecycle":
       case "list":
       case "handover":
+      case "invoke":
       case "mint-item":
       case "transfer-item": {
         const principal = activePrincipal();
@@ -287,6 +293,26 @@ async function dispatchWrite(
       return "usage";
     }
     return cmd === "amend" ? client.amend(principal, regionId, change) : client.propose(principal, regionId, change);
+  }
+  if (cmd === "invoke") {
+    const [, definitionId, payloadJson] = positional;
+    if (!definitionId || !payloadJson) {
+      io.err("usage: vouch invoke <definitionId> '<payload-json>'");
+      io.err(`example: vouch invoke core.transfer '{"from":"ann@umi","to":"bo@umi","amount":10}'`);
+      return "usage";
+    }
+    let payload: unknown;
+    try {
+      payload = JSON.parse(payloadJson);
+    } catch {
+      io.err("the payload argument is not valid JSON — quote it as a single shell argument");
+      return "usage";
+    }
+    if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+      io.err("the payload must be a JSON object");
+      return "usage";
+    }
+    return client.invoke(principal, definitionId, payload as Record<string, unknown>);
   }
   if (cmd === "vote") {
     const [, regionId] = positional;

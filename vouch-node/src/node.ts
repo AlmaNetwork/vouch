@@ -14,6 +14,7 @@ import { AccountRegistry, type AuthResult, type HttpStatus, type RegisterRequest
 import { type Command, commandSchema, dispatch } from "./commands";
 import type { Journal } from "./journal";
 import { type Logger, silentLogger } from "./log";
+import { CORE_DEFINITIONS, seedCoreDefinitions } from "./seed-definitions";
 
 export interface NodeDeps {
   readonly seed: string;
@@ -73,6 +74,28 @@ export class VouchNode {
         this.log.fatal({ err }, "durable append failed — exiting rather than serving un-persisted state");
         process.exit(1);
       });
+    this.seedDefinitions();
+  }
+
+  /**
+   * Write the `core.*` command definitions into the log, once.
+   *
+   * The runnable command set is itself reproducible state (RFC 0007 P1), so it has to
+   * arrive as EVENTS rather than as a table the code holds — which means seeding is a
+   * write, and a write on the boot path has to be journalled like any other or the live
+   * world and its journal diverge on the next restart.
+   *
+   * Safe to call on every boot: `putDefinition` refuses to revise an existing `core.*`
+   * definition (`core-revision-requires-procedure`) and returns BEFORE committing, so a
+   * seeded world emits nothing here the second time. The append below is therefore a
+   * no-op after the first boot.
+   */
+  private seedDefinitions(): void {
+    const before = this.world.log.length;
+    seedCoreDefinitions(this.world);
+    if (this.world.log.length === before) return;
+    this.durable(() => this.journal.append(this.world.log.since(before)));
+    this.log.info({ definitions: CORE_DEFINITIONS.map((d) => d.id) }, "seeded core command definitions");
   }
 
   /**

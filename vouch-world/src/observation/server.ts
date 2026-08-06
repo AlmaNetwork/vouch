@@ -8,6 +8,7 @@
 
 import { Hono } from "hono";
 import { getAgent, listAgents } from "../agent";
+import { getDefinition, listDefinitions } from "../definition";
 import type { WorldState } from "../environment";
 import type { WorldView } from "../foundation";
 import { getItem, listItems } from "../item";
@@ -105,6 +106,8 @@ export function createObservationApp(view: WorldView<WorldState>, opts: Observat
         "/agents/:id",
         "/items",
         "/items/:id",
+        "/definitions",
+        "/definitions/:id",
         "/log?since=N",
         "/log/digest",
       ],
@@ -139,6 +142,16 @@ export function createObservationApp(view: WorldView<WorldState>, opts: Observat
   app.get("/items/:id", (c) => {
     const i = getItem(view.getState(), c.req.param("id"));
     return i ? c.json(i, 200, { "cache-control": DERIVED_CACHE }) : c.json({ error: "item not found" }, 404);
+  });
+
+  // The RFC 0007 §4 definition store. These are readable in `/state` too, but a caller
+  // who wants to know WHICH COMMANDS EXIST should not have to fetch the whole world to
+  // find out — `/state` carries every region and agent with it, and is the largest
+  // response on this surface by a wide margin.
+  app.get("/definitions", (c) => c.json(listDefinitions(view.getState()), 200, { "cache-control": DERIVED_CACHE }));
+  app.get("/definitions/:id", (c) => {
+    const d = getDefinition(view.getState(), c.req.param("id"));
+    return d ? c.json(d, 200, { "cache-control": DERIVED_CACHE }) : c.json({ error: "definition not found" }, 404);
   });
 
   // Still a bare array (vouch-cli, vouch-web and openapi/read.yaml all consume it that

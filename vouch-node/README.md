@@ -118,10 +118,31 @@ closed **precondition** vocabulary (§4.2: `isSelf` / `balanceAtLeast` /
 `recordVouch` / `suspendId` / `reinstateId`), with `$.field` / `$actor` / `$tick`
 references resolved by the kernel. `core.transfer` and `core.vouch` are seeded as data
 and produce **byte-identical events** to the hardcoded `transfer` / `vouch` above
-(proven in `test/interpreter.test.ts`). Deferred: payloadSchema enforcement,
-multi-effect atomicity (needs a vouch-world tx boundary), Roles/bundles (§4.4),
-finality/objection/reorg (§5), SoD/penal laws (§6/§9). Not yet wired into the HTTP
-surface — the migration off the hardcoded switch is a follow-up.
+(proven in `test/interpreter.test.ts`, and again through the signed network path in
+`test/invoke.test.ts`).
+
+**Wired to the network.** The node seeds the `core.*` definitions into its log on boot
+— once, journalled, so the runnable command set is reproducible state rather than a
+table the code holds — and the `invoke` command runs them:
+
+```
+POST /v1/command   { kind: "invoke", definitionId: "core.transfer",
+                     payload: { from, to, amount } }
+GET  /definitions            what can be invoked
+GET  /definitions/:id        one definition, body included
+```
+
+`invoke` carries the same signature, nonce, rate limit and journal as every other
+command — authority does not depend on whether a command's body is code or data. The
+payload admits scalars only, which is what `$.field` resolution can actually consume.
+
+Deferred: payloadSchema enforcement, multi-effect atomicity (needs a vouch-world tx
+boundary), Roles/bundles (§4.4), finality/objection/reorg (§5), SoD/penal laws
+(§6/§9), and `putDefinition` on the network — authoring new law is a question about
+who may legislate, which §4.4/§6 answer. The migration of the remaining hardcoded
+commands onto definitions is a follow-up; today only `transfer` and `vouch` have
+definition equivalents, since the §3.4 effect vocabulary is closed and covers those
+plus `suspendId` / `reinstateId`.
 
 ## Security model
 

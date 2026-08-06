@@ -44,6 +44,15 @@ import {
 } from "vouch-world/region";
 import { z } from "zod";
 import { MAX_PRINCIPAL_LENGTH } from "./accounts";
+import { executeCommand } from "./interpreter";
+
+/** Longest definition id an `invoke` may name. Ids are `<namespace>.<name>`. */
+const MAX_DEFINITION_ID_LENGTH = 128;
+/** Most fields a data-defined command's payload may carry. */
+const MAX_PAYLOAD_KEYS = 32;
+/** Longest payload field name, and longest string value. */
+const MAX_PAYLOAD_KEY = 64;
+const MAX_PAYLOAD_STRING = 256;
 
 // Every bound below is the ENGINE's bound, imported rather than restated. The engine
 // enforces them too, so a command that slips past this schema still cannot get through
@@ -193,6 +202,28 @@ const listSchema = z.object({
 });
 const handoverSchema = z.object({ kind: z.literal("handover"), regionId, to: z.string().min(1).max(MAX_PRINCIPAL_LENGTH) });
 
+// --- data-defined commands (RFC 0007 §4) ------------------------------------
+//
+// `invoke` is the one door onto the interpreter: it names a definition that lives in
+// the log as DATA and hands it a payload. Everything else about the request is
+// unchanged — same signature, same nonce, same journal, same rate limit — because the
+// authority model does not depend on whether a command's body is code or data.
+//
+// The payload admits SCALARS ONLY, and that is faithful rather than restrictive: the
+// kernel resolves `$.field` and passes the result to asString/asNumber, so a nested
+// object or array could never be read meaningfully anyway. Saying so in the schema
+// bounds the payload at the same time.
+
+const payloadValue = z.union([z.string().max(MAX_PAYLOAD_STRING), z.number(), z.boolean(), z.null()]);
+
+const invokeSchema = z.object({
+  kind: z.literal("invoke"),
+  definitionId: z.string().min(1).max(MAX_DEFINITION_ID_LENGTH),
+  payload: z.record(z.string().min(1).max(MAX_PAYLOAD_KEY), payloadValue).refine((p) => Object.keys(p).length <= MAX_PAYLOAD_KEYS, {
+    message: `payload may carry at most ${MAX_PAYLOAD_KEYS} fields`,
+  }),
+});
+
 const amendSchema = z.object({ kind: z.literal("amend"), regionId, change: institutionChange });
 const proposeSchema = z.object({ kind: z.literal("propose"), regionId, change: institutionChange });
 const voteSchema = z.object({ kind: z.literal("vote"), regionId });
@@ -211,6 +242,7 @@ export const commandSchema = z.discriminatedUnion("kind", [
   handoverSchema,
   mintItemSchema,
   transferItemSchema,
+  invokeSchema,
 ]);
 export type Command = z.infer<typeof commandSchema>;
 
@@ -322,6 +354,17 @@ export function dispatch(world: World<WorldState>, principal: string, command: C
         if (region.openProposal) return { ok: false, reason: "proposal-already-open" };
         openProposal(world, command.regionId, command.change, principal);
         return { ok: true, detail: { regionId: command.regionId, policy: command.change.policy } };
+      }
+      case "invoke": {
+        // The interpreter does the rest: it resolves the definition from the log,
+        // checks its preconditions and applies its effects through the same
+        // vouch-world primitives the hardcoded arms above call. `actor` is the
+        // already-authenticated principal, so authority arrives the same way it does
+        // for every other command on this surface.
+        const res = executeCommand(world, { definitionId: command.definitionId, actor: principal, payload: command.payload }, ctx);
+        return res.ok
+          ? { ok: true, detail: { definitionId: command.definitionId, effects: res.effects } }
+          : { ok: false, reason: res.reason };
       }
       case "vote": {
         const region = getRegion(world.getState(), command.regionId);

@@ -76,6 +76,10 @@ interface HandoverArgs {
   regionId: string;
   to: string;
 }
+interface InvokeArgs {
+  definitionId: string;
+  payload: Record<string, unknown>;
+}
 interface MintItemArgs {
   itemId: string;
   itemKind: string;
@@ -314,6 +318,20 @@ export function buildMcpServer(deps: McpDeps, ctx: AuthContext): McpServer {
     (args) => {
       const a = args as unknown as VoteArgs;
       return runWrite(ctx.principal, "vote", { kind: "vote", regionId: a.regionId });
+    },
+  );
+
+  writeTool(
+    "vouch_invoke",
+    "Run a data-defined command",
+    "Run a command whose definition lives in the world's log as DATA rather than in the node's code (RFC 0007 §4). Read /definitions to see what exists and what each one expects. `core.transfer` takes {from,to,amount} and `core.vouch` takes {from,to,weight} — both require `from` to be you, and both do exactly what the built-in tools do. The payload carries scalars only (string, number, boolean, null): the kernel resolves `$.field` references out of it, so nested objects would never be read. Needs scope vouch:invoke.",
+    {
+      definitionId: z.string().min(1).describe("Which definition to run, e.g. 'core.transfer'"),
+      payload: z.record(z.string(), z.unknown()).describe("Flat object of scalars — the fields the definition's `$.field` references name"),
+    },
+    (args) => {
+      const a = args as unknown as InvokeArgs;
+      return runWrite(ctx.principal, "invoke", { kind: "invoke", definitionId: a.definitionId, payload: a.payload });
     },
   );
 
