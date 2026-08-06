@@ -142,7 +142,10 @@ export class VouchNode {
     if (!auth.ok) return { ok: false, status: auth.status, reason: auth.reason, authenticated: false };
 
     const before = this.world.log.length;
-    const outcome = dispatch(this.world, auth.principal, parsed.data, { notary: this.notary });
+    const outcome = dispatch(this.world, auth.principal, parsed.data, {
+      notary: this.notary,
+      isRegistered: (p) => this.registry.has(p),
+    });
 
     // Persist whatever the command emitted, regardless of outcome, so the durable
     // journal can never diverge from the live world on the next boot. (Today every

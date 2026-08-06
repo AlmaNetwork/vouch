@@ -20,6 +20,12 @@ export const SCOPE_FOR_COMMAND: Readonly<Record<string, string>> = {
   amend: "vouch:govern",
   propose: "vouch:govern",
   vote: "vouch:govern",
+  // The market is its own scope, separate from vouch:govern. Amending a region's rules
+  // and GIVING THE REGION AWAY are different kinds of trust — the second is
+  // irreversible from the old owner's side, since only the new owner can hand it back.
+  lifecycle: "vouch:market",
+  list: "vouch:market",
+  handover: "vouch:market",
   // One scope for the item ledger: minting and handing over are the two ends of the
   // same asset moving, and both are already gated in-world (the region's `items`
   // institution for minting, current-holder-only for transfer).

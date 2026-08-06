@@ -46,7 +46,9 @@ describe("RFC 0007 — data-defined command interpreter", () => {
       codeWorld,
       "alice@umi",
       { kind: "transfer", from: "alice@umi", to: "bob@umi", amount: 40 },
-      { notary: NOTARY },
+      // `isRegistered` is only consulted by `handover`; transfer never reaches it. It is
+      // supplied because DispatchContext requires it, not because this test depends on it.
+      { notary: NOTARY, isRegistered: () => true },
     );
 
     expect(dataRes).toEqual({ ok: true, effects: 1 });
