@@ -104,6 +104,23 @@ export interface ResourcePolicy {
   readonly regenPerTick: number;
 }
 
+/**
+ * Who may MINT digital items for this region's residents (RFC 0003: issuance is a
+ * governed institutional act — the engine's `mintItem` deliberately leaves "who may
+ * mint" to be decided elsewhere, and this policy is that decision, made per region).
+ *
+ *   "owner"     — only the region's owner (mirrors `admit`, the currency mint path)
+ *   "residents" — any agent living in the region (a village craft economy)
+ *   "anyone"    — any authenticated principal
+ *
+ * The policy consulted is the RECIPIENT's region of residence: an item has no region
+ * of its own, so the act of bringing one into existence for someone is governed by
+ * the institutions of the village that person lives in.
+ */
+export interface ItemPolicy {
+  readonly minting: "owner" | "residents" | "anyone";
+}
+
 /** The minimal institution set a village holds (§2-A). */
 export interface Institutions {
   readonly schemaLedger: readonly SchemaLedgerEntry[];
@@ -112,6 +129,12 @@ export interface Institutions {
   readonly governance: Governance;
   readonly economyPolicy: EconomyPolicy;
   readonly resourcePolicy: ResourcePolicy;
+  /**
+   * OPTIONAL, honestly: regions founded before this policy existed replay from
+   * journal events whose institutions never carried it, so the field can genuinely
+   * be absent from live state. Read it through `itemPolicyOf`, never directly.
+   */
+  readonly itemPolicy?: ItemPolicy;
 }
 
 /** A village definition — pure data. Adding a village = adding one of these. */
@@ -163,7 +186,8 @@ export type InstitutionChange =
   | { readonly policy: "schemaLedger"; readonly value: readonly SchemaLedgerEntry[] }
   | { readonly policy: "governance"; readonly value: Governance } // constitutional change (P2)
   | { readonly policy: "economy"; readonly value: EconomyPolicy } // fee/tax policy (P2)
-  | { readonly policy: "resource"; readonly value: ResourcePolicy }; // resource pool config (P3)
+  | { readonly policy: "resource"; readonly value: ResourcePolicy } // resource pool config (P3)
+  | { readonly policy: "items"; readonly value: ItemPolicy }; // who may mint items (P3)
 
 /** One eligible voter on a proposal's SNAPSHOT roll, with its weight evaluated AT OPEN (RFC 0001 §5). */
 export type GovRollEntry = { readonly voter: string; readonly weight: number };
@@ -422,13 +446,40 @@ export function validateResourcePolicy(p: ResourcePolicy): void {
   }
 }
 
+/** Reject an item policy whose minting mode is not part of the vocabulary. */
+export function validateItemPolicy(p: ItemPolicy): void {
+  if (p.minting !== "owner" && p.minting !== "residents" && p.minting !== "anyone") {
+    throw new Error('itemPolicy: minting must be "owner" | "residents" | "anyone"');
+  }
+}
+
+/**
+ * The item policy in force before a region ever amends one — and the one every
+ * region founded before the policy existed replays into. "owner" is the RFC 0003
+ * default (issuance is a governed act), and it matches how currency already enters
+ * the world: through the region owner, at `admit`.
+ */
+export const DEFAULT_ITEM_POLICY: ItemPolicy = { minting: "owner" };
+
+/**
+ * A region's item policy, with the pre-policy fallback applied. This is the ONLY
+ * correct read: `institutions.itemPolicy` is optional because regions replayed from
+ * older journals never carried it, and reading the field directly would make those
+ * regions behave differently from a freshly founded one with the same institutions.
+ */
+export function itemPolicyOf(region: RegionState): ItemPolicy {
+  return region.institutions.itemPolicy ?? DEFAULT_ITEM_POLICY;
+}
+
 export function makeInstitutions(partial: Partial<Institutions> = {}): Institutions {
   const governance: Governance = partial.governance ?? { kind: "dictatorship" };
   const economyPolicy: EconomyPolicy = partial.economyPolicy ?? { baseCostRate: 0.2, minCostRate: 0.05, repDiscount: 0.02, creditPerTx: 1 };
   const resourcePolicy: ResourcePolicy = partial.resourcePolicy ?? { capacity: 0, regenPerTick: 0 };
+  const itemPolicy: ItemPolicy = partial.itemPolicy ?? DEFAULT_ITEM_POLICY;
   validateGovernance(governance);
   validateEconomyPolicy(economyPolicy);
   validateResourcePolicy(resourcePolicy);
+  validateItemPolicy(itemPolicy);
   return {
     schemaLedger: partial.schemaLedger ?? [],
     verificationPolicy: partial.verificationPolicy ?? { acceptedSchemaIds: [], rejectUnknownSchemas: true },
@@ -436,6 +487,7 @@ export function makeInstitutions(partial: Partial<Institutions> = {}): Instituti
     governance,
     economyPolicy,
     resourcePolicy,
+    itemPolicy,
   };
 }
 

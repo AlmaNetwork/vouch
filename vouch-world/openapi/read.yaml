@@ -246,6 +246,44 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
               example: { error: "agent not found" }
 
+  /items:
+    get:
+      tags: [state]
+      operationId: listItems
+      summary: The item ledger — every item and who holds it.
+      responses:
+        "200":
+          description: Every item in the world.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ItemState" }
+
+  /items/{id}:
+    get:
+      tags: [state]
+      operationId: getItem
+      summary: A single item by id.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The item id chosen at mint, e.g. "deed-umi-1".
+          schema: { type: string }
+      responses:
+        "200":
+          description: The item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemState" }
+        "404":
+          description: No item with that id.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { error: "item not found" }
+
   /log:
     get:
       tags: [log]
@@ -462,6 +500,7 @@ components:
         - { type: object, required: [policy, value], properties: { policy: { type: string, const: governance }, value: { $ref: "#/components/schemas/Governance" } } }
         - { type: object, required: [policy, value], properties: { policy: { type: string, const: economy }, value: { $ref: "#/components/schemas/EconomyPolicy" } } }
         - { type: object, required: [policy, value], properties: { policy: { type: string, const: resource }, value: { $ref: "#/components/schemas/ResourcePolicy" } } }
+        - { type: object, required: [policy, value], properties: { policy: { type: string, const: items }, value: { $ref: "#/components/schemas/ItemPolicy" } } }
     GovProposal:
       type: object
       description: A council's one in-flight amendment vote (P3); applies once `votes` reach the threshold.
@@ -470,6 +509,17 @@ components:
         change: { $ref: "#/components/schemas/InstitutionChange" }
         votes: { type: array, items: { type: string } }
         proposedBy: { type: string }
+    ItemPolicy:
+      type: object
+      description: >-
+        Who may mint items for this region's residents. Optional in live state:
+        regions replayed from journals older than the policy never carried it, and
+        readers fall back to {minting: owner}.
+      required: [minting]
+      properties:
+        minting:
+          type: string
+          enum: [owner, residents, anyone]
     Institutions:
       type: object
       required: [schemaLedger, verificationPolicy, diplomacyPolicy, governance, economyPolicy, resourcePolicy]
@@ -482,6 +532,7 @@ components:
         governance: { $ref: "#/components/schemas/Governance" }
         economyPolicy: { $ref: "#/components/schemas/EconomyPolicy" }
         resourcePolicy: { $ref: "#/components/schemas/ResourcePolicy" }
+        itemPolicy: { $ref: "#/components/schemas/ItemPolicy" }
     Proposer:
       description: Who proposed a region's founding.
       oneOf:
@@ -600,7 +651,7 @@ components:
     # --- composed world (Layer 4) -------------------------------------------
     WorldState:
       type: object
-      required: [regions, agents, items]
+      required: [regions, agents, items, definitions]
       properties:
         regions:
           type: object
@@ -614,6 +665,38 @@ components:
           type: object
           description: Digital items keyed by id (the P3 ownership ledger).
           additionalProperties: { $ref: "#/components/schemas/ItemState" }
+        definitions:
+          type: object
+          description: >-
+            RFC 0007 §4 definition store — current (latest-version) command/role/law
+            definitions keyed by id. The body is opaque at this layer (form vs meaning);
+            vouch-node's command engine interprets it.
+          additionalProperties: { $ref: "#/components/schemas/DefinitionRecord" }
+
+    DefinitionRecord:
+      type: object
+      description: One versioned, log-stored definition (RFC 0007 §4). The engine validates only this envelope; `body` is never interpreted here.
+      required: [kind, id, version, status, body]
+      properties:
+        kind:
+          type: string
+          description: Definition kind (e.g. `command`, `role`, `procedure`, `law`, `preamble`) — opaque to the engine.
+          example: command
+        id:
+          type: string
+          description: Namespaced id, `<namespace>.<name>`. `kernel.*` is reserved; `core.*` is seed-once.
+          example: core.transfer
+        version:
+          type: integer
+          minimum: 1
+          description: Monotonic per id — a redefinition is always a new version (no shadowing, no gaps).
+        status:
+          type: string
+          enum: [active, retired]
+        body:
+          type: object
+          description: Opaque definition body; interpreted by vouch-node (preconditions/effects), never by the engine.
+          additionalProperties: true
 
     # --- event log (Foundation B) -------------------------------------------
     AlmaEvent:

@@ -76,6 +76,17 @@ interface HandoverArgs {
   regionId: string;
   to: string;
 }
+interface MintItemArgs {
+  itemId: string;
+  itemKind: string;
+  owner: string;
+  identityRegion?: string;
+}
+interface TransferItemArgs {
+  identityRegion: string;
+  itemId: string;
+  to: string;
+}
 
 function textResult(data: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
@@ -264,7 +275,9 @@ export function buildMcpServer(deps: McpDeps, ctx: AuthContext): McpServer {
   // ctx.principal rather than any `principal@region` identity.
   const changeShape = z
     .object({
-      policy: z.enum(["verification", "diplomacy", "schemaLedger", "governance", "economy", "resource"]).describe("Which institution"),
+      policy: z
+        .enum(["verification", "diplomacy", "schemaLedger", "governance", "economy", "resource", "items"])
+        .describe("Which institution"),
       value: z
         .unknown()
         .describe("The new value for that policy — shape depends on `policy`; the node validates it and names the bad field"),
@@ -274,7 +287,7 @@ export function buildMcpServer(deps: McpDeps, ctx: AuthContext): McpServer {
   writeTool(
     "vouch_amend_region",
     "Amend a region's institutions",
-    "Change the rules of a region you govern, directly. Works only for a DICTATORSHIP (its owner); a council-governed region must use vouch_propose_change and vouch_vote instead. `value` shapes: economy {baseCostRate,minCostRate,repDiscount,creditPerTx}, resource {capacity,regenPerTick}, governance {kind:'dictatorship'} or {kind:'council',members,threshold,...}, verification {acceptedSchemaIds,rejectUnknownSchemas}, diplomacy {defaultStance,overrides}, schemaLedger [{schemaId,label?}]. Needs scope vouch:govern.",
+    "Change the rules of a region you govern, directly. Works only for a DICTATORSHIP (its owner); a council-governed region must use vouch_propose_change and vouch_vote instead. `value` shapes: economy {baseCostRate,minCostRate,repDiscount,creditPerTx}, resource {capacity,regenPerTick}, governance {kind:'dictatorship'} or {kind:'council',members,threshold,...}, verification {acceptedSchemaIds,rejectUnknownSchemas}, diplomacy {defaultStance,overrides}, schemaLedger [{schemaId,label?}], items {minting:'owner'|'residents'|'anyone'}. Needs scope vouch:govern.",
     { regionId: z.string().min(1).describe("The region you govern"), change: changeShape },
     (args) => {
       const a = args as unknown as GovernArgs;
@@ -321,6 +334,33 @@ export function buildMcpServer(deps: McpDeps, ctx: AuthContext): McpServer {
     },
   );
 
+  // Items act as WHOEVER the rule in force names. Minting is governed by the
+  // recipient's region's `items` institution: under {minting:'owner'} the minter is
+  // the region-owning ACCOUNT (omit identityRegion), under 'residents' the minter is
+  // one of your resident identities living there (pass identityRegion). Transfers are
+  // always by the holding resident identity, since only agents can hold items.
+
+  writeTool(
+    "vouch_mint_item",
+    "Mint a digital item",
+    "Create a unique item (a deed/badge-like asset, not currency) owned by an agent. Who may mint is the recipient's region's `items` institution — {minting:'owner'} (the default) means the region's owner mints, 'residents' means any agent living there, 'anyone' means any principal. Omit identityRegion to act as your account (owner minting); pass it to act as your resident identity born in that region (resident minting — the identity must currently LIVE in the recipient's region). Item ids are permanent and unique world-wide. Needs scope vouch:item.",
+    {
+      itemId: z.string().min(1).describe("Fresh world-unique id for the item, e.g. 'deed-umi-1'"),
+      itemKind: z.string().min(1).describe("An item type tag, e.g. 'deed', 'badge'"),
+      owner: z.string().min(1).describe("The receiving agent id `name@region`, e.g. 'ann@umi'"),
+      identityRegion: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("Act as your resident identity born in this region instead of your account — for resident-minting"),
+    },
+    (args) => {
+      const a = args as unknown as MintItemArgs;
+      const minter = a.identityRegion === undefined ? ctx.principal : residentIn(a.identityRegion);
+      return runWrite(minter, "mint-item", { kind: "mint-item", itemId: a.itemId, itemKind: a.itemKind, owner: a.owner });
+    },
+  );
+
   writeTool(
     "vouch_list_region_for_sale",
     "List or delist a region",
@@ -349,6 +389,25 @@ export function buildMcpServer(deps: McpDeps, ctx: AuthContext): McpServer {
     },
   );
 
+  writeTool(
+    "vouch_transfer_item",
+    "Transfer an item you hold",
+    "Give an item to another agent. Only the current holder can move it, and the holder is one of your resident identities — pass identityRegion (the region inside that identity's id, where it was BORN, same as vouch_migrate). No currency moves: an item transfer is a handover, not a sale. Needs scope vouch:item.",
+    {
+      identityRegion: z
+        .string()
+        .min(1)
+        .describe("The region in the holding identity's id — where it was born, not necessarily where it lives now"),
+      itemId: z.string().min(1).describe("The item to hand over"),
+      to: z.string().min(1).describe("The receiving agent id `name@region`"),
+    },
+    (args) => {
+      const a = args as unknown as TransferItemArgs;
+      const holder = residentIn(a.identityRegion);
+      return runWrite(holder, "transfer-item", { kind: "transfer-item", itemId: a.itemId, to: a.to });
+    },
+  );
+
   // --- resources (read model as MCP context) ----------------------------------
 
   const resource = async (uri: string, path: string): Promise<ReadResourceResult> => {
@@ -367,6 +426,12 @@ export function buildMcpServer(deps: McpDeps, ctx: AuthContext): McpServer {
     "vouch://agents",
     { title: "Agents", description: "All agents in the world.", mimeType: "application/json" },
     () => resource("vouch://agents", "/agents"),
+  );
+  server.registerResource(
+    "items",
+    "vouch://items",
+    { title: "Items", description: "The item ledger — every item and who holds it.", mimeType: "application/json" },
+    () => resource("vouch://items", "/items"),
   );
   server.registerResource(
     "me",

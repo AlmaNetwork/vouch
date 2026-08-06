@@ -21,6 +21,7 @@ import {
   validateDiplomacyPolicy,
   validateEconomyPolicy,
   validateGovernance,
+  validateItemPolicy,
   validateResourcePolicy,
   validateSchemaLedger,
   validateVerificationPolicy,
@@ -42,6 +43,7 @@ export function validateInstitutionChange(change: InstitutionChange, region: Reg
   }
   if (change.policy === "economy") validateEconomyPolicy(change.value);
   if (change.policy === "resource") validateResourcePolicy(change.value);
+  if (change.policy === "items") validateItemPolicy(change.value);
   // These three were never validated, because nothing could change them: `found`
   // installs the defaults and there was no amend path on the network. Opening one
   // makes them writable, and every collection here is journalled forever.

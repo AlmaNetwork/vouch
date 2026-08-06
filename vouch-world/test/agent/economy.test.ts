@@ -536,7 +536,7 @@ describe("M3 — internal emergence founding (§3-D, reuses the M2 engine)", () 
     const founded = world.log
       .all()
       .find((e) => e.type === "region.founded" && (e.payload as { region: { id: string } }).region.id === "lenientyama");
-    expect((founded?.payload as { proposer: { kind: string; cohort: string[] } }).proposer.cohort).toEqual([
+    expect((founded!.payload as { proposer: { kind: string; cohort: string[] } }).proposer.cohort).toEqual([
       "a1@yama",
       "a2@yama",
       "a3@yama",

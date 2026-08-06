@@ -50,6 +50,8 @@ function applyInstitutionChange(institutions: Institutions, change: InstitutionC
       return { ...institutions, economyPolicy: change.value };
     case "resource":
       return { ...institutions, resourcePolicy: change.value };
+    case "items":
+      return { ...institutions, itemPolicy: change.value };
   }
 }
 

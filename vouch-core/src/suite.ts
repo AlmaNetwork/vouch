@@ -6,6 +6,7 @@
 // registered; an unknown suite is an explicit failure (§M0).
 
 import { ed25519 } from "@noble/curves/ed25519";
+import { z } from "zod";
 
 export interface SignatureSuite {
   readonly id: string;
@@ -178,4 +179,109 @@ export function listSuiteMeta(): SuiteMeta[] {
 /** The registered suites that are still selectable (not `deprecated`), in append order. */
 export function activeSuiteIds(): string[] {
   return SUITE_META.filter((m) => m.status === "active").map((m) => m.id);
+}
+
+// --- RFC 0005 §6: minimum-strength policy + negotiation -------------------
+
+export interface SuitePolicy {
+  /** Advertised, verify-capable suites, most-preferred first (RFC 0005 §5). */
+  readonly signatureSuites: readonly string[];
+  /** Minimum-strength floor in classical-equivalent bits (RFC 0005 §6). */
+  readonly minSecurityBits: number;
+  /** RFC 0005 §8: require post-quantum resistance — excludes every non-PQ suite. */
+  readonly requirePq?: boolean;
+}
+
+export type NegotiationFailureReason = "no-acceptable-suite" | "invalid-policy";
+
+export type NegotiationResult =
+  | { readonly ok: true; readonly agreedSuites: readonly string[] }
+  | { readonly ok: false; readonly reason: NegotiationFailureReason; readonly detail: string };
+
+// A policy is wire-derived (a counterparty's RFC 0004 §5.1 region metadata), so it is
+// validated like every other wire-derived input in this package — a malformed policy is a
+// structured failure, never an escaping TypeError. Without this, a missing responder
+// `signatureSuites` threw while the same defect on the initiator failed closed (asymmetric).
+const suitePolicySchema = z.object({
+  signatureSuites: z.array(z.string()),
+  minSecurityBits: z.number(),
+  requirePq: z.boolean().optional(),
+});
+
+/** Whether `meta` satisfies `policy`: active, meets the strength floor, and PQ if required. */
+function acceptableTo(policy: SuitePolicy, meta: SuiteMeta): boolean {
+  return meta.status === "active" && meta.securityBits >= policy.minSecurityBits && (!policy.requirePq || meta.pq);
+}
+
+/**
+ * RFC 0005 §6 negotiation. The RESPONDER binds `agreedSuites`: the intersection of both regions'
+ * advertised suites — an ordered SET in responder-preference order (duplicates dropped, first
+ * occurrence wins) — excluding deprecated suites, anything below either region's minimum-strength
+ * policy, and (per §8) non-PQ suites if either region requires post-quantum. If that candidate set
+ * is empty, negotiation FAILS and no Connection forms. There is deliberately **no separate MTI
+ * fallback**: §5 obliges every region to advertise the MTI, so between conformant regions whose
+ * policies admit the MTI it is always already in the candidate set; a fallback that rescued a
+ * negotiation with a counterparty whose advertisement omits the MTI would legitimize that §5
+ * violation. Unregistered advertised ids cannot be assessed and are skipped.
+ *
+ * `lookupMeta` is caller-parameterized (defaulting to the registry) for the same reason
+ * `verifyCertificate` takes the issuer key instead of consulting a directory: it keeps the
+ * §6 "MUST exclude deprecated suites" rule testable — the seed table currently has no
+ * deprecated entry and is frozen, so without this seam the rule could only be exercised on
+ * the day a suite is actually deprecated.
+ *
+ * The returned `agreedSuites` is frozen: it gets bound into a co-signed Connection
+ * Agreement (§6.3, the downgrade defence), so runtime immutability matches the frozen
+ * metadata table this file already ships.
+ */
+export function negotiate(
+  initiator: SuitePolicy,
+  responder: SuitePolicy,
+  lookupMeta: (id: string) => SuiteMeta | undefined = getSuiteMeta,
+): NegotiationResult {
+  for (const [side, policy] of [
+    ["initiator", initiator],
+    ["responder", responder],
+  ] as const) {
+    const parsed = suitePolicySchema.safeParse(policy);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return {
+        ok: false,
+        reason: "invalid-policy",
+        detail: `${side} policy is malformed — ${issue ? `${issue.path.join(".") || "<root>"}: ${issue.message}` : "not a policy object"}`,
+      };
+    }
+  }
+
+  // The shared advertisement set first (ordered, deduplicated, responder order) — kept
+  // separate from the acceptability filter so a failure can say WHICH stage emptied it:
+  // this is the one message humans debug across two organizations.
+  const advertisedByInitiator = new Set(initiator.signatureSuites);
+  const seen = new Set<string>();
+  const shared: string[] = [];
+  for (const id of responder.signatureSuites) {
+    if (!seen.has(id) && advertisedByInitiator.has(id)) {
+      seen.add(id); // ordered set: first occurrence wins
+      shared.push(id);
+    }
+  }
+
+  const agreedSuites = Object.freeze(
+    shared.filter((id) => {
+      const meta = lookupMeta(id);
+      return meta !== undefined && acceptableTo(initiator, meta) && acceptableTo(responder, meta);
+    }),
+  );
+  if (agreedSuites.length > 0) {
+    return { ok: true, agreedSuites };
+  }
+  return {
+    ok: false,
+    reason: "no-acceptable-suite",
+    detail:
+      shared.length === 0
+        ? "the two advertisements share no suite id"
+        : `shared [${shared.join(", ")}], but every shared suite was excluded — unregistered, deprecated, below a strength floor, or non-PQ under a PQ requirement`,
+  };
 }

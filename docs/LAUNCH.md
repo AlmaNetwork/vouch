@@ -220,10 +220,12 @@ fail-closed, so a command missing from the scope map is denied by MCP rather tha
 through — forgetting that step breaks loudly, which is the right way round.
 
 - [x] `migrate` — the exit option (#55)
-- [ ] `amend` / `propose` / `vote` — governance. The one that makes comparison possible
+- [x] `amend` / `propose` / `vote` — governance. The one that makes comparison possible (#57)
 - [ ] `recognize` — diplomacy
 - [ ] `list-region` / `set-lifecycle` / `transfer-region` — the region market
-- [ ] `mint-item` / `transfer-item` — digital items
+- [x] `mint-item` / `transfer-item` — digital items. Who may mint is a per-region
+      institution (`items`, amendable like any other policy), so mint rules are
+      themselves an experiment variable (#60)
 - [ ] `suspend` / `reinstate` — a region's own discipline over its residents
 
 #### Deliberately not exposed
